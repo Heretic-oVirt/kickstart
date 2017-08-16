@@ -1939,7 +1939,7 @@ popd
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081603"
+script_version="2017081604"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2960,6 +2960,7 @@ yes
 
 
 # Setup LVM
+# TODO: dynamically calculate arbiter brick sizes and thinpool metadata sizes (cfr https://gerrit.ovirt.org/#/c/75645/3)
 # TODO: allow for SSD-backed (to be autodetected) LVM caches (either only one SSD partitioned to proportionally provide cache to all vgs or one dedicated SSD cache for each vg)
 # TODO: give error for an insufficient number of disks/hosts or insufficient space on disks
 # Note: enginedomain (thick 100 GiB) LVs will host the oVirt Engine Gluster volume bricks
@@ -2968,7 +2969,7 @@ yes
 # Note: ctdb (thick 1 GiB - no arbiter) LVs will host the CTDB lock Gluster volume bricks
 # Note: winshare (thin 1 TiB) LVs will host the Samba share Gluster volume bricks
 # Note: unixshare (thin 1 TiB) LVs will host the Ganesha-NFS share Gluster volume bricks
-# TODO: add LVs to hots the Gluster-block based iSCSI/FCoE service Gluster volume bricks
+# TODO: add LVs to host the Gluster-block based iSCSI/FCoE service Gluster volume bricks
 # Note:
 #  every suitable disk used will be made into the single PV of a VG
 #  if we have only three nodes than one node (the last one) is meant to be arbiter-only
