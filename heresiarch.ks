@@ -1861,7 +1861,7 @@ OVEHOSTED_VM/cloudinitVMStaticCIDR=str:${engine_ip}/${PREFIX}
 OVEHOSTED_VM/cloudInitISO=str:generate
 OVEHOSTED_VM/cloudinitVMETCHOSTS=bool:True
 OVEHOSTED_VM/cloudinitVMDNS=str:$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
-OVEHOSTED_VM/cloudinitVMTZ=str:Europe/Rome
+OVEHOSTED_VM/cloudinitVMTZ=str:${local_timezone}
 OVEHOSTED_VM/rootSshAccess=str:yes
 OVEHOSTED_VM/rootSshPubkey=str:
 OVEHOSTED_VDSM/spicePkiSubject=str:C=EN, L=Test, O=Test, CN=Test
@@ -1939,7 +1939,7 @@ popd
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081201"
+script_version="2017081603"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2641,7 +2641,6 @@ else
 	showlogin=0
 	help_height=
 	acceptlang=0
-	lang=it
 	gotoone=1
 	gotomodule=
 	deftab=webmin
@@ -2969,15 +2968,16 @@ yes
 # Note: ctdb (thick 1 GiB - no arbiter) LVs will host the CTDB lock Gluster volume bricks
 # Note: winshare (thin 1 TiB) LVs will host the Samba share Gluster volume bricks
 # Note: unixshare (thin 1 TiB) LVs will host the Ganesha-NFS share Gluster volume bricks
+# TODO: add LVs to hots the Gluster-block based iSCSI/FCoE service Gluster volume bricks
 # Note:
 #  every suitable disk used will be made into the single PV of a VG
 #  if we have only three nodes than one node (the last one) is meant to be arbiter-only
-#  the arbiter-only node will use only one suitable disk/VG (the first smallest) for all arbiter (thin 10 GiB) LVs
+#  the arbiter-only node will use only one suitable disk/PV/VG (the first smallest) for all arbiter (thin 10 GiB) LVs
 #  find the minimum number of suitable disks-per-node available among all active (non arbiter-only) nodes
-#   if it is one then all LVs will be in one single VG on that single PV
-#   if it is two then all oVirt LVs will be in one VG (the last smaller one) and the CTDB/share LVs on the other (the first bigger one)
-#   if it is three then CTDB/share LVs will be in one VG (the first biggest), the enginedomain/isodomain LVs on another (the last smallest) and the vmstoredomain LV will be in the first remaining one (excluding those already selected)
-#  suitable disks exceeding the number of three-per-node will be left unused (but which disks will be used gets decided according to the rules detailed above)
+#   if it is one then all LVs will be in one single VG on that single PV disk
+#   if it is two then all oVirt LVs will be in one VG (PV: the last smaller disk) and the CTDB/share LVs on the other VG (PV: the first bigger disk)
+#   if it is three then CTDB/share LVs will be in one VG (PV: the first biggest disk), the enginedomain/isodomain LVs on another VG (PV: the last smallest disk) and the vmstoredomain LV will be in the other VG (PV: the first remaining disk excluding those already selected)
+#  suitable disks exceeding the number of three-per-node will be left unused (but which disks get used will be decided according to the rules detailed above)
 
 {% if groups['glusternodes'] | length == 3 %}
 
@@ -3411,6 +3411,7 @@ ignore_lv_errors=no
 {% else %}
 # TODO: add support for more than 3 nodes (rotating arbiter - replicated+distributed volumes with a multiple of 3 disks on each node)
 # TODO: assume that 3 free disks for each node are equivalent to one disk in the fixed-arbiter configuration above
+# TODO: the following will intentionally cause an error - remove when adding complete logic
 NO ARBITER-ONLY NODE!!!
 {% endif %}
 
@@ -3423,7 +3424,7 @@ action=restart
 service=chronyd
 
 [service3]
-action=start
+action=restart
 service=glusterd
 slice_setup=yes
 
@@ -3566,7 +3567,7 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy-cleanu
 
 # Create Ansible playbook for GlusterFS nodes nic bonding forced LACP setup
 # Note: the following will powerdown the nodes at the end so that manual switch configuration can be performed before powering them up again
-# Note: the rationale behind this playbook is that LACP seriously interfers both with standard PXE booting and our custom network bonding autodetection logic above - use AP/RR during installation, then use this to convert to LACP afterwards
+# Note: the rationale behind this playbook is that LACP seriously interfers both with standard PXE booting and our custom network bonding autodetection logic above - use AP/RR during installation, then use this to convert every bond to LACP afterwards
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 ---
 - name: reconfigure gluster nodes bonding to LACP mode
@@ -3586,6 +3587,66 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 
+# Create Ansible playbook for GlusterFS nodes unconfiguration (cleanup)
+# TODO: add NFS-Ganesha and Gluster-block when ready
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
+---
+- name: inspect gluster nodes
+  hosts: glusternodes
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: gather suitable disks
+      hvp_free_disks: min_size_bytes=100000000000
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+- name: Stop and unconfigure CTDB
+  hosts: glusternodes
+  remote_user: root
+  tasks:
+    - name: disable and stop the CTDB service
+      systemd:
+        name: ctdb
+        enabled: False
+        state: stopped
+        no_block: no
+    - name: disable and stop the RT bandwidth configuration
+      systemd:
+        name: cgroup-rt-bandwidth
+        enabled: False
+        state: stopped
+        no_block: no
+    - name: disable and stop the local mounting of the Gluster ctdb volume
+      systemd:
+        name: gluster-lock.mount
+        enabled: True
+        state: started
+        no_block: no
+    - name: disable and stop the wait service for Gluster ctdb volume
+      systemd:
+        name: gluster-ctdb-wait-online
+        enabled: True
+        state: started
+        no_block: no
+- name: perform gdeploy-based Gluster unconfiguration
+  hosts: localhost
+  remote_user: root
+  tasks:
+    - name: prepare gdeploy cleanup configuration file
+      template:
+        src: templates/gdeploy-cleanup.j2
+        dest: "{{ playbook_dir }}/gdeploy-cleanup.conf"
+        owner: root
+        group: root
+        mode: 0644
+    - name: perform actual gdeploy-based Gluster unconfiguration
+      command: gdeploy -k -vv -c "{{ playbook_dir }}/gdeploy-cleanup.conf"
+      register: gdeploy_cleanup_result
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
+
 # Create Ansible playbook for GlusterFS nodes
 # TODO: add NFS-Ganesha and Gluster-block when ready
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
@@ -3604,13 +3665,6 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
   hosts: localhost
   remote_user: root
   tasks:
-    - name: prepare gdeploy cleanup configuration file
-      template:
-        src: templates/gdeploy-cleanup.j2
-        dest: "{{ playbook_dir }}/gdeploy-cleanup.conf"
-        owner: root
-        group: root
-        mode: 0644
     - name: prepare gdeploy setup configuration file
       template:
         src: templates/gdeploy.j2
