@@ -8,16 +8,16 @@
 # Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
 # Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: not honored for bond slaves)
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
-# Note: alternatively burn this kickstart into your oVirt Node image and append to default commandline:
+# Note: alternatively to install from DVD burn this kickstart into your oVirt Node image and append to default commandline:
 # nomodeset elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg hvp_nodeid=[0123]
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest (default)
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
 # Note: to force custom addressing add hvp_{mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the node IP or the network address on the given network and yy is the prefix on the given network - other node addresses will count up and down from current node IP
+# Note: to force custom test IPs add hvp_{mgmt,gluster,lan,internal}_test_ip=t.t.t.t where t.t.t.t is the test IP on the given network
 # Note: to force custom node bonding mode add hvp_{mgmt,gluster,lan,internal}_bondmode=vvvv where vvvv is the bonding mode, either activepassive, roundrobin (only for gluster) or lacp
 # Note: to force custom network MTU add hvp_{mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
-# Note: to force custom test IPs add hvp_{mgmt,gluster,lan,internal}_test_ip=t.t.t.t where t.t.t.t is the test IP on the given network
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
 # Note: to force custom nameserver IP (during installation) add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
@@ -65,6 +65,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above (except for hvp_nicmacfix) can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -168,56 +169,6 @@ else
 	EOF
 fi
 
-# Determine OS disk choice
-given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
-# Note: we want the devices list alphabetically ordered anyway
-all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
-# No indication on OS disk choice: use default choice
-if [ -z "${given_nodeosdisk}" ]; then
-	given_nodeosdisk="last-smallest"
-fi
-if [ -b "/dev/${given_nodeosdisk}" ]; then
-	# If the given string is a device name then use that
-	device_name="${given_nodeosdisk}"
-else
-	# If the given string is a generic indication then find the proper device
-	case "${given_nodeosdisk}" in
-		first)
-			device_name=$(echo "${all_devices}" | head -1)
-			;;
-		last)
-			device_name=$(echo "${all_devices}" | tail -1)
-			;;
-		*)
-			# Note: we allow for choosing either the first smallest device (default, if only "smallest" has been indicated) or the last one
-			case "${given_nodeosdisk}" in
-				smallest)
-					# If we want the first of the smallests then change the selected device only if the size is strictly smaller
-					comparison_logic="-lt"
-					;;
-				*)
-					# In case of unrecognized/unsupported indication use last-smallest as default choice
-					# If we want the last of the smallests then keep changing selected device even for the same size
-					comparison_logic="-le"
-					;;
-			esac
-			device_name=""
-			for current_device in ${all_devices}; do
-				current_size=$(blockdev --getsize64 /dev/${current_device})
-				if [ -z "${device_name}" ]; then
-					device_name="${current_device}"
-					device_size="${current_size}"
-				else
-					if [ ${current_size} ${comparison_logic} ${device_size} ]; then
-						device_name="${current_device}"
-						device_size="${current_size}"
-					fi
-				fi
-			done
-			;;
-	esac
-fi
-
 # Define all cluster default network data
 # Note: engine-related data will only be used for automatic DNS zones configuration
 unset node_count
@@ -232,7 +183,9 @@ unset bridge_name
 unset node_name
 unset bmc_ip_offset
 unset node_ip_offset
+unset test_ip
 unset test_ip_offset
+unset switch_ip
 unset switch_ip_offset
 unset switch_name
 unset engine_name
@@ -252,32 +205,19 @@ unset admin_password
 unset keyboard_layout
 unset local_timezone
 
-# TODO: perform better consistency check on all commandline-given parameters
+# Hardcoded defaults
 
-# Determine cluster members number
-given_node_count=$(sed -n -e 's/^.*hvp_nodecount=\(\S*\).*$/\1/p' /proc/cmdline)
-if ! echo "${given_node_count}" | grep -q '^[[:digit:]]\+$' ; then
-	node_count="3"
-else
-	node_count="${given_node_count}"
-fi
+default_nodeosdisk="last-smallest"
 
-# Define number of active storage members
-# Note: if we have three nodes only, then one (the last one) is an all-arbiter no-I/O node
-if [ "${node_count}" -eq 3 ]; then
-	active_storage_node_count="2"
-else
-	active_storage_node_count="${node_count}"
-fi
+default_node_count="3"
+
+default_node_index="0"
 
 declare -A node_name
 node_name[0]="pinkiepie"
 node_name[1]="applejack"
 node_name[2]="rarity"
 node_name[3]="fluttershy"
-for ((i=3;i<${node_count};i=i+1)); do
-	node_name[${i}]="node${i}"
-done
 
 switch_name="scootaloo"
 
@@ -347,6 +287,10 @@ reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
 reverse_domain_name['lan']="12.20.172.in-addr.arpa"
 reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
+declare -A test_ip
+# Note: default values for test_ip derived below - defined here to allow loading as configuration parameters
+
+# TODO: make the following configurable from commandline
 declare -A bridge_name
 bridge_name['mgmt']="ovirtmgmt"
 bridge_name['gluster']=""
@@ -363,10 +307,204 @@ admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
 
+# Detect any configuration fragments and load them into the pre environment
+# Note: BIOS based devices, file and DHCP methods are unsupported
+mkdir /tmp/kscfg-pre
+mkdir /tmp/kscfg-pre/mnt
+ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+ks_custom_frags="hvp_parameters.sh"
+ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
+if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+else
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh"
+fi
+if [ -z "${ks_source}" ]; then
+	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
+else
+	ks_dev=""
+	if echo "${ks_source}" | grep -q '^floppy' ; then
+		# Note: hardcoded device name for floppy disk
+		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
+		ks_dev="/dev/fd0"
+		ks_fstype="vfat"
+		ks_fsopt="ro"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
+		if [ -z "${ks_path}" ]; then
+			ks_path="/ks.cfg"
+		fi
+		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
+		# Note: cdrom gets accessed as real device name which must be detected - assuming it's the first removable device
+		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
+		# Note: on RHEL>=6 even IDE/ATAPI devices have SCSI device names
+		for dev in /dev/sd[a-z] /dev/sr[0-9]; do
+			ks_dev=""
+			if [ -b "${dev}" ]; then
+				is_removable="$(cat /sys/block/$(basename ${dev})/removable 2>/dev/null)"
+				if [ "${is_removable}" = "1" ]; then
+					ks_dev="${dev}"
+					ks_fstype="iso9660"
+					ks_fsopt="ro"
+					ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
+					if [ -z "${ks_path}" ]; then
+						echo "Unable to determine Kickstart source path" 1>&2
+						ks_dev=""
+					else
+						ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+					fi
+					break
+				fi
+			fi
+		done
+	elif echo "${ks_source}" | grep -q '^hd:' ; then
+		# Note: blindly extracting device name from Kickstart commandline
+		ks_dev="/dev/$(echo ${ks_source} | awk -F: '{print $2}')"
+		# TODO: Detect actual filesystem type on local drive - assuming VFAT
+		ks_fstype="vfat"
+		ks_fsopt="ro"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
+		if [ -z "${ks_path}" ]; then
+			echo "Unable to determine Kickstart source path" 1>&2
+			ks_dev=""
+		else
+			ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+		fi
+	elif echo "${ks_source}" | grep -q '^nfs:' ; then
+		# Note: blindly extracting NFS server from Kickstart commandline
+		ks_dev="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_fstype="nfs"
+		ks_fsopt="ro,nolock"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
+		if [ -z "${ks_path}" ]; then
+			echo "Unable to determine Kickstart source path" 1>&2
+			ks_dev=""
+		else
+			ks_dev="${ks_dev}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dir="/"
+		fi
+	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
+		# Note: blindly extracting URL from Kickstart commandline
+		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
+		ks_fstype="url"
+	else
+		echo "Unsupported Kickstart source detected" 1>&2
+	fi
+	if [ -z "${ks_dev}" ]; then
+		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
+	else
+		if [ "${ks_fstype}" = "url" ]; then
+			for custom_frag in ${ks_custom_frags} ; do
+				echo "Attempting network retrieval of ${ks_dev}/${custom_frag}" 1>&2
+				wget -P /tmp/kscfg-pre "${ks_dev}/${custom_frag}" 
+			done
+		else
+			mount -t ${ks_fstype} -o ${ks_fsopt} ${ks_dev} /tmp/kscfg-pre/mnt
+			for custom_frag in ${ks_custom_frags} ; do
+				echo "Attempting filesystem retrieval of ${custom_frag}" 1>&2
+				if [ -f "/tmp/kscfg-pre/mnt${ks_dir}/${custom_frag}" ]; then
+					cp "/tmp/kscfg-pre/mnt${ks_dir}/${custom_frag}" /tmp/kscfg-pre
+				fi
+			done
+			umount /tmp/kscfg-pre/mnt
+		fi
+	fi
+fi
+# Load any configuration fragment found, in the proper order
+# Note: configuration-fragment defaults will override hardcoded defaults
+# Note: commandline parameters will override configuration-fragment and hardcoded defaults
+# Note: configuration fragments get executed will full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+for custom_frag in ${ks_custom_frags} ; do
+	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+		# Perform a configuration fragment sanity check before loading
+		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		res=$?
+		if [ ${res} -ne 0 ]; then
+			# Report invalid configuration fragment and skip it
+			logger -s -p "local7.err" -t "${script_name}" "Skipping invalid remote configuration fragment ${custom_frag}"
+			continue
+		fi
+		source "/tmp/kscfg-pre/${custom_frag}"
+	fi
+done
+
+# TODO: perform better consistency check on all commandline-given parameters
+
+# Determine OS disk choice
+given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
+# Note: we want the devices list alphabetically ordered anyway
+all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
+# No indication on OS disk choice: use default choice
+if [ -z "${given_nodeosdisk}" ]; then
+	given_nodeosdisk="${default_nodeosdisk}"
+fi
+if [ -b "/dev/${given_nodeosdisk}" ]; then
+	# If the given string is a device name then use that
+	device_name="${given_nodeosdisk}"
+else
+	# If the given string is a generic indication then find the proper device
+	case "${given_nodeosdisk}" in
+		first)
+			device_name=$(echo "${all_devices}" | head -1)
+			;;
+		last)
+			device_name=$(echo "${all_devices}" | tail -1)
+			;;
+		*)
+			# Note: we allow for choosing either the first smallest device (default, if only "smallest" has been indicated) or the last one
+			case "${given_nodeosdisk}" in
+				smallest)
+					# If we want the first of the smallests then change the selected device only if the size is strictly smaller
+					comparison_logic="-lt"
+					;;
+				*)
+					# In case of unrecognized/unsupported indication use last-smallest as default choice
+					# If we want the last of the smallests then keep changing selected device even for the same size
+					comparison_logic="-le"
+					;;
+			esac
+			device_name=""
+			for current_device in ${all_devices}; do
+				current_size=$(blockdev --getsize64 /dev/${current_device})
+				if [ -z "${device_name}" ]; then
+					device_name="${current_device}"
+					device_size="${current_size}"
+				else
+					if [ ${current_size} ${comparison_logic} ${device_size} ]; then
+						device_name="${current_device}"
+						device_size="${current_size}"
+					fi
+				fi
+			done
+			;;
+	esac
+fi
+
+# Determine cluster members number
+given_node_count=$(sed -n -e 's/^.*hvp_nodecount=\(\S*\).*$/\1/p' /proc/cmdline)
+if ! echo "${given_node_count}" | grep -q '^[[:digit:]]\+$' ; then
+	node_count="${default_node_count}"
+else
+	node_count="${given_node_count}"
+fi
+# Fill in missing node names
+for ((i=0;i<${node_count};i=i+1)); do
+	if [ -z "${node_name[${i}]}" ]; then
+		node_name[${i}]="node${i}"
+	fi
+done
+
+# Define number of active storage members
+# Note: if we have three nodes only, then one (the last one) will be an all-arbiter no-I/O node
+if [ "${node_count}" -eq 3 ]; then
+	active_storage_node_count="2"
+else
+	active_storage_node_count="${node_count}"
+fi
 # Determine cluster member identity
 my_index=$(sed -n -e 's/^.*hvp_nodeid=\(\S*\).*$/\1/p' /proc/cmdline)
 if ! echo "${my_index}" | grep -q '^[[:digit:]]\+$' ; then
-	my_index="0"
+	my_index="${default_node_index}"
 fi
 
 # Determine master node identity
@@ -472,8 +610,8 @@ fi
 
 # Determine network segments parameters
 fixed_mgmt_bondmode="false"
-unset my_ip test_ip
-declare -A my_ip test_ip
+unset my_ip
+declare -A my_ip
 for zone in "${!network[@]}" ; do
 	given_network=$(sed -n -e "s/^.*hvp_${zone}=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	unset NETWORK NETMASK
@@ -534,7 +672,8 @@ for zone in "${!network[@]}" ; do
 	given_network_test_ip=$(sed -n -e "s/^.*hvp_${zone}_test_ip=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_test_ip}" ]; then
 		test_ip["${zone}"]="${given_network_test_ip}"
-	else
+	fi
+	if [ -z "${test_ip[${zone}]}" ]; then
 		test_ip["${zone}"]=$(ipmat ${NETWORK} ${test_ip_offset} +)
 	fi
 	unset PREFIX
@@ -552,22 +691,6 @@ for zone in "${!network[@]}" ; do
 done
 if [ -z "${my_gateway}" ]; then
 	my_gateway="${test_ip['mgmt']}"
-fi
-
-# Determine switch IP
-given_switch=$(sed -n -e "s/^.*hvp_switch=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-if [ -n "${given_switch}" ]; then
-	switch_ip="${given_switch}"
-else
-	switch_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${switch_ip_offset} +)
-fi
-
-# Determine engine IP
-given_engine=$(sed -n -e 's/^.*hvp_engine=\(\S*\).*$/\1/p' /proc/cmdline)
-if [ -n "${given_engine}" ]; then
-	engine_ip="${given_engine}"
-else
-	engine_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${engine_ip_offset} +)
 fi
 
 # Disable any interface configured by NetworkManager
@@ -660,6 +783,23 @@ else
 	gluster_zone="mgmt"
 fi
 
+# Determine switch IP
+given_switch=$(sed -n -e "s/^.*hvp_switch=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_switch}" ]; then
+	switch_ip="${given_switch}"
+fi
+if [ -z "${switch_ip}" ]; then
+	switch_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${switch_ip_offset} +)
+fi
+
+# Determine engine IP
+given_engine=$(sed -n -e 's/^.*hvp_engine=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_engine}" ]; then
+	engine_ip="${given_engine}"
+fi
+if [ -z "${engine_ip}" ]; then
+	engine_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${engine_ip_offset} +)
+fi
 
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
@@ -1006,7 +1146,7 @@ view "localhost_resolver"
 
         /* these are zones that contain definitions for all the localhost
          * names and addresses, as recommended in RFC1912 - these names should
-	 * ONLY be served to localhost clients:
+         * ONLY be served to localhost clients:
          */
         include "/etc/named.rfc1912.zones";
 
@@ -1281,12 +1421,24 @@ popd
 ) 2>&1 | tee /tmp/kickstart_pre.log
 %end
 
-# Post-installation script (run with bash from chroot at the end of installation)
+# Post-installation script (run with bash from installation image at the end of installation)
+%post --nochroot
+# Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
+for custom_frag in /tmp/kscfg-pre/*.sh ; do
+	if [ -f "${custom_frag}" ]; then
+		mkdir -p /mnt/sysimage/tmp/kscfg-pre
+		cp "${custom_frag}" /mnt/sysimage/tmp/kscfg-pre/
+	fi
+done
+
+%end
+
+# Post-installation script (run with bash from chroot after the first post section)
 %post
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081201"
+script_version="2017081802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1301,24 +1453,51 @@ logger -s -p "local7.info" -t "kickstart-post" "Kickstarting with kernel command
 
 # Force sane language defaults for safe command output parsing
 export LANG=C LC_ALL=C
+
 # Set the hostname for apps that need it
 # Note: hostnamectl would not work inside the installation chroot
 export HOSTNAME=$(cat /etc/hostname)
-hostname $HOSTNAME
+hostname ${HOSTNAME}
 
 # Set the homedir for apps that need it
 export HOME="/root"
 
-# Determine cluster member identity
+# Hardcoded defaults
+
 unset my_index
+unset master_index
+
+master_index="0"
+
+# Load configuration parameters files (generated in pre section above)
+ks_custom_frags="hvp_parameters.sh"
+ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
+if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+else
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh"
+fi
+for custom_frag in ${ks_custom_frags} ; do
+	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+		# Perform a configuration fragment sanity check before loading
+		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		res=$?
+		if [ ${res} -ne 0 ]; then
+			# Report invalid configuration fragment and skip it
+			logger -s -p "local7.err" -t "${script_name}" "Skipping invalid remote configuration fragment ${custom_frag}"
+			continue
+		fi
+		source "/tmp/kscfg-pre/${custom_frag}"
+	fi
+done
+
+# Determine cluster member identity
 my_index=$(sed -n -e 's/^.*hvp_nodeid=\(\S*\).*$/\1/p' /proc/cmdline)
 if ! echo "${my_index}" | grep -q '^[[:digit:]]\+$' ; then
-	my_index="0"
+	my_index="${default_node_index}"
 fi
 
 # Determine master node identity
-unset master_index
-master_index="0"
 given_master_index=$(sed -n -e 's/^.*hvp_masternodeid=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_master_index}" | grep -q '^[[:digit:]]\+$' ; then
 	master_index="${given_master_index}"
@@ -1414,7 +1593,7 @@ chmod 644 /etc/{issue*,motd}
 # Enable HAVEGEd
 systemctl enable haveged
 
-# Note: users configuration script generated in pre section above and copied in second post section below
+# Note: users configuration script generated in pre section above and copied in third post section below
 
 # Conditionally force static the nic name<->MAC mapping to work around hardware bugs (eg nic "autoshifting" on some HP MicroServer G7)
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
@@ -1456,9 +1635,9 @@ CTDB_SET_TraverseTimeout=60
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
 
-# Note: hosts and addresses configuration files created in pre section above and copied in second post section below
+# Note: hosts and addresses configuration files created in pre section above and copied in third post section below
 
-# Note: a mount systemd unit for CTDB shared lock area created in pre section above and copied in second post section below
+# Note: a mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
 
 # Note: adding a glusterd-wait-online service to avoid random failures on global cluster reboot
@@ -1548,7 +1727,7 @@ systemctl disable ctdb
 
 # Configure Samba
 
-# Note: Samba main configuration file created in pre section above and copied in second post section below
+# Note: Samba main configuration file created in pre section above and copied in third post section below
 cp /etc/samba/smb.conf /etc/samba/smb.conf.orig
 
 # Username mappings
@@ -1671,7 +1850,7 @@ systemctl disable openvswitch
 systemctl disable ovn-controller
 
 # Configure Bind
-# Note: actual configuration file generated in pre section above to make use of kernel commandline parsing - will be put in place in second post section below
+# Note: actual configuration file generated in pre section above to make use of kernel commandline parsing - will be put in place in third post section below
 
 # Note: using haveged to ensure enough entropy (but rngd could be already running from installation environment)
 # Note: starting service manually since systemd inside a chroot would need special treatment
@@ -1801,7 +1980,7 @@ systemctl enable ks1stboot.service
 ) 2>&1 | tee /root/kickstart_post.log
 %end
 
-# Post-installation script (run with bash from installation image after the first post section)
+# Post-installation script (run with bash from installation image after the second post section)
 %post --nochroot
 # Copy CTDB configuration (generated in pre section above) into installed system
 if [ -s /tmp/hvp-ctdb-files/nodes ]; then
@@ -1871,7 +2050,7 @@ mv /mnt/sysimage/root/kickstart_post.log /mnt/sysimage/root/log
 mv /mnt/sysimage/root/*-ks.cfg /mnt/sysimage/root/etc
 %end
 
-# Post-installation script (run with bash from chroot after the second post section)
+# Post-installation script (run with bash from chroot after the third post section)
 %post --erroronfail
 
 # Initialize imgbased layout
