@@ -1,13 +1,13 @@
 # Kickstart file for Heretic oVirt Project initial installation physical/virtual host
 
-# Install with commandline (see below for comments):
+# Install from DVD with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
 # elevator=deadline ip=nicname:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
 # Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
 # Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
-# Note: alternatively burn this kickstart into your NetInstall image and use:
+# Note: alternatively burn this kickstart into your DVD image and append to default commandline:
 # elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing/configuring local virtualization support irrespective of hardware capabilities add hvp_novirt
@@ -74,6 +74,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above (except for hvp_nicmacfix) can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -253,11 +254,23 @@ ipmat() {
 	return 0
 }
 
-# Determine node OS disk choice
-given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
-if [ -z "${given_nodeosdisk}" ]; then
-	given_nodeosdisk="last-smallest"
-fi
+# A general IP distance function to derive offsets from classless IP addresses
+# Note: derived from https://stackoverflow.com/questions/33056385/increment-ip-address-in-a-shell-script
+# TODO: add support for IPv6
+ipdiff() {
+        local given_ip1=$1
+        local given_ip2=$2
+        # TODO: perform better checking on parameters
+        if [ -z "${given_ip1}" -o -z "${given_ip2}" ]; then
+                echo ""
+                return 255
+        fi
+        local given_ip1_hex=$(printf '%.2X%.2X%.2X%.2X' $(echo "${given_ip1}" | sed -e 's/\./ /g'))
+        local given_ip2_hex=$(printf '%.2X%.2X%.2X%.2X' $(echo "${given_ip2}" | sed -e 's/\./ /g'))
+        local result=$(echo $(( 0x${given_ip1_hex} - 0x${given_ip2_hex} )) | sed -e 's/^-//')
+        echo "${result}"
+        return 0
+}
 
 # Define all cluster default network data
 # Note: engine-related data will only be used for automatic DNS zones configuration
@@ -273,6 +286,7 @@ unset reverse_domain_name
 unset node_name
 unset bmc_ip_offset
 unset node_ip_offset
+unset switch_ip
 unset switch_ip_offset
 unset switch_name
 unset engine_name
@@ -293,32 +307,17 @@ unset admin_password
 unset keyboard_layout
 unset local_timezone
 
-# TODO: perform better consistency check on all commandline-given parameters
+# Hardcoded defaults
 
-# Determine cluster members number
-given_node_count=$(sed -n -e 's/^.*hvp_nodecount=\(\S*\).*$/\1/p' /proc/cmdline)
-if ! echo "${given_node_count}" | grep -q '^[[:digit:]]\+$' ; then
-	node_count="3"
-else
-	node_count="${given_node_count}"
-fi
+default_nodeosdisk="last-smallest"
 
-# Define number of active storage members
-# Note: if we have three nodes only, then one (the last one) will be an all-arbiter no-I/O node
-if [ "${node_count}" -eq 3 ]; then
-	active_storage_node_count="2"
-else
-	active_storage_node_count="${node_count}"
-fi
+default_node_count="3"
 
 declare -A node_name
 node_name[0]="pinkiepie"
 node_name[1]="applejack"
 node_name[2]="rarity"
 node_name[3]="fluttershy"
-for ((i=3;i<${node_count};i=i+1)); do
-	node_name[${i}]="node${i}"
-done
 
 switch_name="scootaloo"
 
@@ -420,6 +419,157 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
+
+# Detect any configuration fragments and load them into the pre environment
+# Note: BIOS based devices, file and DHCP methods are unsupported
+mkdir /tmp/kscfg-pre
+mkdir /tmp/kscfg-pre/mnt
+ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+ks_custom_frags="hvp_parameters.sh"
+ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
+if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+else
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh"
+fi
+if [ -z "${ks_source}" ]; then
+	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
+else
+	ks_dev=""
+	if echo "${ks_source}" | grep -q '^floppy' ; then
+		# Note: hardcoded device name for floppy disk
+		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
+		ks_dev="/dev/fd0"
+		ks_fstype="vfat"
+		ks_fsopt="ro"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
+		if [ -z "${ks_path}" ]; then
+			ks_path="/ks.cfg"
+		fi
+		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
+		# Note: cdrom gets accessed as real device name which must be detected - assuming it's the first removable device
+		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
+		# Note: on RHEL>=6 even IDE/ATAPI devices have SCSI device names
+		for dev in /dev/sd[a-z] /dev/sr[0-9]; do
+			ks_dev=""
+			if [ -b "${dev}" ]; then
+				is_removable="$(cat /sys/block/$(basename ${dev})/removable 2>/dev/null)"
+				if [ "${is_removable}" = "1" ]; then
+					ks_dev="${dev}"
+					ks_fstype="iso9660"
+					ks_fsopt="ro"
+					ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
+					if [ -z "${ks_path}" ]; then
+						echo "Unable to determine Kickstart source path" 1>&2
+						ks_dev=""
+					else
+						ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+					fi
+					break
+				fi
+			fi
+		done
+	elif echo "${ks_source}" | grep -q '^hd:' ; then
+		# Note: blindly extracting device name from Kickstart commandline
+		ks_dev="/dev/$(echo ${ks_source} | awk -F: '{print $2}')"
+		# TODO: Detect actual filesystem type on local drive - assuming VFAT
+		ks_fstype="vfat"
+		ks_fsopt="ro"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
+		if [ -z "${ks_path}" ]; then
+			echo "Unable to determine Kickstart source path" 1>&2
+			ks_dev=""
+		else
+			ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+		fi
+	elif echo "${ks_source}" | grep -q '^nfs:' ; then
+		# Note: blindly extracting NFS server from Kickstart commandline
+		ks_dev="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_fstype="nfs"
+		ks_fsopt="ro,nolock"
+		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
+		if [ -z "${ks_path}" ]; then
+			echo "Unable to determine Kickstart source path" 1>&2
+			ks_dev=""
+		else
+			ks_dev="${ks_dev}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dir="/"
+		fi
+	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
+		# Note: blindly extracting URL from Kickstart commandline
+		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
+		ks_fstype="url"
+	else
+		echo "Unsupported Kickstart source detected" 1>&2
+	fi
+	if [ -z "${ks_dev}" ]; then
+		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
+	else
+		if [ "${ks_fstype}" = "url" ]; then
+			for custom_frag in ${ks_custom_frags} ; do
+				echo "Attempting network retrieval of ${ks_dev}/${custom_frag}" 1>&2
+				wget -P /tmp/kscfg-pre "${ks_dev}/${custom_frag}" 
+			done
+		else
+			mount -t ${ks_fstype} -o ${ks_fsopt} ${ks_dev} /tmp/kscfg-pre/mnt
+			for custom_frag in ${ks_custom_frags} ; do
+				echo "Attempting filesystem retrieval of ${custom_frag}" 1>&2
+				if [ -f "/tmp/kscfg-pre/mnt${ks_dir}/${custom_frag}" ]; then
+					cp "/tmp/kscfg-pre/mnt${ks_dir}/${custom_frag}" /tmp/kscfg-pre
+				fi
+			done
+			umount /tmp/kscfg-pre/mnt
+		fi
+	fi
+fi
+# Load any configuration fragment found, in the proper order
+# Note: configuration-fragment defaults will override hardcoded defaults
+# Note: commandline parameters will override configuration-fragment and hardcoded defaults
+# Note: configuration fragments get executed will full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+for custom_frag in ${ks_custom_frags} ; do
+	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+		# Perform a configuration fragment sanity check before loading
+		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		res=$?
+		if [ ${res} -ne 0 ]; then
+			# Report invalid configuration fragment and skip it
+			logger -s -p "local7.err" -t "${script_name}" "Skipping invalid remote configuration fragment ${custom_frag}"
+			continue
+		fi
+		source "/tmp/kscfg-pre/${custom_frag}"
+	fi
+done
+
+# TODO: perform better consistency check on all commandline-given parameters
+
+# Determine node OS disk choice
+given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -z "${given_nodeosdisk}" ]; then
+	given_nodeosdisk="${default_nodeosdisk}"
+fi
+
+# Determine cluster members number
+given_node_count=$(sed -n -e 's/^.*hvp_nodecount=\(\S*\).*$/\1/p' /proc/cmdline)
+if ! echo "${given_node_count}" | grep -q '^[[:digit:]]\+$' ; then
+	node_count="${default_node_count}"
+else
+	node_count="${given_node_count}"
+fi
+# Fill in missing node names
+for ((i=0;i<${node_count};i=i+1)); do
+	if [ -z "${node_name[${i}]}" ]; then
+		node_name[${i}]="node${i}"
+	fi
+done
+
+# Define number of active storage members
+# Note: if we have three nodes only, then one (the last one) will be an all-arbiter no-I/O node
+if [ "${node_count}" -eq 3 ]; then
+	active_storage_node_count="2"
+else
+	active_storage_node_count="${node_count}"
+fi
 
 # Determine master node identity
 given_master_index=$(sed -n -e 's/^.*hvp_masternodeid=\(\S*\).*$/\1/p' /proc/cmdline)
@@ -721,11 +871,33 @@ done
 # Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
 if [ "${fixed_mgmt_bondmode}" = "false" ]; then
 	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
-		bondopts['mgmt']="mode=active-backup;miimon=100"
+		bondmode['mgmt']="activepassive"
 	else
-		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+		bondmode['mgmt']="lacp"
 	fi
 fi
+
+# Derive effective bondopts from bonding mode indications
+# Note: used only for node configuration parameters file generation below
+unset bondopts
+declare -A bondopts
+for zone in "${!bondmode[@]}" ; do
+	case "${bondmode[${zone}]}" in
+		lacp)
+			bondopts["${zone}"]="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+			;;
+		roundrobin)
+			bondopts["${zone}"]="mode=balance-rr;miimon=100"
+			;;
+		activepassive)
+			bondopts["${zone}"]="mode=active-backup;miimon=100"
+			;;
+		*)
+			# In case of unrecognized mode force activepassive
+			bondopts["${zone}"]="mode=active-backup;miimon=100"
+			;;
+	esac
+done
 
 # Determine network segment identity and parameters
 if [ -n "${nics['mgmt']}" ]; then
@@ -745,7 +917,8 @@ fi
 given_switch=$(sed -n -e "s/^.*hvp_switch=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_switch}" ]; then
 	switch_ip="${given_switch}"
-else
+fi
+if [ -z "${switch_ip}" ]; then
 	switch_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${switch_ip_offset} +)
 fi
 
@@ -753,7 +926,8 @@ fi
 given_engine=$(sed -n -e 's/^.*hvp_engine=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_engine}" ]; then
 	engine_ip="${given_engine}"
-else
+fi
+if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
 fi
 
@@ -943,6 +1117,7 @@ EOF
 
 # Define common network parameters for all nodes to be added on PXE menu as kernel commandline parameters during installation
 common_network_params=""
+essential_network_params=""
 for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" ]; then
 		unset PREFIX
@@ -990,6 +1165,7 @@ EOF
 # Note: we will automatically extend to node installation the parameters passed during our own installation
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
+	essential_network_params="${essential_network_params} hvp_nicmacfix"
 else
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	# Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
@@ -997,23 +1173,107 @@ else
 fi
 if grep 'biosdevname=0' /proc/cmdline | grep -q 'net.ifnames=0' ; then
 	common_network_params="${common_network_params} biosdevname=0 net.ifnames=0"
+	essential_network_params="${essential_network_params} biosdevname=0 net.ifnames=0"
 else
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
 fi
-# TODO: investigate "too many boot env vars" kernel panic - manually trim the cmdline below removing default parameters as a workaround - maybe automatically track modified settings and include only those
-# TODO: possible solution: limit cmdline use to dracut/kernel/inst.ks parameters then somewhow retrieve a parameters file from the same source which the kickstart came from
+# Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all but essential hvp_* parameters (hvp_nicmacfix) - creating hvp_parameters_heretic_ngn.sh with all other parameters (leaving a commented line as reference here)
+# Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/hvp/vmlinuz
-	        append initrd=linux/hvp/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        # append initrd=linux/hvp/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/hvp/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
+# Create common configuration parameters fragment
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+# Preconfigured defaults for nodes installation
+
+default_nodeosdisk="${given_nodeosdisk}"
+
+default_node_count="${node_count}"
+
+# Note: the following should be passed on kernel commandline or put only in a node-specific configuration parameters file (hvp_parameters_hh:hh:hh:hh:hh:hh.sh)
+#default_node_index="0"
+
+EOF
+for ((i=0;i<${node_count};i=i+1)); do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	node_name[${i}]="${node_name[${i}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+
+switch_name="${switch_name}"
+
+engine_name="${engine_name}"
+
+storage_name="${storage_name}"
+
+bmc_ip_offset="${bmc_ip_offset}"
+node_ip_offset="${node_ip_offset}"
+storage_ip_offset="${storage_ip_offset}"
+
+# Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
+switch_ip_offset="$(ipdiff ${switch_ip} ${network[${dhcp_zone}]})"
+engine_ip_offset="$(ipdiff ${engine_ip} ${network[${dhcp_zone}]})"
+test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
+
+switch_ip="${switch_ip}"
+engine_ip="${engine_ip}"
+EOF
+for zone in "${!my_ip[@]}" ; do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	test_ip["${zone}"]="${my_ip[${zone}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+
+master_index="${master_index}"
+
+# Note: network_base values are derived automatically anyway
+network['mgmt']="${network['mgmt']}"
+netmask['mgmt']="${netmask['mgmt']}"
+bondopts['mgmt']="${bondopts['mgmt']}"
+mtu['mgmt']="${mtu['mgmt']}"
+network['gluster']="${network['gluster']}"
+netmask['gluster']="${netmask['gluster']}"
+bondopts['gluster']="${bondopts['gluster']}"
+mtu['gluster']="${mtu['gluster']}"
+network['lan']="${network['lan']}"
+netmask['lan']="${netmask['lan']}"
+bondopts['lan']="${bondopts['lan']}"
+mtu['lan']="${mtu['lan']}"
+network['internal']="${network['internal']}"
+netmask['internal']="${netmask['internal']}"
+bondopts['internal']="${bondopts['internal']}"
+mtu['internal']="${mtu['internal']}"
+
+# Note: reverse_domain_name values are derived automatically anyway
+domain_name['mgmt']="${domain_name['mgmt']}"
+domain_name['gluster']="${domain_name['gluster']}"
+domain_name['lan']="${domain_name['lan']}"
+domain_name['internal']="${domain_name['internal']}"
+
+my_nameserver="${my_ip[${dhcp_zone}]}"
+
+my_forwarders="${my_forwarders}"
+
+my_gateway="${dhcp_gateway}"
+
+root_password="${root_password}"
+admin_username="${admin_username}"
+admin_password="${admin_password}"
+keyboard_layout="${keyboard_layout}"
+local_timezone="${local_timezone}"
+EOF
 
 # Create bind configuration files (disable RFC1918 stub zones creation - include forced DNS-based redirect to local repo mirrors)
 mkdir -p /tmp/hvp-bind-zones/dynamic
@@ -1224,7 +1484,7 @@ options
 EOF
 for forwarder in $(echo "${my_forwarders}" | sed -e 's/,/ /g') ; do
 	cat <<- EOF >> named.conf
-	        ${forwarder};
+	                ${forwarder};
 	EOF
 done
 cat << EOF >> named.conf
@@ -1732,6 +1992,11 @@ EOF
 # Note: eth interfaces enumeration taken from https://serverfault.com/a/852093
 cat << EOF > ovirtnodes.yaml
 ---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
 - name: perform oVirt configuration
   hosts: ovirtnodes
   remote_user: root
@@ -1877,12 +2142,17 @@ EOF
 
 # Create Ansible playbook for oVirt Engine
 # Note: Ansible oVirt Engine management example thanks to Simone Tiraboschi
-# TODO: verify whether we can override answers from first node (using the same template) using Ansible module or we must revert to manually adding further nodes from commandline (unsupported on oVirt >= 4.0)
+# TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
 # TODO: add further storage domains
-# TODO: add OVN configuration
+# TODO: add OVN configuration both on engine and on nodes
 # TODO: add provisioning of virtual machines (AD DC, printer server, DB, application server and virtual desktop)
 cat << EOF > ovirtengine.yaml
 ---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
 - name: perform oVirt configuration
   hosts: ovirtengine
   remote_user: root
@@ -1939,7 +2209,7 @@ popd
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081604"
+script_version="2017081802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2833,7 +3103,6 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/shutdown.yaml
 
 # Create a task to setup key-based SSH access
 # Note: if the password-containing var has been skipped/removed from above then the following must be invoked with: --ask-pass
-# TODO: make sure that the private key is locally present - generate otherwise
 cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
 ---
 - name: Set authorized ssh key to allow ssh passwordless access
@@ -3571,6 +3840,11 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy-cleanu
 # Note: the rationale behind this playbook is that LACP seriously interfers both with standard PXE booting and our custom network bonding autodetection logic above - use AP/RR during installation, then use this to convert every bond to LACP afterwards
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 ---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
 - name: reconfigure gluster nodes bonding to LACP mode
   hosts: glusternodes
   remote_user: root
@@ -3592,6 +3866,11 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 # TODO: add NFS-Ganesha and Gluster-block when ready
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 ---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -3652,6 +3931,11 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 # TODO: add NFS-Ganesha and Gluster-block when ready
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 ---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -4062,6 +4346,12 @@ if [ -f /tmp/hvp-syslinux-conf/default ]; then
 	chmod 644 /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 	chown root:root /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 fi
+# Note: the following will overwrite the generic sample mirrorred from the HVP official site
+if [ -f /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh ]; then
+	cp --backup --suffix .orig /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
+	chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
+	chown root:root /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
+fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
 # Note: it should be inserted before the inclusion of /etc/httpd/conf.d/*.conf fragments
@@ -4135,7 +4425,7 @@ fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
 cp /run/install/ks.cfg /mnt/sysimage/root/etc
-for full_frag in /tmp/full-* ; do
+for full_frag in /tmp/full-* /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${full_frag}" ]; then
 		cp "${full_frag}" /mnt/sysimage/root/etc
 	fi
