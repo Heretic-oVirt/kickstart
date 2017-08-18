@@ -1438,7 +1438,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081802"
+script_version="2017081803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1547,8 +1547,7 @@ fi
 # Install further packages for additional functions: Bind
 yum -y --enablerepo base --enablerepo updates install bind
 
-# Rebase to GlusterFS packages from HVP repo (recompiled RHGS version)
-# Note: gdeploy is older in HVP repo
+# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
 yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy
 
 # Clean up after all installations
@@ -1850,7 +1849,7 @@ systemctl disable openvswitch
 systemctl disable ovn-controller
 
 # Configure Bind
-# Note: actual configuration file generated in pre section above to make use of kernel commandline parsing - will be put in place in third post section below
+# Note: base configuration files generated in pre section above - actual file copying happens in non-chroot post section below
 
 # Note: using haveged to ensure enough entropy (but rngd could be already running from installation environment)
 # Note: starting service manually since systemd inside a chroot would need special treatment
@@ -1863,8 +1862,8 @@ rndckey=$(grep Key $(/usr/sbin/dnssec-keygen -a HMAC-MD5 -b 512 -n HOST -T KEY r
 cat << EOM > rndc.key
 // rndc key for control connections
 key "rndc_key" {
-	algorithm hmac-md5;
-	secret "${rndckey}";
+        algorithm hmac-md5;
+        secret "${rndckey}";
 };
 EOM
 chgrp named rndc.key
@@ -1872,12 +1871,12 @@ chmod 640 rndc.key
 cat << EOM > rndc.conf
 // rndc configuration for control connections
 options {
-	default-server  localhost;
-	default-key     "rndc_key";
+        default-server  localhost;
+        default-key     "rndc_key";
 };
 
 server localhost {
-	key  "rndc_key";
+        key  "rndc_key";
 };
 
 // rndc key for control connections
@@ -1924,7 +1923,6 @@ chmod 755 /root/bin/backup-conf
 cat << EOF > /root/etc/backup.list
 /boot/grub2
 /etc
-/var/www/html
 /usr/local/bin
 /usr/local/sbin
 /usr/local/etc
@@ -2040,7 +2038,7 @@ fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
 cp /run/install/ks.cfg /mnt/sysimage/root/etc
-for full_frag in /tmp/full-* ; do
+for full_frag in /tmp/full-* /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${full_frag}" ]; then
 		cp "${full_frag}" /mnt/sysimage/root/etc
 	fi
