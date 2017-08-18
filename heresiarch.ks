@@ -2209,7 +2209,7 @@ popd
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081802"
+script_version="2017081803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2485,6 +2485,8 @@ sed -i -e 's/^rotate.*$/rotate 130/' -e 's/^#\s*compress.*$/compress/' /etc/logr
 
 # Enable HAVEGEd
 systemctl enable haveged
+
+# Note: users configuration script generated in pre section above and copied in third post section below
 
 # Conditionally force static the nic name<->MAC mapping to work around hardware bugs (eg nic "autoshifting" on some HP MicroServer G7)
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
@@ -4148,6 +4150,7 @@ chmod 755 /root/bin/backup-conf
 cat << EOF > /root/etc/backup.list
 /boot/grub2
 /etc
+/var/www/html
 /usr/local/bin
 /usr/local/sbin
 /usr/local/etc
@@ -4276,6 +4279,7 @@ exit 0
 EOF
 chmod 750 /etc/rc.d/rc.ks1stboot
 # Prepare first-boot execution through systemd
+# TODO: find a way to actually block logins till this unit exits
 cat << EOF > /etc/systemd/system/ks1stboot.service
 [Unit]
 Description=Post Kickstart first boot configurations
