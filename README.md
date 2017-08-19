@@ -1,6 +1,6 @@
 # Kickstart repository
 
-This repository contains the kickstart files used in the Heretic oVirt Project:
+This repository contains the kickstart files used for Heretic oVirt Project infrastructure machines:
 
 heresiarch.ks - the kickstart file for the installer machine (install this machine *first*)
 
