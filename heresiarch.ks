@@ -534,7 +534,7 @@ for custom_frag in ${ks_custom_frags} ; do
 		res=$?
 		if [ ${res} -ne 0 ]; then
 			# Report invalid configuration fragment and skip it
-			logger -s -p "local7.err" -t "${script_name}" "Skipping invalid remote configuration fragment ${custom_frag}"
+			logger -s -p "local7.err" -t "kickstart-pre" "Skipping invalid remote configuration fragment ${custom_frag}"
 			continue
 		fi
 		source "/tmp/kscfg-pre/${custom_frag}"
@@ -2209,7 +2209,7 @@ popd
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081803"
+script_version="2017081901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
