@@ -501,6 +501,7 @@ if [ "${node_count}" -eq 3 ]; then
 else
 	active_storage_node_count="${node_count}"
 fi
+
 # Determine cluster member identity
 my_index=$(sed -n -e 's/^.*hvp_nodeid=\(\S*\).*$/\1/p' /proc/cmdline)
 if ! echo "${my_index}" | grep -q '^[[:digit:]]\+$' ; then
@@ -866,7 +867,7 @@ mkdir -p /tmp/hvp-users-conf
 cat << EOF > /tmp/hvp-users-conf/rc.users-setup
 #!/bin/bash
 # Configure email aliases (divert root email to administrative account)
-sed -i -e 's/^#\\s*root.*\$/root:\\t\\t${admin_username}/' /etc/aliases
+sed -i -e "s/^#\\\\s*root.*\\\$/root:\\\\t\\\\t${admin_username}/" /etc/aliases
 cat << EOM >> /etc/aliases
 
 # Email alias for server monitoring
@@ -891,8 +892,8 @@ cat << EOF > /tmp/full-disk
 # oVirt Node hyperconverged disk configuration: there will surely be multiple SCSI/SATA disks but only one will be used for OS
 # Initialize partition table (GPT) on all available disks
 clearpart --all --initlabel --disklabel=gpt
-# Bootloader placed on MBR, with 3 seconds waiting, without password protection, disabling high res text console, disabling CPU C-states and with I/O scheduler optimized for a virtualization/storage server
-bootloader --location=mbr --timeout=3 --append="nomodeset elevator=deadline processor.max_cstate=1 intel_idle.max_cstate=0"
+# Bootloader placed on MBR, with 3 seconds waiting, with password protection, disabling high res text console, disabling CPU C-states and with I/O scheduler optimized for a virtualization/storage server
+bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomodeset elevator=deadline processor.max_cstate=1 intel_idle.max_cstate=0"
 # Ignore further disks
 # Note: further disks will be used as bricks later on
 ignoredisk --only-use=${device_name}
@@ -1438,7 +1439,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081901"
+script_version="2017081903"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
