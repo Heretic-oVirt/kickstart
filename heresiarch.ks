@@ -1011,7 +1011,7 @@ su - ${admin_username} -c "mkdir /home/${admin_username}/rpmbuild/tmp"
 echo "%_tmppath     %_topdir/tmp" >> /home/${admin_username}/.rpmmacros
 
 # Configure email aliases (divert root email to administrative account)
-sed -i -e 's/^#\\s*root.*\$/root:\\t\\t${admin_username}/' /etc/aliases
+sed -i -e "s/^#\\\\s*root.*\\\$/root:\\\\t\\\\t${admin_username}/" /etc/aliases
 newaliases
 EOF
 
@@ -1044,8 +1044,8 @@ cat << EOF > /tmp/full-disk
 # Simple disk configuration: single SCSI/SATA/VirtIO disk
 # Initialize partition table (GPT) on selected disk
 clearpart --drives=${device_name} --all --initlabel --disklabel=gpt
-# Bootloader placed on MBR, with 3 seconds waiting and without password protection
-bootloader --location=mbr --timeout=3 --boot-drive=${device_name} --driveorder=${device_name}
+# Bootloader placed on MBR, with 3 seconds waiting and with password protection
+bootloader --location=mbr --timeout=3 --password=${root_password} --boot-drive=${device_name} --driveorder=${device_name}
 # Ignore further disk - maybe USB key!!!
 ignoredisk --only-use=${device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
@@ -4371,7 +4371,8 @@ fi
 # Copy users setup script (generated in pre section above) into installed system
 if [ -f /tmp/hvp-users-conf/rc.users-setup ]; then
 	cp /tmp/hvp-users-conf/rc.users-setup /mnt/sysimage/etc/rc.d/rc.users-setup
-	chmod 755 /mnt/sysimage/etc/rc.d/rc.users-setup
+	# Note: cleartext passwords contained - must restrict access
+	chmod 700 /mnt/sysimage/etc/rc.d/rc.users-setup
 	chown root:root /mnt/sysimage/etc/rc.d/rc.users-setup
 fi
 
