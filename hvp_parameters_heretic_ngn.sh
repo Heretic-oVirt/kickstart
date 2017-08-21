@@ -1,6 +1,8 @@
 # Preconfigured defaults for node installation
 # Note: the following are all the modifiable parameters for reference only (values are equal to hardcoded defaults)
 
+nicmacfix="false"
+
 default_nodeosdisk="last-smallest"
 
 default_node_count="3"
@@ -72,4 +74,3 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
-
