@@ -65,7 +65,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
-# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above (except for hvp_nicmacfix) can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -171,6 +171,7 @@ fi
 
 # Define all cluster default network data
 # Note: engine-related data will only be used for automatic DNS zones configuration
+unset nicmacfix
 unset node_count
 unset network
 unset netmask
@@ -206,6 +207,8 @@ unset keyboard_layout
 unset local_timezone
 
 # Hardcoded defaults
+
+nicmacfix="false"
 
 default_nodeosdisk="last-smallest"
 
@@ -430,6 +433,11 @@ done
 
 # TODO: perform better consistency check on all commandline-given parameters
 
+# Determine choice of nic MAC fixed assignment
+if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+	nicmacfix="true"
+fi
+
 # Determine OS disk choice
 given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
 # Note: we want the devices list alphabetically ordered anyway
@@ -614,26 +622,13 @@ fixed_mgmt_bondmode="false"
 unset my_ip
 declare -A my_ip
 for zone in "${!network[@]}" ; do
-	given_network=$(sed -n -e "s/^.*hvp_${zone}=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	unset NETWORK NETMASK
-	eval $(ipcalc -s -n "${given_network}")
-	eval $(ipcalc -s -m "${given_network}")
-	if [ -n "${NETWORK}" -a -n "${NETMASK}" ]; then
-		network["${zone}"]="${NETWORK}"
-		netmask["${zone}"]="${NETMASK}"
-	fi
-	NETWORK=${network["${zone}"]}
-	NETMASK=${netmask["${zone}"]}
-	unset IPADDR
-	IPADDR=$(echo "${given_network}" | sed -n -e 's>^\([^/]*\)/.*$>\1>p')
-	if [ -n "${IPADDR}" -a "${IPADDR}" != "${NETWORK}" ]; then
-		my_ip["${zone}"]="${IPADDR}"
-	else
-		my_ip["${zone}"]=$(ipmat $(ipmat ${NETWORK} ${node_ip_offset} +) ${my_index} +)
-	fi
 	given_network_domain_name=$(sed -n -e "s/^.*hvp_${zone}_domainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
+	fi
+	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_network_mtu}" ]; then
+		mtu["${zone}"]="${given_network_mtu}"
 	fi
 	given_network_bondmode=$(sed -n -e "s/^.*hvp_${zone}_bondmode=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_bondmode}" ]; then
@@ -666,9 +661,22 @@ for zone in "${!network[@]}" ; do
 				;;
 		esac
 	fi
-	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_network_mtu}" ]; then
-		mtu["${zone}"]="${given_network_mtu}"
+	given_network=$(sed -n -e "s/^.*hvp_${zone}=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	unset NETWORK NETMASK
+	eval $(ipcalc -s -n "${given_network}")
+	eval $(ipcalc -s -m "${given_network}")
+	if [ -n "${NETWORK}" -a -n "${NETMASK}" ]; then
+		network["${zone}"]="${NETWORK}"
+		netmask["${zone}"]="${NETMASK}"
+	fi
+	NETWORK=${network["${zone}"]}
+	NETMASK=${netmask["${zone}"]}
+	unset IPADDR
+	IPADDR=$(echo "${given_network}" | sed -n -e 's>^\([^/]*\)/.*$>\1>p')
+	if [ -n "${IPADDR}" -a "${IPADDR}" != "${NETWORK}" ]; then
+		my_ip["${zone}"]="${IPADDR}"
+	else
+		my_ip["${zone}"]=$(ipmat $(ipmat ${NETWORK} ${node_ip_offset} +) ${my_index} +)
 	fi
 	given_network_test_ip=$(sed -n -e "s/^.*hvp_${zone}_test_ip=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_test_ip}" ]; then
@@ -1439,7 +1447,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081903"
+script_version="2017082101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1465,10 +1473,13 @@ export HOME="/root"
 
 # Hardcoded defaults
 
+unset nicmacfix
 unset my_index
 unset master_index
 
 master_index="0"
+
+nicmacfix="false"
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh"
@@ -1491,6 +1502,11 @@ for custom_frag in ${ks_custom_frags} ; do
 		source "/tmp/kscfg-pre/${custom_frag}"
 	fi
 done
+
+# Determine choice of nic MAC fixed assignment
+if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+	nicmacfix="true"
+fi
 
 # Determine cluster member identity
 my_index=$(sed -n -e 's/^.*hvp_nodeid=\(\S*\).*$/\1/p' /proc/cmdline)
@@ -1596,7 +1612,7 @@ systemctl enable haveged
 # Note: users configuration script generated in pre section above and copied in third post section below
 
 # Conditionally force static the nic name<->MAC mapping to work around hardware bugs (eg nic "autoshifting" on some HP MicroServer G7)
-if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+if [ "${nicmacfix}" = "true" ] ; then
 	for nic_cfg in /etc/sysconfig/network-scripts/ifcfg-* ; do
 		eval $(grep '^DEVICE=' "${nic_cfg}")
 		nic_name="${DEVICE}"
@@ -1936,6 +1952,22 @@ EOF
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
 #!/bin/bash
+
+# Conditionally enable either IPMI or LMsensors monitoring
+# TODO: configure IPMI options
+# TODO: find a way to ignore partial IPMI implementations (e.g. those needing a [missing] add-on card)
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	if dmidecode --type 38 | grep -q 'IPMI' ; then
+		systemctl enable ipmi
+		systemctl enable ipmievd
+		systemctl start ipmi
+		systemctl start ipmievd
+	else
+		systemctl enable lm_sensors
+		yes yes | sensors-detect
+		systemctl start lm_sensors
+	fi
+fi
 
 # Run dynamically determined users configuration actions
 if [ -x /etc/rc.d/rc.users-setup ]; then
