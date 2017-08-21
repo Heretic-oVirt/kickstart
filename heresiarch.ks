@@ -74,7 +74,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
-# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above (except for hvp_nicmacfix) can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -274,6 +274,8 @@ ipdiff() {
 
 # Define all cluster default network data
 # Note: engine-related data will only be used for automatic DNS zones configuration
+unset nicmacfix
+unset nolocalvirt
 unset network_priority
 unset node_count
 unset network
@@ -308,6 +310,10 @@ unset keyboard_layout
 unset local_timezone
 
 # Hardcoded defaults
+
+nicmacfix="false"
+
+nolocalvirt="false"
 
 default_nodeosdisk="last-smallest"
 
@@ -543,6 +549,19 @@ done
 
 # TODO: perform better consistency check on all commandline-given parameters
 
+# Determine choice of nic MAC fixed assignment
+if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+	nicmacfix="true"
+fi
+
+# Determine choice of skipping local virtualization support
+if grep -w -q 'hvp_novirt' /proc/cmdline ; then
+	nolocalvirt="true"
+fi
+if ! egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo ; then
+	nolocalvirt="true"
+fi
+
 # Determine node OS disk choice
 given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -z "${given_nodeosdisk}" ]; then
@@ -715,6 +734,10 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
 	fi
+	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_network_mtu}" ]; then
+		mtu["${zone}"]="${given_network_mtu}"
+	fi
 	given_network_bondmode=$(sed -n -e "s/^.*hvp_${zone}_bondmode=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_bondmode}" ]; then
 		case "${given_network_bondmode}" in
@@ -745,10 +768,6 @@ for zone in "${!network[@]}" ; do
 				bondmode["${zone}"]="activepassive"
 				;;
 		esac
-	fi
-	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_network_mtu}" ]; then
-		mtu["${zone}"]="${given_network_mtu}"
 	fi
 	given_network=$(sed -n -e "s/^.*hvp_${zone}=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	unset NETWORK NETMASK
@@ -1033,6 +1052,7 @@ EOF
 
 # Create disk setup fragment
 # TODO: find a better way to detect emulated/VirtIO devices
+all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
 if [ -b /dev/vda ]; then
 	device_name="vda"
 elif [ -b /dev/xvda ]; then
@@ -1163,7 +1183,7 @@ LABEL install
 # Start kickstart-based HVP Nodes installation
 EOF
 # Note: we will automatically extend to node installation the parameters passed during our own installation
-if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
 	essential_network_params="${essential_network_params} hvp_nicmacfix"
 else
@@ -1180,7 +1200,7 @@ else
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
 fi
-# Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all but essential hvp_* parameters (hvp_nicmacfix) - creating hvp_parameters_heretic_ngn.sh with all other parameters (leaving a commented line as reference here)
+# Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating hvp_parameters_heretic_ngn.sh with all other parameters (leaving a commented line as reference here)
 # Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
@@ -2204,12 +2224,24 @@ popd
 ) 2>&1 | tee /tmp/kickstart_pre.log
 %end
 
-# Post-installation script (run with bash from chroot at the end of installation)
+# Post-installation script (run with bash from installation image at the end of installation)
+%post --nochroot --log /dev/console
+# Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
+for custom_frag in /tmp/kscfg-pre/*.sh ; do
+	if [ -f "${custom_frag}" ]; then
+		mkdir -p /mnt/sysimage/tmp/kscfg-pre
+		cp "${custom_frag}" /mnt/sysimage/tmp/kscfg-pre/
+	fi
+done
+
+%end
+
+# Post-installation script (run with bash from chroot after the first post section)
 # Note: console logging to support commandline virt-install invocation
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017081901"
+script_version="2017082101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2230,6 +2262,47 @@ hostname ${HOSTNAME}
 
 # Set the homedir for apps that need it
 export HOME="/root"
+
+# Hardcoded defaults
+
+unset nicmacfix
+
+nicmacfix="false"
+
+# Load configuration parameters files (generated in pre section above)
+ks_custom_frags="hvp_parameters.sh"
+ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
+if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+else
+	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh"
+fi
+for custom_frag in ${ks_custom_frags} ; do
+	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+		# Perform a configuration fragment sanity check before loading
+		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		res=$?
+		if [ ${res} -ne 0 ]; then
+			# Report invalid configuration fragment and skip it
+			logger -s -p "local7.err" -t "kickstart-post" "Skipping invalid remote configuration fragment ${custom_frag}"
+			continue
+		fi
+		source "/tmp/kscfg-pre/${custom_frag}"
+	fi
+done
+
+# Determine choice of nic MAC fixed assignment
+if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+	nicmacfix="true"
+fi
+
+# Determine choice of skipping local virtualization support
+if grep -w -q 'hvp_novirt' /proc/cmdline ; then
+	nolocalvirt="true"
+fi
+if ! egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo ; then
+	nolocalvirt="true"
+fi
 
 # Create /dev/root symlink for grubby (must differentiate for use of LVM or MD based "/")
 # TODO: Open a Bugzilla notification
@@ -2349,7 +2422,7 @@ else
 fi
 
 # Add virtualization support on suitable physical platforms
-if egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo && grep -v -q 'hvp_novirt' /proc/cmdline ; then
+if [ "${nolocalvirt}" != "true" ]; then
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
@@ -2489,7 +2562,7 @@ systemctl enable haveged
 # Note: users configuration script generated in pre section above and copied in third post section below
 
 # Conditionally force static the nic name<->MAC mapping to work around hardware bugs (eg nic "autoshifting" on some HP MicroServer G7)
-if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
+if [ "${nicmacfix}" = "true" ] ; then
 	for nic_cfg in /etc/sysconfig/network-scripts/ifcfg-* ; do
 		eval $(grep '^DEVICE=' "${nic_cfg}")
 		nic_name="${DEVICE}"
@@ -2677,6 +2750,7 @@ cat /etc/pki/tls/dhparams.pem >> /etc/pki/tls/certs/localhost.crt
 sed -i -e 's/^ServerTokens.*$/ServerTokens ProductOnly/' -e 's/^ServerSignature.*$/ServerSignature Off\n\n#\n# Disable TRACE for PCI compliance\nTraceEnable off/' -e 's/^\(ScriptAlias.*\)$/#\1/' /etc/httpd/conf/httpd.conf
 sed -i -e 's/^\(SSLProtocol.*\)$/#\1/' -e 's/^\(SSLCipherSuite.*\)$/#\1\n# Stricter settings for PCI compliance\nSSLProtocol all -SSLv2 -SSLv3\nSSLCipherSuite ALL:!EXP:!NULL:!ADH:!LOW:!RC4/' /etc/httpd/conf.d/ssl.conf
 
+# Prepare home page
 cat << EOF > /var/www/html/index.html
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 	<head>
@@ -2828,7 +2902,7 @@ EOF
 chmod 644 /etc/httpd/conf.d/public.conf
 
 # Configure either Wok or Webmin
-if egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo && grep -v -q 'hvp_novirt' /proc/cmdline ; then
+if [ "${nolocalvirt}" != "true" ]; then
 	# TODO: default port 8000 is not available (already assigned by default SELinux policy to soundd_port_t) - adding 500 to all 8000-based ports - remove when fixed upstream
 	cp /usr/lib/firewalld/services/wokd.xml /etc/firewalld/services/
 	sed -i -e 's/800\([01]\)/850\1/g' /etc/firewalld/services/wokd.xml
@@ -3047,7 +3121,7 @@ cp /boot/memtest86+* /var/lib/tftpboot
 cp /usr/share/syslinux/{*.{c32,0},memdisk} /var/lib/tftpboot
 mkdir -p /var/lib/tftpboot/{pxelinux.cfg,linux/{centos,hvp}}
 pushd /var/lib/tftpboot
-# Note: PXElinux default menu created in pre section above and copied in second post section below
+# Note: PXElinux default menu created in pre section above and copied in third post section below
 touch pxelinux.cfg/default
 ln -s memtest86+* memtest86+
 ln -s pxelinux.cfg/default .
@@ -3079,10 +3153,10 @@ sed -i -e 's/^#*\s*host_key_checking\s*=.*$/host_key_checking = False/' -e 's/^#
 # Prepare Ansible roles
 mkdir -p /usr/local/etc/hvp-ansible/roles/{common,ovirtengine,ovirtnodes,glusternodes}/{library,files,templates,tasks,handlers,vars,defaults,meta}
 
-# Note: Ansible group var files created in pre section above and copied in second post section below
+# Note: Ansible group var files created in pre section above and copied in third post section below
 # TODO: either remove the password-related variables or at least encrypt them with Ansible Vault
 
-# Note: oVirt defaults created in pre section above and copied in second post section below
+# Note: oVirt defaults created in pre section above and copied in third post section below
 # TODO: encrypt with Ansible Vault (maybe only the password-related part)
 
 # Create a task to shutdown hosts
@@ -4001,9 +4075,9 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 
-# Note: Ansible playbook for oVirt nodes created in pre section above and copied in second post section below
+# Note: Ansible playbook for oVirt nodes created in pre section above and copied in third post section below
 
-# Note: Ansible playbook for oVirt Engine created in pre section above and copied in second post section below
+# Note: Ansible playbook for oVirt Engine created in pre section above and copied in third post section below
 
 # Create global Ansible playbook for the whole process (Gluster and oVirt)
 cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
@@ -4125,7 +4199,7 @@ fi
 EOF
 chmod 644 /etc/profile.d/consistent-user-path.sh
 
-# Note: users configuration script created in pre section above and copied in second post section below
+# Note: users configuration script created in pre section above and copied in third post section below
 
 # Exclude /var/tmp from systemd-tmpfiles (equivalent of tmpwatch in CentOS <= 6)
 mkdir -p /etc/tmpfiles.d
@@ -4307,7 +4381,7 @@ systemctl mask initial-setup
 ) 2>&1 | tee /root/kickstart_post.log
 %end
 
-# Post-installation script (run with bash from installation image after the first post section)
+# Post-installation script (run with bash from installation image after the second post section)
 %post --nochroot
 # Append hosts fragment (generated in pre section above) into installed system
 if [ -s /tmp/hvp-bind-zones/hosts ]; then
@@ -4439,7 +4513,7 @@ cp /tmp/kickstart_pre.log /mnt/sysimage/root/log
 mv /mnt/sysimage/root/kickstart_post.log /mnt/sysimage/root/log
 %end
 
-# Post-installation script (run with bash from chroot after the second post section)
+# Post-installation script (run with bash from chroot after the third post section)
 %post
 # Relabel filesystem
 # This has to be the last post action to catch any files we've created/modified
