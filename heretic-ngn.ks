@@ -922,7 +922,7 @@ logvol none --vgname=HostVG --name=HostPool --thinpool --size=40000 --grow
 logvol / --vgname=HostVG --name=root --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=6000 --grow
 logvol /var --vgname=HostVG --name=var --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=15000
 logvol /var/log --vgname=HostVG --name=var_log --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=8000
-logvol /var/log/audit --vgname=HostVG --name=var_audit --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
+logvol /var/log/audit --vgname=HostVG --name=var_log_audit --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
 logvol /home --vgname=HostVG --name=home --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=1000
 logvol /tmp --vgname=HostVG --name=tmp --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=1000
 EOF
@@ -1447,7 +1447,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082101"
+script_version="2017082301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
