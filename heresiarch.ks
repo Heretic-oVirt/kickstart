@@ -2165,7 +2165,7 @@ EOF
 # TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
 # TODO: add further storage domains
 # TODO: add OVN configuration both on engine and on nodes
-# TODO: add provisioning of virtual machines (AD DC, printer server, DB, application server and virtual desktop)
+# TODO: add provisioning of virtual machines (AD DC, printer server, DB, application server, firewall/proxy and virtual desktops)
 cat << EOF > ovirtengine.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
@@ -2181,6 +2181,9 @@ cat << EOF > ovirtengine.yaml
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
+    - name: Enable libgfapi support
+      command: engine-config -s LibgfApiSupported=true
+      register: libgfapi_result
     - name: Obtain oVirt Engine SSO token
       no_log: true
       ovirt_auth:
@@ -2241,7 +2244,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082203"
+script_version="2017082301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
