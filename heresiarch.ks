@@ -87,7 +87,7 @@ text
 # Uncomment the line below to automatically reboot at the end of installation
 # (must be sure that system does not try to loop-install again and again)
 # Note: this is needed for proper installation automation by means of virt-install
-# reboot
+reboot
 
 # Use the inserted optical media as in:
 cdrom
@@ -2244,7 +2244,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082301"
+script_version="2017082401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2916,8 +2916,16 @@ Alias /hvp-repos /var/www/hvp-repos
 	Options Indexes FollowSymLinks
 	Indexoptions +FoldersFirst -VersionSort
         AllowOverride None
-	Order allow,deny
-	Allow from all
+        <IfModule mod_authz_core.c>
+          # Apache 2.4
+          Require all granted
+        </IfModule>
+        <IfModule !mod_authz_core.c>
+          # Apache 2.2
+          Order Deny,Allow
+          Deny from all
+          Allow from all
+        </IfModule>
 </Directory>
 
 EOF
