@@ -3,8 +3,7 @@
 
 # Install from PXE with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-# nomodeset elevator=deadline ip=nicname:dhcp inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
+# nomodeset elevator=deadline ip=nicname:dhcp inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
 # Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
 # Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: not honored for bond slaves)
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
@@ -164,8 +163,7 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 else
 	cat <<- EOF > /tmp/full-liveimg
 	# Note: external image to be used for PXE network booting
-	# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-	liveimg --url=http://dangerous.ovirt.life/hvp-repos/el7/node/ovirt-node-ng-image.squashfs.img
+	liveimg --url=${given_stage2}/ovirt-node-ng-image.squashfs.img
 	EOF
 fi
 
@@ -1447,7 +1445,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082301"
+script_version="2017082501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1543,8 +1541,7 @@ yum -y install haveged
 
 # Add HVP custom repo
 yum -y --enablerepo base --enablerepo updates install wget
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-wget -P /etc/yum.repos.d http://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+wget -P /etc/yum.repos.d https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
 chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Install custom packages for NAS functions
