@@ -2,8 +2,7 @@
 
 # Install from DVD with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-# elevator=deadline ip=nicname:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
+# elevator=deadline ip=nicname:dhcp inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
 # Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
 # Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
@@ -92,8 +91,7 @@ reboot
 # Use the inserted optical media as in:
 cdrom
 # alternatively specify an HTTP/FTP area as in:
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-#url --url http://dangerous.ovirt.life/hvp-repos/el7/os
+#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
 
 # System localization configuration dynamically generated in pre section below
 %include /tmp/full-localization
@@ -134,8 +132,7 @@ selinux --enforcing
 # Explicitly list provided repositories
 # Note: no additional repos setup - further packages/updates installed manually in post section
 #repo --name="CentOS"  --baseurl=cdrom:sr0 --cost=100
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-#repo --name="HVP-mirror" --baseurl=http://dangerous.ovirt.life/hvp-repos/el7/os
+#repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/os
 
 # Packages list - package groups are preceded by an "@" sign - excluded packages by an "-" sign
 # Note: some virtualization technologies (VMware, Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
@@ -1172,13 +1169,13 @@ LABEL memtest+
 LABEL rescue
         MENU LABEL CentOS rescue image
         kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/centos ip=dhcp rescue
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
 
 # Start CentOS installation
 LABEL install
         MENU LABEL Install CentOS
         kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/centos ip=dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/generic.ks quiet
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/generic.ks quiet
 
 # Start kickstart-based HVP Nodes installation
 EOF
@@ -1207,12 +1204,13 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/hvp/vmlinuz
-	        # append initrd=linux/hvp/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
-	        append initrd=linux/hvp/initrd.img inst.stage2=http://dangerous.ovirt.life/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	        # append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
 # Create common configuration parameters fragment
+# TODO: differentiate variables in general and kickstart-specific parameters fragments
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 # Preconfigured defaults for nodes installation
 
@@ -1425,44 +1423,6 @@ if [ -n "${nics['gluster']}" ]; then
 	done
 fi
 
-# Add forced redirect to local repo mirrors
-cat << EOF > ovirt.life.db
-\$ORIGIN ovirt.life.
-\$TTL 15552000
-@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-                         $(date '+%Y%m%d')01 ; serial
-                         3600 ; refresh
-                         900 ; retry
-                         1209600 ; expire
-                         43200 ; default_ttl
-                         )
-@			NS	${my_name}.${domain_name[${zone}]}.
-
-; Names for static addresses assigned to our virtual/physical machines
-
-dangerous		A	${my_ip[${zone}]}
-bravenew		A	${my_ip[${zone}]}
-
-EOF
-cat << EOF > ovirt.world.db
-\$ORIGIN ovirt.world.
-\$TTL 15552000
-@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-                         $(date '+%Y%m%d')01 ; serial
-                         3600 ; refresh
-                         900 ; retry
-                         1209600 ; expire
-                         43200 ; default_ttl
-                         )
-@			NS	${my_name}.${domain_name[${zone}]}.
-
-; Names for static addresses assigned to our virtual/physical machines
-
-dangerous		A	${my_ip[${zone}]}
-bravenew		A	${my_ip[${zone}]}
-
-EOF
-
 popd
 
 # Use information gathered above to create bind configuration file
@@ -1642,20 +1602,6 @@ if [ -n "${nics['gluster']}" ]; then
 	EOF
 fi
 cat << EOF >> named.conf
-        zone "ovirt.life" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/ovirt.life.db";
-        };
-
-        zone "ovirt.world" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/ovirt.world.db";
-        };
-
 };
 
 view "internal"
@@ -1718,20 +1664,6 @@ if [ -n "${nics['gluster']}" ]; then
 	EOF
 fi
 cat << EOF >> named.conf
-        zone "ovirt.life" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/ovirt.life.db";
-        };
-
-        zone "ovirt.world" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/ovirt.world.db";
-        };
-
 };
 
 view "external"
@@ -1901,7 +1833,7 @@ cat << EOF > httpd.conf
 <VirtualHost *:80>
     DocumentRoot /var/www/html
     ServerName ${my_ip[${dhcp_zone}]}
-    ServerAlias ${my_name}.${domain_name[${dhcp_zone}]} dangerous.ovirt.life bravenew.ovirt.world
+    ServerAlias ${my_name}.${domain_name[${dhcp_zone}]}
 </VirtualHost>
 
 EOF
@@ -2244,7 +2176,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082401"
+script_version="2017082501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2332,8 +2264,7 @@ yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-2.el7.elrepo.noarch.rpm
 
 # Add our own repo
-# TODO: switch to HTTPS as soon as a non-self-signed certificate will be available
-wget -P /etc/yum.repos.d/ http://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
 chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Enable use of delta rpms since we are not using our local mirror
