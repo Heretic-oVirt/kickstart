@@ -2096,8 +2096,11 @@ EOF
 # Note: Ansible oVirt Engine management example thanks to Simone Tiraboschi
 # TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
 # TODO: add further storage domains
-# TODO: add OVN configuration both on engine and on nodes
+# TODO: add OVN configuration both on engine and on nodes and create a couple of logical networks
+# TODO: add Bareos configuration both on engine and on nodes
 # TODO: add provisioning of virtual machines (AD DC, printer server, DB, application server, firewall/proxy and virtual desktops)
+# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
+# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 cat << EOF > ovirtengine.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
@@ -2113,6 +2116,59 @@ cat << EOF > ovirtengine.yaml
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
+    - name: add our own repo
+      get_url:
+        url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+        dest: /etc/yum.repos.d/HVP.repo
+        mode: 0644
+    - name: install the Bareos-related packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items: bareos-tools bareos-client bareos-director bareos-webui
+    - name: enable and start the Bareos-related services
+      systemd:
+        name: "{{ item }}"
+        enabled: False
+        state: stopped
+        no_block: no
+      with_items: bareos-fd bareos-dir
+    - name: install the OVN-related packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items: openvswitch openvswitch-ovn-common openvswitch-ovn-central python-openvswitch ovirt-provider-ovn
+    - name: enable and start the OVN-related services
+      systemd:
+        name: "{{ item }}"
+        enabled: True
+        state: started
+        no_block: no
+      with_items: ovirt-provider-ovn
+    - name: allow OVN-provider communications
+      firewalld:
+        service: ovirt-provider-ovn
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: allow OVN-components communications - 1
+      firewalld:
+        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6641" accept'
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: allow OVN-components communications - 2
+      firewalld:
+        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6642" accept'
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: configure OVN central to listen on ports - 1
+      shell: "ovn-nbctl set-connection ptcp:6641"
+      register: centralconf1_result
+    - name: configure OVN central to listen on ports - 2
+      shell: "ovn-nbctl set-connection ptcp:6642"
+      register: centralconf2_result
     - name: Enable libgfapi support
       command: engine-config -s LibgfApiSupported=true
       register: libgfapi_result
@@ -2151,6 +2207,17 @@ cat << EOF > ovirtengine.yaml
       ovirt_auth:
         state: absent
         ovirt_auth: "{{ ovirt_auth }}"
+- name: perform OVN configuration on hosts
+  hosts: ovirtnodes
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: configure OVN VIF driver
+      shell: "vdsm-tool ovn-config {{ hostvars[groups['ovirtengine'][0]]['ansible_default_ipv4']['address'] }} {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+      register: vifconf_result
 ...
 EOF
 
@@ -2176,7 +2243,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082501"
+script_version="2017082603"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3951,14 +4018,14 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
     - name: disable and stop the local mounting of the Gluster ctdb volume
       systemd:
         name: gluster-lock.mount
-        enabled: True
-        state: started
+        enabled: False
+        state: stopped
         no_block: no
     - name: disable and stop the wait service for Gluster ctdb volume
       systemd:
         name: gluster-ctdb-wait-online
-        enabled: True
-        state: started
+        enabled: False
+        state: stopped
         no_block: no
 - name: perform gdeploy-based Gluster unconfiguration
   hosts: localhost
