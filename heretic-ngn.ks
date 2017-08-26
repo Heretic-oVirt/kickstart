@@ -1445,7 +1445,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082501"
+script_version="2017082603"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1550,8 +1550,7 @@ yum -y --enablerepo base --enablerepo updates install krb5-workstation samba sam
 #yum -y --enablerepo base --enablerepo updates --enablerepo hvp-fedora-rebuild install gluster-block
 
 # Install custom packages for OVN functions
-# Note: we explicitly add OpenvSwitch to force updating it if needed
-yum -y --enablerepo base --enablerepo updates install ovirt-provider-ovn-driver openvswitch
+yum -y --enablerepo base --enablerepo updates install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
@@ -1560,6 +1559,9 @@ fi
 
 # Install further packages for additional functions: Bind
 yum -y --enablerepo base --enablerepo updates install bind
+
+# Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
+yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
 
 # Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
 yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy
@@ -1854,13 +1856,10 @@ Slice=storage.slice
 EOF
 chmod 644 /etc/systemd/system/nfs-ganesha.service.d/custom-slice.conf
 
-# TODO: Configure OVN
-
-# TODO: Enable OVN
-# TODO: OVN to be enabled later on
-#firewall-offline-cmd --add-service=ovirt-provider-ovn
-systemctl disable openvswitch
-systemctl disable ovn-controller
+# Enable OVN
+# Note: OVN to be configured later on together with Engine-based part
+firewall-offline-cmd --add-service=ovn-host-firewall-service
+systemctl enable ovn-controller
 
 # Configure Bind
 # Note: base configuration files generated in pre section above - actual file copying happens in non-chroot post section below
@@ -1926,6 +1925,16 @@ firewall-offline-cmd --set-log-denied=all
 
 # Configure Ansible
 sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
+
+# TODO: Configure Bareos fd with direct access to all GlusterFS volumes
+# TODO: Configure Bareos sd with direct access to a dedicated GlusterFS backup volume
+# Device Type = gfapi
+# Archive Device = gluster://localhost/BACKUP
+# TODO: Configure Bareos sd with direct access to an external USB/eSATA drive
+
+# TODO: Enable Bareos when configuration is completed
+systemctl disable bareos-fd
+systemctl disable bareos-sd
 
 # Configure root home dir (with utility script for basic configuration backup)
 mkdir -p /root/{etc,bin,log,tmp,backup}
