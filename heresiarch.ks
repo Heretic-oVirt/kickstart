@@ -1018,7 +1018,7 @@ cat << EOF > /tmp/hvp-users-conf/rc.users-setup
 # Create local user for maintenance work
 # Note: unprivileged user created here to account for default settings
 useradd -c "Admin" ${admin_username}
-echo "${admin_password}" | passwd --stdin ${admin_username}
+echo '${admin_password}' | passwd --stdin ${admin_username}
 # Add user to wheel group to allow liberal use of sudo
 usermod -a -G wheel ${admin_username}
 # Configure an rpmbuild user environment
@@ -1286,9 +1286,9 @@ my_forwarders="${my_forwarders}"
 
 my_gateway="${dhcp_gateway}"
 
-root_password="${root_password}"
+root_password='${root_password}'
 admin_username="${admin_username}"
-admin_password="${admin_password}"
+admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
 EOF
@@ -2243,7 +2243,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082902"
+script_version="2017082905"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2723,7 +2723,8 @@ systemctl enable snmpd
 
 # Configuration file customization through cfgmaker/indexmaker demanded to post-install rc.ks1stboot script
 
-# Configure MRTG-Apache integration (by default will be reachable only from localhost: use SSH tunneling)
+# Configure MRTG-Apache integration (allow access from everywhere)
+sed -i -e 's/^\(\s*\)\(Require local.*\)$/\1Require all granted/' /etc/httpd/conf.d/mrtg.conf
 
 # Configure Apache
 
@@ -4358,23 +4359,22 @@ fi
 popd
 # Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
 
-EOF
-
 # Initialize MRTG configuration (needs Net-SNMP up)
 # TODO: add CPU/RAM/disk/etc. resource monitoring
 cfgmaker --output /etc/mrtg/mrtg.cfg --global "HtmlDir: /var/www/mrtg" --global "ImageDir: /var/www/mrtg" --global "LogDir: /var/lib/mrtg" --global "ThreshDir: /var/lib/mrtg" --no-down --zero-speed=1000000000 --if-filter='(\$default && \$if_is_ethernet)' public@localhost
 
 # Set execution mode parameters
 # Note: on CentOS7 MRTG is preferably configured as an always running service (for efficiency reasons)
-sed -i -e '/Global Config Options/s/^\(.*\)$/\1\nRunAsDaemon: Yes\nInterval: 5\nNoDetach: Yes/' /etc/mrtg/mrtg.cfg
+sed -i -e '/Global Config Options/s/^\\(.*\\)\$/\\1\\nRunAsDaemon: Yes\\nInterval: 5\\nNoDetach: Yes/' /etc/mrtg/mrtg.cfg
 
 # Setup MRTG index page
 indexmaker --output=/var/www/mrtg/index.html /etc/mrtg/mrtg.cfg
 
 # Enable MRTG
 # Note: MRTG is an always running service (for efficiency reasons) now
-systemctl enable mrtg
-systemctl start mrtg
+systemctl --now enable mrtg
+
+EOF
 
 # Saving installation instructions
 # Note: done in rc.ks1stboot since this seems to get created after all post scripts are run
