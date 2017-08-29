@@ -955,7 +955,7 @@ cat << EOF > /tmp/full-network
 EOF
 for zone in "${!network[@]}" ; do
 	if [ -n "${nics[${zone}]}" ]; then
-		nic_names="${nics[${zone}]}"
+		nic_names=$(echo ${nics[${zone}]} | sed -e 's/^\s*//' -e 's/\s*$//')
 		further_options=""
 		# Add gateway and nameserver options only if the default gateway is on this network
 		unset NETWORK
@@ -2243,7 +2243,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082901"
+script_version="2017082902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
