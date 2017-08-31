@@ -1113,6 +1113,7 @@ if [ -n "${nics['mgmt']}" ]; then
 	firewall-cmd --zone=internal --permanent --add-service=tproxy
 	nmcli con mod ${nics['external']} connection.zone external
 	firewall-cmd --zone=external --add-masquerade --permanent
+	nmcli con reload
 	firewall-cmd --reload
 	EOF
 else
@@ -2243,7 +2244,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082905"
+script_version="2017083102"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2371,7 +2372,8 @@ yum -y install webalizer mrtg net-snmp net-snmp-utils
 yum -y install dhcp tftp tftp-server syslinux bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python
+# Note: using our HRGS-rebuild repo to get a newer gDeploy
+yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python
 
 # Install Memtest86+ to be offered through PXE
 yum -y install memtest86+
