@@ -1445,7 +1445,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017082603"
+script_version="2017083001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1545,12 +1545,12 @@ wget -P /etc/yum.repos.d https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
 chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Install custom packages for NAS functions
-yum -y --enablerepo base --enablerepo updates install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gstatus
+yum -y --enablerepo base --enablerepo updates --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gstatus
 # TODO: Install Gluster-block and its dependencies (must replace some packages in base with recompiled newer Fedora versions or wait for RHEL7.4-compatible bits in RHGS)
 #yum -y --enablerepo base --enablerepo updates --enablerepo hvp-fedora-rebuild install gluster-block
 
 # Install custom packages for OVN functions
-yum -y --enablerepo base --enablerepo updates install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum -y --enablerepo base --enablerepo updates --enablerepo hvp-opensvswitch-rebuild install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
