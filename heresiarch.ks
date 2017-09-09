@@ -1437,24 +1437,30 @@ done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 # Note: network_base values are derived automatically anyway
-network['mgmt']="${network['mgmt']}"
-netmask['mgmt']="${netmask['mgmt']}"
-mtu['mgmt']="${mtu['mgmt']}"
-network['gluster']="${network['gluster']}"
-netmask['gluster']="${netmask['gluster']}"
-mtu['gluster']="${mtu['gluster']}"
-network['lan']="${network['lan']}"
-netmask['lan']="${netmask['lan']}"
-mtu['lan']="${mtu['lan']}"
-network['internal']="${network['internal']}"
-netmask['internal']="${netmask['internal']}"
-mtu['internal']="${mtu['internal']}"
+EOF
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+	network['${zone}']="${network[${zone}]}"
+	netmask['${zone}']="${netmask[${zone}]}"
+	mtu['${zone}']="${mtu[${zone}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 # Note: reverse_domain_name values are derived automatically anyway
-domain_name['mgmt']="${domain_name['mgmt']}"
-domain_name['gluster']="${domain_name['gluster']}"
-domain_name['lan']="${domain_name['lan']}"
-domain_name['internal']="${domain_name['internal']}"
+EOF
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+	domain_name['${zone}']="${domain_name[${zone}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 
 ad_subdomain_prefix="${ad_subdomain_prefix}"
 
@@ -1489,10 +1495,16 @@ for ((i=0;i<${node_count};i=i+1)); do
 done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 
-bondopts['mgmt']="${bondopts['mgmt']}"
-bondopts['gluster']="${bondopts['gluster']}"
-bondopts['lan']="${bondopts['lan']}"
-bondopts['internal']="${bondopts['internal']}"
+EOF
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	bondopts['${zone}']="${bondopts[${zone}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 
 bmc_ip_offset="${bmc_ip_offset}"
 node_ip_offset="${node_ip_offset}"
@@ -2497,7 +2509,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017090905"
+script_version="2017090906"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
