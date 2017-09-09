@@ -2497,7 +2497,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017090904"
+script_version="2017090905"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4738,12 +4738,16 @@ if [ -f /tmp/hvp-syslinux-conf/default ]; then
 	chmod 644 /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 	chown root:root /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 fi
-# Note: the following will overwrite the generic sample mirrorred from the HVP official site
-if [ -f /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh ]; then
-	cp --backup --suffix .orig /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
-	chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
-	chown root:root /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters_heretic_ngn.sh
-fi
+
+# Copy kickstart parameters files (generated in pre section above) into installed system
+# Note: the following will overwrite the generic samples mirrored from the HVP official site
+for parameters_file in /tmp/hvp-syslinux-conf/hvp_parameters*.sh ; do
+	if [ -f "${parameters_file}" ]; then
+		cp --backup --suffix .orig ${parameters_file} /mnt/sysimage/var/www/hvp-repos/el7/ks/
+	fi
+done
+chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
+chown root:root /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
 
 # Copy httpd configuration (generated in pre section above) into installed system
 # Note: it should be inserted before the inclusion of /etc/httpd/conf.d/*.conf fragments
