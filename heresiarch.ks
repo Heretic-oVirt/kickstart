@@ -19,6 +19,16 @@
 # Note: to force custom network MTU add hvp_{external,mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
+# Note: to force custom NetBIOS domain naming add hvp_netbiosdomain=MYDOM where MYDOM is the NetBIOS domain name
+# Note: to force custom sysvol replication password add hvp_sysvolpassword=mysysvolsecret where mysysvolsecret is the sysvol replication password
+# Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
+# Note: to force custom AD DC naming add hvp_dcname=mydcname where mydcname is the unqualified (ie without domain name part) hostname of the AD DC
+# Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird or sqlserver)
+# Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the AD network
+# Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
+# Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the AD network
+# Note: to force custom print server naming add hvp_prname=myprname where myprname is the unqualified (ie without domain name part) hostname of the print server
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
@@ -39,6 +49,8 @@
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
+# Note: to force custom AD further admin username add hvp_winadminname=mywinadmin where mywinadmin is the further AD admin username
+# Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: the default behaviour involves installing/configuring local virtualization support when virtualization hardware capabilities are detected
@@ -51,6 +63,16 @@
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default machine IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default domain names are assumed to be {external,mgmt,gluster,lan,internal}.private
+# Note: the default AD subdomain name is assumed to be ad
+# Note: the default NetBIOS domain name is equal to the first part of the AD DNS subdomain name (on the lan network, or mgmt if there is only one network) in uppercase
+# Note: the default sysvol replication password is HVP_dem0
+# Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
+# Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
+# Note: the default database type is postgresql
+# Note: the default DB server IP on the AD network is assumed to be the AD network address plus 230
+# Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
+# Note: the default print server IP on the AD network is assumed to be the AD network address plus 250
+# Note: the default print server naming uses the "My Little Pony" character name rainbowdash for the print server
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default gateway is assumed to be the DHCP-provided router address on the external network
@@ -68,9 +90,11 @@
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
 # Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
-# Note: the default root user password is hvpdemo
+# Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
+# Note: the default AD further admin username is the same as the admin username with the string "ad" prefixed
+# Note: the default AD further admin user password is HVP_dem0
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
@@ -281,6 +305,19 @@ unset network_base
 unset bondmode
 unset mtu
 unset domain_name
+unset ad_subdomain_prefix
+unset netbios_domain_name
+unset sysvolrepl_password
+unset ad_dc_ip
+unset ad_dc_ip_offset
+unset ad_dc_name
+unset db_ip
+unset db_ip_offset
+unset db_name
+unset dbtype
+unset pr_ip
+unset pr_ip_offset
+unset pr_name
 unset reverse_domain_name
 unset node_name
 unset bmc_ip_offset
@@ -303,6 +340,8 @@ unset my_gateway
 unset root_password
 unset admin_username
 unset admin_password
+unset winadmin_username
+unset winadmin_password
 unset keyboard_layout
 unset local_timezone
 
@@ -409,6 +448,24 @@ reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
 reverse_domain_name['lan']="12.20.172.in-addr.arpa"
 reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
+ad_subdomain_prefix="ad"
+
+sysvolrepl_password="HVP_dem0"
+
+ad_dc_ip_offset="220"
+
+ad_dc_name="spike"
+
+db_ip_offset="230"
+
+db_name="bigmcintosh"
+
+dbtype="postgresql"
+
+pr_ip_offset="250"
+
+pr_name="rainbowdash"
+
 my_nameserver="dhcp"
 
 my_forwarders="8.8.8.8"
@@ -417,9 +474,10 @@ my_gateway="dhcp"
 
 my_name="twilight"
 
-root_password="hvpdemo"
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
+winadmin_password="HVP_dem0"
 keyboard_layout="us"
 local_timezone="UTC"
 
@@ -656,6 +714,21 @@ if [ -n "${given_admin_password}" ]; then
 	admin_password="${given_admin_password}"
 fi
 
+# Determine AD further admin username
+given_winadmin_username=$(sed -n -e "s/^.*hvp_winadminname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_winadmin_username}" ]; then
+	winadmin_username="${given_winadmin_username}"
+fi
+if [ -z "${winadmin_username}" ]; then
+	winadmin_username="ad${admin_username}"
+fi
+
+# Determine AD further admin password
+given_winadmin_password=$(sed -n -e "s/^.*hvp_winadminpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_winadmin_password}" ]; then
+	winadmin_password="${given_winadmin_password}"
+fi
+
 # Determine keyboard layout
 given_keyboard_layout=$(sed -n -e "s/^.*hvp_kblayout=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_keyboard_layout}" ]; then
@@ -691,6 +764,44 @@ given_hostname=$(sed -n -e 's/^.*hvp_myname=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_hostname}" | grep -q '^[[:alnum:]]\+$' ; then
 	my_name="${given_hostname}"
 fi
+
+# Determine AD subdomain name
+given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ad_subdomainname}" ]; then
+	ad_subdomain_prefix="${given_ad_subdomainname}"
+fi
+
+# Determine NetBIOS domain name
+given_netbiosdomain=$(sed -n -e 's/^.*hvp_netbiosdomain=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_netbiosdomain}" | grep -q '^[[:alnum:]]\+$' ; then
+	netbios_domain_name=$(echo "${given_netbiosdomain}" | awk '{print toupper($0)}')
+fi
+
+# Determine AD DC name
+given_dcname=$(sed -n -e 's/^.*hvp_dcname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_dcname}" | grep -q '^[[:alnum:]]\+$' ; then
+	ad_dc_name="${given_dcname}"
+fi
+
+# Determine DB name
+given_dbname=$(sed -n -e 's/^.*hvp_dbname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_dbname}" | grep -q '^[[:alnum:]]\+$' ; then
+	db_name="${given_dbname}"
+fi
+
+# Determine print server name
+given_prname=$(sed -n -e 's/^.*hvp_prname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_prname}" | grep -q '^[[:alnum:]]\+$' ; then
+	pr_name="${given_prname}"
+fi
+
+# Determine database type
+given_dbtype=$(sed -n -e 's/^.*hvp_dbtype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_dbtype}" in
+	postgresql|mysql|firebird|sqlserver)
+		dbtype="${given_dbtype}"
+		;;
+esac
 
 # Determine nameserver address
 given_nameserver=$(sed -n -e "s/^.*hvp_nameserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
@@ -947,6 +1058,43 @@ if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
 fi
 
+# Determine AD DC IP
+given_dc=$(sed -n -e 's/^.*hvp_ad_dc=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_dc}" ]; then
+	ad_dc_ip="${given_dc}"
+fi
+if [ -n "${nics['lan']}" ]; then
+	ad_zone="lan"
+else
+	ad_zone="${dhcp_zone}"
+fi
+if [ -z "${ad_dc_ip}" ]; then
+	ad_dc_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${ad_dc_ip_offset} +)
+fi
+
+# Determine DB IP
+given_db=$(sed -n -e 's/^.*hvp_db=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_db}" ]; then
+	db_ip="${given_db}"
+fi
+if [ -z "${db_ip}" ]; then
+	db_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${db_ip_offset} +)
+fi
+
+# Determine PR IP
+given_pr=$(sed -n -e 's/^.*hvp_pr=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_pr}" ]; then
+	pr_ip="${given_pr}"
+fi
+if [ -z "${pr_ip}" ]; then
+	pr_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${pr_ip_offset} +)
+fi
+
+# Define default NetBIOS domain name if not specified
+if [ -z "${netbios_domain_name}" ]; then
+	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${my_zone}]} | awk -F. '{print toupper($1)}')
+fi
+
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
 cat << EOF > /tmp/full-network
@@ -1133,14 +1281,16 @@ ALL: ${allowed_addr}
 sshd: ALL
 EOF
 
-# Define common network parameters for all nodes to be added on PXE menu as kernel commandline parameters during installation
+# Define common network parameters to be added on PXE menu as kernel commandline parameters during installation
 common_network_params=""
+vm_network_params=""
 essential_network_params=""
 for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" ]; then
 		unset PREFIX
 		eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
 		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
+		vm_network_params="${vm_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
 	fi
 done
 
@@ -1166,24 +1316,11 @@ LABEL memtest+
 	MENU LABEL RAM Test (Memtest86+)
 	kernel memtest86+
 
-# Load CentOS rescue image
-LABEL rescue
-        MENU LABEL CentOS rescue image
-        kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
-
-# Start CentOS installation
-LABEL install
-        MENU LABEL Install CentOS
-        kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/generic.ks quiet
-
-# Start kickstart-based HVP Nodes installation
 EOF
-# Note: we will automatically extend to node installation the parameters passed during our own installation
+# Note: we will automatically extend to further installations the parameters passed during our own installation
 if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
-	essential_network_params="${essential_network_params} hvp_nicmacfix"
+	vm_network_params="${vm_network_params} hvp_nicmacfix"
 else
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	# Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
@@ -1191,6 +1328,7 @@ else
 fi
 if grep 'biosdevname=0' /proc/cmdline | grep -q 'net.ifnames=0' ; then
 	common_network_params="${common_network_params} biosdevname=0 net.ifnames=0"
+	vm_network_params="${vm_network_params} biosdevname=0 net.ifnames=0"
 	essential_network_params="${essential_network_params} biosdevname=0 net.ifnames=0"
 else
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
@@ -1198,37 +1336,56 @@ else
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
 fi
-# Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating hvp_parameters_heretic_ngn.sh with all other parameters (leaving a commented line as reference here)
+# Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating common hvp_parameters.sh and specific hvp_parameters_*.sh with all other parameters (leaving a commented line as reference here)
+cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+
+# Load CentOS rescue image
+LABEL rescue
+        MENU LABEL CentOS rescue image
+        kernel linux/centos/vmlinuz
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
+
+# Start kickstart-based HVP AD DC installation
+LABEL installdc
+        MENU LABEL Install Active Directory Domain Controller Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
+
+# Start kickstart-based HVP DB server installation
+LABEL installdb
+        MENU LABEL Install Database Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
+
+# Start kickstart-based HVP Printserver installation
+LABEL installpr
+        MENU LABEL Install Print Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
+
+# Start kickstart-based HVP Nodes installation
+EOF
 # Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/hvp/vmlinuz
-	        # append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        # append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
 	        append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
 # Create common configuration parameters fragment
-# TODO: differentiate variables in general and kickstart-specific parameters fragments
-cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
-# Preconfigured defaults for nodes installation
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
+# Custom defaults for all installations
 
-default_nodeosdisk="${given_nodeosdisk}"
+nicmacfix="${nicmacfix}"
 
 default_node_count="${node_count}"
-
-# Note: the following should be passed on kernel commandline or put only in a node-specific configuration parameters file (hvp_parameters_hh:hh:hh:hh:hh:hh.sh)
-#default_node_index="0"
-
-EOF
-for ((i=0;i<${node_count};i=i+1)); do
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
-	node_name[${i}]="${node_name[${i}]}"
-	EOF
-done
-cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 
 switch_name="${switch_name}"
 
@@ -1236,43 +1393,35 @@ engine_name="${engine_name}"
 
 storage_name="${storage_name}"
 
-bmc_ip_offset="${bmc_ip_offset}"
-node_ip_offset="${node_ip_offset}"
 storage_ip_offset="${storage_ip_offset}"
 
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
-switch_ip_offset="$(ipdiff ${switch_ip} ${network[${dhcp_zone}]})"
-engine_ip_offset="$(ipdiff ${engine_ip} ${network[${dhcp_zone}]})"
-test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
-
 switch_ip="${switch_ip}"
+switch_ip_offset="$(ipdiff ${switch_ip} ${network[${dhcp_zone}]})"
 engine_ip="${engine_ip}"
+engine_ip_offset="$(ipdiff ${engine_ip} ${network[${dhcp_zone}]})"
+
+test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
 EOF
 for zone in "${!my_ip[@]}" ; do
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 	test_ip["${zone}"]="${my_ip[${zone}]}"
 	EOF
 done
-cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
-
-master_index="${master_index}"
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 # Note: network_base values are derived automatically anyway
 network['mgmt']="${network['mgmt']}"
 netmask['mgmt']="${netmask['mgmt']}"
-bondopts['mgmt']="${bondopts['mgmt']}"
 mtu['mgmt']="${mtu['mgmt']}"
 network['gluster']="${network['gluster']}"
 netmask['gluster']="${netmask['gluster']}"
-bondopts['gluster']="${bondopts['gluster']}"
 mtu['gluster']="${mtu['gluster']}"
 network['lan']="${network['lan']}"
 netmask['lan']="${netmask['lan']}"
-bondopts['lan']="${bondopts['lan']}"
 mtu['lan']="${mtu['lan']}"
 network['internal']="${network['internal']}"
 netmask['internal']="${netmask['internal']}"
-bondopts['internal']="${bondopts['internal']}"
 mtu['internal']="${mtu['internal']}"
 
 # Note: reverse_domain_name values are derived automatically anyway
@@ -1280,6 +1429,8 @@ domain_name['mgmt']="${domain_name['mgmt']}"
 domain_name['gluster']="${domain_name['gluster']}"
 domain_name['lan']="${domain_name['lan']}"
 domain_name['internal']="${domain_name['internal']}"
+
+ad_subdomain_prefix="${ad_subdomain_prefix}"
 
 my_nameserver="${my_ip[${dhcp_zone}]}"
 
@@ -1292,6 +1443,71 @@ admin_username="${admin_username}"
 admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
+EOF
+# Create kickstart-specific configuration parameters fragment
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+# Custom defaults for nodes installation
+
+default_nodeosdisk="${given_nodeosdisk}"
+
+master_index="${master_index}"
+
+# Note: the following should be passed on kernel commandline or put only in a node-specific configuration parameters file (hvp_parameters_hh:hh:hh:hh:hh:hh.sh)
+#default_node_index="0"
+
+EOF
+for ((i=0;i<${node_count};i=i+1)); do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	node_name[${i}]="${node_name[${i}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+
+bondopts['mgmt']="${bondopts['mgmt']}"
+bondopts['gluster']="${bondopts['gluster']}"
+bondopts['lan']="${bondopts['lan']}"
+bondopts['internal']="${bondopts['internal']}"
+
+bmc_ip_offset="${bmc_ip_offset}"
+node_ip_offset="${node_ip_offset}"
+
+ad_dc_ip="${ad_dc_ip}"
+ad_dc_ip_offset="${ad_dc_ip_offset}"
+
+ad_dc_name="${ad_dc_name}"
+
+EOF
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
+# Custom defaults for AD DC installation
+
+# Note: when installing further AD DCs you must provide a different offset
+my_ip_offset="${ad_dc_ip_offset}"
+
+# Note: when installing further AD DCs you must provide a different name
+my_name="${ad_dc_name}"
+
+sysvolrepl_password="${sysvolrepl_password}"
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_db.sh
+# Custom defaults for DB server installation
+
+my_ip_offset="${db_ip_offset}"
+
+dbtype="${dbtype}"
+
+my_name="${db_name}"
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_pr.sh
+# Custom defaults for print server installation
+
+my_ip_offset="${pr_ip_offset}"
+
+my_name="${pr_name}"
+
 EOF
 
 # Create bind configuration files (disable RFC1918 stub zones creation - include forced DNS-based redirect to local repo mirrors)
@@ -2244,7 +2460,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017083102"
+script_version="2017090901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2426,6 +2642,7 @@ fi
 
 # Add virtualization support on suitable physical platforms
 if [ "${nolocalvirt}" != "true" ]; then
+	yum -y install centos-release-qemu-ev
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
