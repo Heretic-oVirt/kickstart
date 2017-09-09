@@ -1,4 +1,5 @@
 # Kickstart file for Heretic oVirt Project initial installation physical/virtual host
+# Note: minimum amount of RAM successfully tested for installation: 2048 MiB from network - 1024 MiB from local media
 
 # Install from DVD with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
@@ -112,10 +113,8 @@ text
 # Note: this is needed for proper installation automation by means of virt-install
 reboot
 
-# Use the inserted optical media as in:
-cdrom
-# alternatively specify an HTTP/FTP area as in:
-#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
+# Installation source configuration dynamically generated in pre section below
+%include /tmp/full-installsource
 
 # System localization configuration dynamically generated in pre section below
 %include /tmp/full-localization
@@ -783,7 +782,7 @@ if echo "${given_dcname}" | grep -q '^[[:alnum:]]\+$' ; then
 	ad_dc_name="${given_dcname}"
 fi
 
-# Determine DB name
+# Determine DB server name
 given_dbname=$(sed -n -e 's/^.*hvp_dbname=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_dbname}" | grep -q '^[[:alnum:]]\+$' ; then
 	db_name="${given_dbname}"
@@ -1072,7 +1071,7 @@ if [ -z "${ad_dc_ip}" ]; then
 	ad_dc_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${ad_dc_ip_offset} +)
 fi
 
-# Determine DB IP
+# Determine DB server IP
 given_db=$(sed -n -e 's/^.*hvp_db=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_db}" ]; then
 	db_ip="${given_db}"
@@ -1081,7 +1080,7 @@ if [ -z "${db_ip}" ]; then
 	db_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${db_ip_offset} +)
 fi
 
-# Determine PR IP
+# Determine print server IP
 given_pr=$(sed -n -e 's/^.*hvp_pr=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_pr}" ]; then
 	pr_ip="${given_pr}"
@@ -1229,6 +1228,33 @@ if cat /sys/class/dmi/id/sys_vendor | egrep -q -v "(Microsoft|VMware|innotek|Par
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10 seek=$(($(blockdev --getsize64 /dev/${current_device}) / (1024 * 1024) - 10))
 	done
+fi
+
+# Create install source selection fragment
+# Note: we use a non-local (hd:) stage2 location as indicator of network boot
+given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_stage2}" | grep -q '^hd:' ; then
+	# Note: we assume that a local stage2 comes from a full DVD image (Packages repo included)
+	# TODO: detect use of NetBoot media (no local Packages repo)
+	cat <<- EOF > /tmp/full-installsource
+	# Use the inserted optical media as in:
+	cdrom
+	# alternatively specify a NFS network share as in:
+	# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
+	# or an HTTP/FTP area as in:
+	#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
+	EOF
+else
+	# Note: we assume that a remote stage2 has been copied together with the full media content preserving the default DVD structure
+	# TODO: we assume a HTTP/FTP area - add support for NFS
+	cat <<- EOF > /tmp/full-installsource
+	# Specify a NFS network share as in:
+	# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
+	# or an HTTP/FTP area as in:
+	url --url ${given_stage2}
+	# alternatively use the inserted optical media as in:
+	#cdrom
+	EOF
 fi
 
 # Determine configuration for DHCP and related services
@@ -1486,6 +1512,9 @@ my_ip_offset="${ad_dc_ip_offset}"
 # Note: when installing further AD DCs you must provide a different name
 my_name="${ad_dc_name}"
 
+# Note: when installing further AD DCs you must change the follwoing option to true
+domain_join="false"
+
 sysvolrepl_password="${sysvolrepl_password}"
 
 EOF
@@ -1493,20 +1522,28 @@ EOF
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_db.sh
 # Custom defaults for DB server installation
 
+my_nameserver="${ad_dc_ip}"
+
 my_ip_offset="${db_ip_offset}"
 
 dbtype="${dbtype}"
 
 my_name="${db_name}"
 
+domain_join="true"
+
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_pr.sh
 # Custom defaults for print server installation
 
+my_nameserver="${ad_dc_ip}"
+
 my_ip_offset="${pr_ip_offset}"
 
 my_name="${pr_name}"
+
+domain_join="true"
 
 EOF
 
@@ -2315,7 +2352,7 @@ EOF
 # TODO: add further storage domains
 # TODO: add OVN configuration both on engine and on nodes and create a couple of logical networks
 # TODO: add Bareos configuration both on engine and on nodes
-# TODO: add provisioning of virtual machines (AD DC, printer server, DB, application server, firewall/proxy and virtual desktops)
+# TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
 # TODO: add generic configuration of Engine vm (take it from our Kickstarts)
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 cat << EOF > ovirtengine.yaml
@@ -2460,7 +2497,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017090901"
+script_version="2017090904"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
