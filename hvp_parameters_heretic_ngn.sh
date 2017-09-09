@@ -65,6 +65,10 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+ad_subdomain_prefix="ad"
+
+ad_dc_ip_offset="220"
+
 my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
