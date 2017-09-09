@@ -19,6 +19,8 @@
 # Note: to force custom network MTU add hvp_{mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
+# Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
 # Note: to force custom nameserver IP (during installation) add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
@@ -46,6 +48,8 @@
 # Note: the default test IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default domain names are assumed to be {mgmt,gluster,lan,internal}.private
+# Note: the default AD subdomain name is assumed to be ad
+# Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
 # Note: the default nameserver IP is assumed to be 8.8.8.8 during installation (afterwards it will be switched to 127.0.0.1 unconditionally)
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default gateway IP is assumed to be equal to the test IP on the mgmt network
@@ -177,6 +181,9 @@ unset network_base
 unset bondopts
 unset mtu
 unset domain_name
+unset ad_subdomain_prefix
+unset ad_dc_ip
+unset ad_dc_ip_offset
 unset reverse_domain_name
 unset bridge_name
 unset node_name
@@ -287,6 +294,10 @@ reverse_domain_name['mgmt']="10.20.172.in-addr.arpa"
 reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
 reverse_domain_name['lan']="12.20.172.in-addr.arpa"
 reverse_domain_name['internal']="13.20.172.in-addr.arpa"
+
+ad_subdomain_prefix="ad"
+
+ad_dc_ip_offset="220"
 
 declare -A test_ip
 # Note: default values for test_ip derived below - defined here to allow loading as configuration parameters
@@ -615,6 +626,12 @@ if [ -n "${given_gateway}" ]; then
 	my_gateway="${given_gateway}"
 fi
 
+# Determine AD subdomain name
+given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ad_subdomainname}" ]; then
+	ad_subdomain_prefix="${given_ad_subdomainname}"
+fi
+
 # Determine network segments parameters
 fixed_mgmt_bondmode="false"
 unset my_ip
@@ -806,6 +823,20 @@ if [ -n "${given_engine}" ]; then
 fi
 if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${engine_ip_offset} +)
+fi
+
+# Determine AD DC IP
+given_dc=$(sed -n -e 's/^.*hvp_ad_dc=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_dc}" ]; then
+	ad_dc_ip="${given_dc}"
+fi
+if [ -z "${ad_dc_ip}" ]; then
+	if [ -n "${nics['lan']}" ]; then
+		ad_zone="lan"
+	else
+		ad_zone="mgmt"
+	fi
+	ad_dc_ip=$(ipmat $(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_index} -) ${node_ip_offset} -) ${ad_dc_ip_offset} +)
 fi
 
 # Create network setup fragment
@@ -1033,6 +1064,11 @@ else
 	my_options="masters { ${master_ip}; };"
 	file_location="slaves"
 fi
+if [ -n "${nics['lan']}" ]; then
+	ad_zone="${ad_subdomain_prefix}.${domain_name['lan']}"
+else
+	ad_zone="${ad_subdomain_prefix}.${domain_name['mgmt']}"
+fi
 # Use information gathered above to create bind configuration file
 mkdir -p /tmp/hvp-bind-zones
 pushd /tmp/hvp-bind-zones
@@ -1169,6 +1205,11 @@ view "localhost_resolver"
         };
 
         // These are your "authoritative" internal zones :
+        zone "${ad_zone}" IN {
+                type slave;
+                masters { ${ad_dc_ip}; };
+                forwarders {};
+        };
 
 EOF
 for zone in "${!network[@]}" ; do
@@ -1215,6 +1256,11 @@ view "internal"
 
         // These are your "authoritative" internal zones, and would probably
         // also be included in the "localhost_resolver" view above :
+        zone "${ad_zone}" IN {
+                type slave;
+                masters { ${ad_dc_ip}; };
+                forwarders {};
+        };
 
 EOF
 for zone in "${!network[@]}" ; do
@@ -1352,7 +1398,7 @@ mkdir -p /tmp/hvp-samba-files
 pushd /tmp/hvp-samba-files
 
 # Create sample Samba configuration
-# TODO: a proper configuration (AD domain member etc.) should be pushed by means of Ansible once the whole infrastructure is up and running
+# Note: a proper configuration (AD domain member etc.) will be pushed and activated by means of Ansible once the whole infrastructure is up and running
 cat << EOF > smb.conf
 [global]
    server string = Workgroup File Server
@@ -1445,7 +1491,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017083001"
+script_version="2017090803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
