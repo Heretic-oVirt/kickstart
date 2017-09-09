@@ -72,6 +72,22 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+ad_subdomain_prefix="ad"
+
+ad_dc_ip_offset="220"
+
+ad_dc_name="spike"
+
+db_ip_offset="230"
+
+db_name="bigmcintosh"
+
+dbtype="postgresql"
+
+pr_ip_offset="250"
+
+pr_name="rainbowdash"
+
 my_nameserver="dhcp"
 
 my_forwarders="8.8.8.8"
