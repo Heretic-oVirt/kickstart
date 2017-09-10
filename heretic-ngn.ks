@@ -742,6 +742,7 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			res=$?
 			effective_mtu=$(cat /sys/class/net/${nic_name}/mtu 2>/dev/null)
 			if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
+				# TODO: verify whether the following is enough to restore sane interface state
 				ip addr flush dev "${nic_name}"
 				continue
 			fi
@@ -1491,7 +1492,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017090803"
+script_version="2017091001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1586,17 +1587,17 @@ sed -i -e '/^mirrorlist=/s/^/#/g' -e '/^#baseurl=/s/^#//g' /etc/yum.repos.d/epel
 yum -y install haveged
 
 # Add HVP custom repo
-yum -y --enablerepo base --enablerepo updates install wget
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
 wget -P /etc/yum.repos.d https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
 chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Install custom packages for NAS functions
-yum -y --enablerepo base --enablerepo updates --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gstatus
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gstatus
 # TODO: Install Gluster-block and its dependencies (must replace some packages in base with recompiled newer Fedora versions or wait for RHEL7.4-compatible bits in RHGS)
-#yum -y --enablerepo base --enablerepo updates --enablerepo hvp-fedora-rebuild install gluster-block
+#yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-fedora-rebuild install gluster-block
 
 # Install custom packages for OVN functions
-yum -y --enablerepo base --enablerepo updates --enablerepo hvp-opensvswitch-rebuild install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-opensvswitch-rebuild install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
@@ -1604,7 +1605,7 @@ if [ "${my_index}" = "${master_index}" ]; then
 fi
 
 # Install further packages for additional functions: Bind
-yum -y --enablerepo base --enablerepo updates install bind
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
