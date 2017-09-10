@@ -949,7 +949,14 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 					dhclient -x
 				fi
 			else
+				# Note: check whether the desired MTU setting can be obtained or not - skip if it fails
 				ip link set mtu "${mtu[${zone}]}" dev "${nic_name}"
+				res=$?
+				effective_mtu=$(cat /sys/class/net/${nic_name}/mtu 2>/dev/null)
+				if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
+					ip addr flush dev "${nic_name}"
+					continue
+				fi
 				unset PREFIX
 				eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
 				ip addr add "${my_ip[${zone}]}/${PREFIX}" dev "${nic_name}"
@@ -1091,7 +1098,7 @@ fi
 
 # Define default NetBIOS domain name if not specified
 if [ -z "${netbios_domain_name}" ]; then
-	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${my_zone}]} | awk -F. '{print toupper($1)}')
+	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk -F. '{print toupper($1)}')
 fi
 
 # Create network setup fragment
@@ -1517,6 +1524,9 @@ ad_dc_name="${ad_dc_name}"
 EOF
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
 # Custom defaults for AD DC installation
+
+# Note: when installing further AD DCs you must uncomment the following line
+my_nameserver="${ad_dc_ip}"
 
 # Note: when installing further AD DCs you must provide a different offset
 my_ip_offset="${ad_dc_ip_offset}"
@@ -2173,6 +2183,7 @@ ca_file: ca.crt
 
 # Env:
 ## Datacenter:
+# TODO: dynamically determine oVirt version
 dc_name: ${datacenter_name}
 compatibility_version: 4.1
 
@@ -2297,7 +2308,6 @@ EOF
 # Create a custom Jinja2 template to generate a proper Hosted Engine answers file
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
-# TODO: dynamically get the timezone
 unset PREFIX
 eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
 cat << EOF > he-answers.j2
@@ -2359,14 +2369,13 @@ OVEHOSTED_NOTIF/destEmail=str:monitoring@localhost
 EOF
 
 # Create Ansible playbook for oVirt Engine
-# Note: Ansible oVirt Engine management example thanks to Simone Tiraboschi
+# Note: Ansible oVirt management thanks to Simone Tiraboschi
+# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
+# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
 # TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
-# TODO: add further storage domains
-# TODO: add OVN configuration both on engine and on nodes and create a couple of logical networks
+# TODO: create a couple of OVN logical networks
 # TODO: add Bareos configuration both on engine and on nodes
 # TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
-# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
-# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 cat << EOF > ovirtengine.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
@@ -2452,10 +2461,24 @@ cat << EOF > ovirtengine.yaml
         host: "{{ groups['ovirtnodes'][${master_index}] }}"
         data_center: "{{ dc_name }}"
         domain_function: data
+        state: present
         glusterfs:
           address: "{{ vmstore_sd_addr }}"
           path: "{{ vmstore_sd_path }}"
           mount_options: "{{ vmstore_sd_mountopts }}"
+        wait: true
+    - name: Add ISO storage domain
+      ovirt_storage_domains:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ iso_sd_name }}"
+        host: "{{ groups['ovirtnodes'][${master_index}] }}"
+        data_center: "{{ dc_name }}"
+        domain_function: iso
+        state: present
+        nfs:
+          address: "{{ iso_sd_addr }}"
+          path: "{{ iso_sd_path }}"
+          version: auto
         wait: true
     - name: Add Host
       ovirt_hosts:
@@ -2487,6 +2510,25 @@ cat << EOF > ovirtengine.yaml
 ...
 EOF
 
+# Prepare Active Directory defaults
+# TODO: add Active Directory variables
+cat << EOF > ad.yaml
+EOF
+
+# Create Ansible playbook for Active Directory joining of our Samba cluster
+# TODO: add actual domain join tasks
+cat << EOF > adjoin.yaml
+---
+- name: perform Samba cluster AD joining
+  hosts: "{{ groups['glusternodes'][${master_index}] }}"
+  remote_user: root
+  tasks:
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/ad.yaml
+...
+EOF
+
 popd
 
 ) 2>&1 | tee /tmp/kickstart_pre.log
@@ -2509,7 +2551,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017090906"
+script_version="2017091003"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2676,7 +2718,7 @@ elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it's included in base distro now)
 	yum -y install open-vm-tools open-vm-tools-desktop fuse
 	# Note: the following is needed to recompile external VMHGFS support from VMwareTools - separately installed since it's not needed on server machines
-	# TODO: switch to VMware repo and install vmhgfs kmod package from there
+	# TODO: remove the following and switch to vmware-hgfsclient (already part of open-vm-tools) as per http://planetlotus.org/profiles/dave-hay_146277
 	yum -y install fuse-devel
 fi
 
@@ -2695,7 +2737,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
-	yum -y install http://kimchi-project.github.io/wok/downloads/latest/wok.el7.centos.noarch.rpm http://kimchi-project.github.io/gingerbase/downloads/latest/ginger-base.el7.centos.noarch.rpm http://kimchi-project.github.io/ginger/downloads/latest/ginger.el7.centos.noarch.rpm http://kimchi-project.github.io/kimchi/downloads/latest/kimchi.el7.centos.noarch.rpm
+	yum -y install https://github.com/kimchi-project/wok/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
 else
 	# Alternatively install Webmin for generic web management
 	# Add Webmin repo
@@ -3237,7 +3279,6 @@ if [ "${nolocalvirt}" != "true" ]; then
 	chmod 644 /etc/httpd/conf.d/wok.conf
 
 	# Configure Wok to use a custom certificate
-	# TODO: use our own X.509 certificate (signed by our own CA)
 	cat /etc/pki/tls/private/localhost.key > /etc/wok/wok-key.pem
 	chmod 600 /etc/wok/wok-key.pem
 	cat /etc/pki/tls/certs/localhost.crt > /etc/wok/wok-cert.pem
@@ -3272,7 +3313,6 @@ else
 	chmod 644 /etc/httpd/conf.d/webmin.conf
 
 	# Configure Webmin to use a custom certificate
-	# TODO: use our own X.509 certificate (signed by our own CA)
 	cat /etc/pki/tls/private/localhost.key > /etc/webmin/miniserv.pem
 	cat /etc/pki/tls/certs/localhost.crt >> /etc/webmin/miniserv.pem
 
@@ -3511,13 +3551,13 @@ EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
 
 # Create a custom fact-gathering module to find free (not already partitioned/used) disks on nodes
-# TODO: find and exclude SSDs
-# TODO: create a separate hvp_free_ssds to find free SSDs
-cat << EOM > /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_disks
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_disks
 #!/bin/bash
 
 # Default values for parameters
 min_size_bytes="10000000000"
+# Note: use 0 as true (include SSDs) and 1 as false (reject SSDs)
+accept_ssds="1"
 
 # Load any given parameters
 if [ -n "\${1}" -a -f "\${1}" ]; then
@@ -3525,8 +3565,9 @@ if [ -n "\${1}" -a -f "\${1}" ]; then
 fi
 
 # Retrieve disk list
+# Note: SSDs are conditionally excluded (lsblk convention is 0 for SSD and 1 for rotational)
 # Note: suitable disks must be acceptable as physical volumes but currently unpartitioned and unassigned to any volume group
-free_disks=\$(for disk in \$(lsblk -b -d -o NAME,SIZE -n | awk "{if (\\\$2 > \${min_size_bytes}) print \\\$1}"); do
+free_disks=\$(for disk in \$(lsblk -b -d -o NAME,SIZE,ROTA -n | awk "{if ((\\\$2 > \${min_size_bytes}) && (\\\$3 >= \${accept_ssds})) print \\\$1}"); do
 	if ! pvs --noheadings | grep -q \${disk} && parted -s /dev/\${disk} print 2>/dev/null | grep -iq '^partition.*unknown'; then
 		echo \${disk}
 	fi
@@ -3543,16 +3584,58 @@ done
 
 # Give results in JSON format to be gathered as custom additional facts
 # TODO: detect errors in commands above and emit proper rc and msg values
-cat << EOF
+cat << EOM
 {
     "changed" : false,
     "ansible_facts" : {
         "hvp_free_disks" : [\${free_disks_list}]
     }
 }
-EOF
 EOM
+EOF
 chmod 755 /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_disks
+
+# Create a custom fact-gathering module to find free (not already partitioned/used) SSDs on nodes
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_ssds
+#!/bin/bash
+
+# Default values for parameters
+min_size_bytes="10000000000"
+
+# Load any given parameters
+if [ -n "\${1}" -a -f "\${1}" ]; then
+	source "\${1}"
+fi
+
+# Retrieve SSD list
+# Note: suitable SSDs must be acceptable as physical volumes but currently unpartitioned and unassigned to any volume group
+free_ssds=\$(for disk in \$(lsblk -b -d -o NAME,SIZE,ROTA -n | awk "{if ((\\\$2 > \${min_size_bytes}) && (\\\$3 == 0)) print \\\$1}"); do
+	if ! pvs --noheadings | grep -q \${disk} && parted -s /dev/\${disk} print 2>/dev/null | grep -iq '^partition.*unknown'; then
+		echo \${disk}
+	fi
+done)
+
+# Format disk list
+free_ssds_list=""
+for disk in \${free_ssds}; do
+	if [ -n "\${free_ssds_list}" ]; then
+		free_ssds_list="\${free_ssds_list}, "
+	fi
+	free_ssds_list="\${free_ssds_list}{ \\"name\\": \\"\${disk}\\", \\"size\\": \$(blockdev --getsize64 /dev/\${disk}) }"
+done
+
+# Give results in JSON format to be gathered as custom additional facts
+# TODO: detect errors in commands above and emit proper rc and msg values
+cat << EOM
+{
+    "changed" : false,
+    "ansible_facts" : {
+        "hvp_free_ssds" : [\${free_ssds_list}]
+    }
+}
+EOM
+EOF
+chmod 755 /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_ssds
 
 # TODO: add support for the equalto test in Jinja2 selectattr - added in Jinja2 2.8 - remove when rebased upstream
 mkdir -p /usr/local/etc/hvp-ansible/roles/glusternodes/test_plugins
@@ -3581,7 +3664,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy.j2
 # gDeploy Gluster configuration file for HVP
 
 # Nodes in the trusted pool
-# TODO: dynamically choose the weakest node (less disk space / RAM available) as the arbiter-only node (listed last)
+# TODO: dynamically choose the weakest node (less disk space / slower CPU) as the arbiter-only node (listed last)
 [hosts]
 {% for host in groups['glusternodes'] %}
 {{ host }}
@@ -4091,7 +4174,7 @@ ports=111/tcp,2049/tcp,54321/tcp,5900/tcp,5900-6923/tcp,5666/tcp,16514/tcp
 services=glusterfs
 
 # Gluster volume definitions
-# TODO: add support for more than 3 nodes
+# TODO: add support for more than 3 nodes (replicated+distributed volumes)
 
 [volume1]
 action=create
@@ -4329,7 +4412,9 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
   tasks:
     - include: ../common/tasks/setupkeys.yaml
     - name: gather suitable disks
-      hvp_free_disks: min_size_bytes=100000000000
+      hvp_free_disks: min_size_bytes=100000000000 accept_ssds=1
+    - name: gather suitable ssds
+      hvp_free_ssds: min_size_bytes=100000000000
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
@@ -4396,6 +4481,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
 - include: roles/glusternodes/glusternodes.yaml
 - include: roles/ovirtnodes/ovirtnodes.yaml
 - include: roles/ovirtengine/ovirtengine.yaml
+- include: roles/glusternodes/adjoin.yaml
 ...
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/hvp.yaml
@@ -4592,8 +4678,9 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
-	# Note: open-vm-tools packages do not include shared folders support - installing upstream VMwareTools here
 	# Note: the upstream VMwareTools installation should not override what already provided by open-vm-tools (verified on version 9.9.3)
+	# Note: installing upstream VMwareTools here to get legacy shared folders support
+	# TODO: remove the following and switch to vmware-hgfsclient (already part of open-vm-tools) as per http://planetlotus.org/profiles/dave-hay_146277
 	wget --no-check-certificate -O - https://dangerous.ovirt.life/support/VMware/VMwareTools.tar.gz | tar xzf -
 	pushd vmware-tools-distrib
 	./vmware-install.pl -d
@@ -4815,6 +4902,16 @@ if [ -f /tmp/hvp-ansible-files/ovirtengine.yaml ]; then
 	cp /tmp/hvp-ansible-files/ovirtengine.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
 	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
 	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
+fi
+if [ -f /tmp/hvp-ansible-files/ad.yaml ]; then
+	cp /tmp/hvp-ansible-files/ad.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+	chmod 600 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+fi
+if [ -f /tmp/hvp-ansible-files/adjoin.yaml ]; then
+	cp /tmp/hvp-ansible-files/adjoin.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
+	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
+	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 fi
 for file in /tmp/hvp-ansible-files/group_vars/* ; do
 	if [ -f "${file}" ]; then
