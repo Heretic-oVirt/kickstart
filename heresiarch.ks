@@ -1263,6 +1263,7 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 		# alternatively use the inserted optical media as in:
 		#cdrom
 		EOF
+	fi
 else
 	# Note: we assume that a remote stage2 has been copied together with the full media content preserving the default DVD structure
 	# TODO: we assume a HTTP/FTP area - add support for NFS
@@ -2563,7 +2564,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092301"
+script_version="2017092302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
