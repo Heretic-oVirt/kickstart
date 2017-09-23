@@ -1,7 +1,7 @@
 # Kickstart file for Heretic oVirt Project initial installation physical/virtual host
 # Note: minimum amount of RAM successfully tested for installation: 2048 MiB from network - 1024 MiB from local media
 
-# Install from DVD with commandline (see below for comments):
+# Install with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # elevator=deadline ip=nicname:dhcp inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
 # Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
@@ -155,7 +155,7 @@ selinux --enforcing
 # Explicitly list provided repositories
 # Note: no additional repos setup - further packages/updates installed manually in post section
 #repo --name="CentOS"  --baseurl=cdrom:sr0 --cost=100
-#repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/os
+#repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/centos
 
 # Packages list - package groups are preceded by an "@" sign - excluded packages by an "-" sign
 # Note: some virtualization technologies (VMware, Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
@@ -1222,8 +1222,8 @@ ignoredisk --only-use=${device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
 # Simple partitioning: single root and swap
-part swap --fstype swap --hibernation --ondisk=${device_name} --asprimary --label swap
-part / --fstype xfs --size=100 --grow --ondisk=${device_name} --asprimary --label /
+part swap --fstype swap --hibernation --ondisk=${device_name} --asprimary
+part / --fstype xfs --size=100 --grow --ondisk=${device_name} --asprimary
 EOF
 # Clean up disks from any previous software-RAID (Linux or BIOS based)
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
@@ -1241,16 +1241,28 @@ fi
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_stage2}" | grep -q '^hd:' ; then
-	# Note: we assume that a local stage2 comes from a full DVD image (Packages repo included)
-	# TODO: detect use of NetBoot media (no local Packages repo)
-	cat <<- EOF > /tmp/full-installsource
-	# Use the inserted optical media as in:
-	cdrom
-	# alternatively specify a NFS network share as in:
-	# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
-	# or an HTTP/FTP area as in:
-	#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
-	EOF
+	if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
+		# Note: we know that the local stage2 comes from a full DVD image (Packages repo included)
+		cat <<- EOF > /tmp/full-installsource
+		# Use the inserted optical media as in:
+		cdrom
+		# alternatively specify a NFS network share as in:
+		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
+		# or an HTTP/FTP area as in:
+		#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
+		EOF
+	else
+		# Note: since we detected use of NetInstall media (no local Packages repo) we use network install source from kickstart location
+		given_stage2=$(sed -n -e 's/^.*inst\.ks=\(\S*\).*$/\1/p' /proc/cmdline | sed -e 's>/[^/]*$>/../centos>')
+		# TODO: we assume a HTTP/FTP area - add support for NFS
+		cat <<- EOF > /tmp/full-installsource
+		# Specify a NFS network share as in:
+		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
+		# or an HTTP/FTP area as in:
+		url --url ${given_stage2}
+		# alternatively use the inserted optical media as in:
+		#cdrom
+		EOF
 else
 	# Note: we assume that a remote stage2 has been copied together with the full media content preserving the default DVD structure
 	# TODO: we assume a HTTP/FTP area - add support for NFS
@@ -2551,7 +2563,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017091003"
+script_version="2017092301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2899,11 +2911,11 @@ fi
 # Note: systemd sets clock to UTC by default
 #echo 'UTC' >> /etc/adjtime
 
-# Configure NTP time synchronization (immediate hardware synch, add initial time adjusting from given server)
+# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given server)
 sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
 echo "0.centos.pool.ntp.org" > /etc/ntp/step-tickers
 
-# Allow NTPdate hardware clock synch through SELinux
+# Allow NTPdate hardware clock sync through SELinux
 # Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myntpdate
 # TODO: remove when SELinux policy fixed upstream
 mkdir -p /etc/selinux/local
@@ -4673,7 +4685,7 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	EOM
 	chmod 644 /etc/sysctl.d/99-xen-guest.conf
 	sysctl -p
-	wget --no-check-certificate https://dangerous.ovirt.life/support/Xen/xe-guest-utilities*.rpm
+	wget https://dangerous.ovirt.life/support/Xen/xe-guest-utilities*.rpm
 	yum -y --nogpgcheck install ./xe-guest-utilities*.rpm
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
@@ -4681,7 +4693,7 @@ elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: the upstream VMwareTools installation should not override what already provided by open-vm-tools (verified on version 9.9.3)
 	# Note: installing upstream VMwareTools here to get legacy shared folders support
 	# TODO: remove the following and switch to vmware-hgfsclient (already part of open-vm-tools) as per http://planetlotus.org/profiles/dave-hay_146277
-	wget --no-check-certificate -O - https://dangerous.ovirt.life/support/VMware/VMwareTools.tar.gz | tar xzf -
+	wget -O - https://dangerous.ovirt.life/support/VMware/VMwareTools.tar.gz | tar xzf -
 	pushd vmware-tools-distrib
 	./vmware-install.pl -d
 	popd
@@ -4689,14 +4701,14 @@ elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	rm -rf vmware-tools-distrib
 	need_reboot="yes"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
-	wget --no-check-certificate https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
+	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
 	chmod a+rx VBoxLinuxAdditions.run
 	./VBoxLinuxAdditions.run --nox11
 	usermod -a -G vboxsf mwtouser
 	rm -f VBoxLinuxAdditions.run
 	need_reboot="yes"
 elif dmidecode -s system-manufacturer | grep -q "Parallels" ; then
-	wget --no-check-certificate https://dangerous.ovirt.life/support/Parallels/ParallelsTools.tar.gz | tar xzf -
+	wget https://dangerous.ovirt.life/support/Parallels/ParallelsTools.tar.gz | tar xzf -
 	pushd parallels-tools-distrib
 	./install --install-unattended-with-deps
 	popd
@@ -4847,6 +4859,16 @@ for parameters_file in /tmp/hvp-syslinux-conf/hvp_parameters*.sh ; do
 done
 chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
 chown root:root /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
+
+# Create local installation source tree to make sure that PXE-based installations of guests do not fail
+if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
+	# Copy CentOS repo from DVD image when using that as install source
+	cp -r /run/install/repo/{Packages,repodata} /mnt/sysimage/var/www/hvp-repos/el7/centos/
+else
+	# Mirror an external repo otherwise
+	wget -P /mnt/sysimage/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/Packages
+	wget -P /mnt/sysimage/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/repodata
+fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
 # Note: it should be inserted before the inclusion of /etc/httpd/conf.d/*.conf fragments
