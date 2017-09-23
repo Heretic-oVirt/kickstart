@@ -1582,7 +1582,7 @@ domain_join="true"
 
 EOF
 
-# Create bind configuration files (disable RFC1918 stub zones creation - include forced DNS-based redirect to local repo mirrors)
+# Create bind configuration files (disable RFC1918 stub zones creation)
 mkdir -p /tmp/hvp-bind-zones/dynamic
 pushd /tmp/hvp-bind-zones/dynamic
 
@@ -2564,7 +2564,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092302"
+script_version="2017092303"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3221,8 +3221,10 @@ chmod 644 /var/www/html/index.html
 
 # Prepare RPM publishing area
 mkdir -p /var/www/hvp-repos/el7/{centos,node,ks,{{fedora,rhgs}-rebuild,others}/{SRPMS,x86_64}}
-# Clone web contents here using wget
-wget -P /var/www/hvp-repos -m -np -nH --cut-dirs=1 --reject "index.html*" http://dangerous.ovirt.life/hvp-repos/
+# Mirror web contents here using wget
+for subdir in ks centos node; do
+	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
+done
 
 # Enable virtual host configuration
 sed -i -e 's/^#*\s*NameVirtualHost.*$/NameVirtualHost *:80/' /etc/httpd/conf/httpd.conf
@@ -3490,12 +3492,12 @@ touch pxelinux.cfg/default
 ln -s memtest86+* memtest86+
 ln -s pxelinux.cfg/default .
 pushd linux/hvp
-wget http://dangerous.ovirt.life/hvp-repos/el7/node/vmlinuz
-wget http://dangerous.ovirt.life/hvp-repos/el7/node/initrd.img
+cp /var/www/hvp-repos/el7/node/vmlinuz .
+cp /var/www/hvp-repos/el7/node/initrd.img .
 popd
 pushd linux/centos
-wget http://dangerous.ovirt.life/hvp-repos/el7/centos/vmlinuz
-wget http://dangerous.ovirt.life/hvp-repos/el7/centos/initrd.img
+cp /var/www/hvp-repos/el7/centos/vmlinuz .
+cp /var/www/hvp-repos/el7/centos/initrd.img .
 popd
 popd
 
