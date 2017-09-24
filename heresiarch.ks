@@ -922,6 +922,8 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 	if nmcli device show "${nic_name}" | grep -q '^GENERAL.STATE:.*(connected)' ; then
 		nmcli device disconnect "${nic_name}"
 		nmcli connection delete "${nic_name}"
+		ip addr flush dev "${nic_name}"
+		ip link set mtu 1500 dev "${nic_name}"
 	fi
 done
 
@@ -954,7 +956,6 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 				res=$?
 				effective_mtu=$(cat /sys/class/net/${nic_name}/mtu 2>/dev/null)
 				if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
-					# TODO: verify whether the following is enough to restore sane interface state
 					ip addr flush dev "${nic_name}"
 					ip link set mtu 1500 dev "${nic_name}"
 					continue
@@ -969,9 +970,11 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 				nics["${zone}"]="${nic_name}"
 				nic_assigned='true'
 				ip addr flush dev "${nic_name}"
+				ip link set mtu 1500 dev "${nic_name}"
 				break
 			fi
 			ip addr flush dev "${nic_name}"
+			ip link set mtu 1500 dev "${nic_name}"
 		done
 		if [ "${nic_assigned}" = "false" ]; then
 			nics['unused']="${nics['unused']} ${nic_name}"
@@ -1105,11 +1108,16 @@ fi
 
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
+# Note: listing interfaces using network priority order
+# TODO: Anaconda/NetworkManager do not add DEFROUTE="no" and MTU="xxx" parameters - adding workarounds here - remove when fixed upstream
+mkdir -p /tmp/hvp-networkmanager-conf
+pushd /tmp/hvp-networkmanager-conf
 cat << EOF > /tmp/full-network
 # Network device configuration - possibly mixed static / dynamic (DHCP) version (always verify that your nic is supported by install kernel/modules)
 # Use a "void" configuration to make sure anaconda quickly steps over "onboot=no" devices
 EOF
-for zone in "${!network[@]}" ; do
+for (( i=0; i<${#network_priority[*]}; i=i+1 )); do
+	zone="${network_priority[${i}]}"
 	if [ -n "${nics[${zone}]}" ]; then
 		nic_names=$(echo ${nics[${zone}]} | sed -e 's/^\s*//' -e 's/\s*$//')
 		further_options=""
@@ -1126,9 +1134,13 @@ for zone in "${!network[@]}" ; do
 		fi
 		if [ "${NETWORK}" = "${network[${zone}]}" ]; then
 			further_options="${further_options} --gateway=${my_gateway} --nameserver=${my_nameserver}"
+			# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+			echo 'DEFROUTE="yes"' >> ifcfg-${nic_names}
 		elif [ "${zone}" != "external" ]; then
 			# Note: the external zone must be exempt from the nodefroute option
 			further_options="${further_options} --nodefroute"
+			# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+			echo 'DEFROUTE="no"' >> ifcfg-${nic_names}
 		fi
 		# Add hostname option on the DHCP-offering zone only
 		if [ "${zone}" = "${dhcp_zone}" ]; then
@@ -1144,6 +1156,8 @@ for zone in "${!network[@]}" ; do
 			cat <<- EOF >> /tmp/full-network
 			network --device=${nic_names} --activate --onboot=yes --bootproto=static --ip=${my_ip[${zone}]} --netmask=${netmask[${zone}]} --mtu=${mtu[${zone}]} ${further_options}
 			EOF
+			# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+			echo "MTU=\"${mtu[${zone}]}\"" >> ifcfg-${nic_names}
 		fi
 	fi
 done
@@ -1155,6 +1169,7 @@ for nic_name in ${nics['unused']} ; do
 	network --device=${nic_name} --no-activate --nodefroute --onboot=no
 	EOF
 done
+popd
 
 # Create users setup fragment
 cat << EOF > /tmp/full-users
@@ -1194,6 +1209,7 @@ if [ "${keyboard_layout}" != "us" ]; then
 else
 	xlayouts="'us'"
 fi
+# TODO: GNOME3 seems not to respect the keyboard layout preference order (US is always the default)
 cat << EOF > /tmp/full-localization
 # Default system language, additional languages can be enabled installing the appropriate packages below
 lang en_US.UTF-8
@@ -1243,6 +1259,7 @@ fi
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_stage2}" | grep -q '^hd:' ; then
+	# Detect use of NetInstall media
 	if [ -d /run/install/repo/repodata ]; then
 		# Note: we know that the local stage2 comes from a full DVD image (Packages repo included)
 		cat <<- EOF > /tmp/full-installsource
@@ -1483,7 +1500,7 @@ for zone in "${!network[@]}" ; do
 	domain_name['${zone}']="${domain_name[${zone}]}"
 	EOF
 done
-cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 ad_subdomain_prefix="${ad_subdomain_prefix}"
 
@@ -1499,7 +1516,7 @@ admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
 EOF
-# Create kickstart-specific configuration parameters fragment
+# Create kickstart-specific configuration parameters fragments
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 # Custom defaults for nodes installation
 
@@ -1538,6 +1555,7 @@ ad_dc_ip_offset="${ad_dc_ip_offset}"
 ad_dc_name="${ad_dc_name}"
 
 EOF
+
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
 # Custom defaults for AD DC installation
 
@@ -2005,6 +2023,7 @@ popd
 mkdir -p /tmp/hvp-bind-zones
 pushd /tmp/hvp-bind-zones
 cat << EOF > "ifcfg-${nics['external']}"
+PEERDNS="no"
 DNS1="127.0.0.1"
 EOF
 popd
@@ -2239,9 +2258,10 @@ cat << EOF > ovirtnodes.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
   hosts: localhost
-  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-  args:
-    creates: /root/.ssh/id_ecdsa
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
 - name: perform oVirt configuration
   hosts: ovirtnodes
   remote_user: root
@@ -2396,9 +2416,10 @@ cat << EOF > ovirtengine.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
   hosts: localhost
-  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-  args:
-    creates: /root/.ssh/id_ecdsa
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
 - name: perform oVirt configuration
   hosts: ovirtengine
   remote_user: root
@@ -2567,7 +2588,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092403"
+script_version="2017092406"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3222,8 +3243,8 @@ cat << EOF > /var/www/html/index.html
 EOF
 chmod 644 /var/www/html/index.html
 
-# Prepare RPM publishing area
-mkdir -p /var/www/hvp-repos/el7/{centos,node,ks,{{fedora,rhgs}-rebuild,others}/{SRPMS,x86_64}}
+# Prepare network installation area
+mkdir -p /var/www/hvp-repos/el7/{centos,node,ks}
 # Mirror web contents here using wget
 for subdir in ks centos node; do
 	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
@@ -4330,9 +4351,10 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
   hosts: localhost
-  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-  args:
-    creates: /root/.ssh/id_ecdsa
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
 - name: reconfigure gluster nodes bonding to LACP mode
   hosts: glusternodes
   remote_user: root
@@ -4356,9 +4378,10 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
   hosts: localhost
-  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-  args:
-    creates: /root/.ssh/id_ecdsa
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -4421,9 +4444,10 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 ---
 - name: Generate root ECDSA SSH key if not present
   hosts: localhost
-  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-  args:
-    creates: /root/.ssh/id_ecdsa
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -4835,7 +4859,7 @@ if [ -d /tmp/hvp-bind-zones ]; then
 	# Reconfigure networking to use localhost DNS
 	nic_cfg_file=$(basename $(ls /tmp/hvp-bind-zones/ifcfg-* 2>/dev/null))
 	if [ -f "/tmp/hvp-bind-zones/${nic_cfg_file}" ]; then
-		sed -i -e '/^PEERDNS=/s/=.*$/="no"/' -e '/^DNS[0-9]/d' "/etc/sysconfig/network-scripts/${nic_cfg_file}"
+		sed -i -e '/^PEERDNS/d' -e '/^DNS[0-9]/d' "/etc/sysconfig/network-scripts/${nic_cfg_file}"
 		cat "/tmp/hvp-bind-zones/${nic_cfg_file}" >> "/etc/sysconfig/network-scripts/${nic_cfg_file}"
 		sed -i -e '/^nameserver\s/d' /mnt/sysimage/etc/resolv.conf
 		echo 'nameserver 127.0.0.1' >> /mnt/sysimage/etc/resolv.conf
@@ -4950,6 +4974,13 @@ for file in /tmp/hvp-ansible-files/group_vars/* ; do
 		chmod 600 /mnt/sysimage/etc/ansible/group_vars/*
 		chown root:root /mnt/sysimage/etc/ansible/group_vars/*
 	fi
+done
+
+# TODO: perform NetworkManager workaround configuration on interfaces as detected in pre section above - remove when fixed upstream
+for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
+	cfg_file_name=$(basename ${file})
+	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
+	cat ${file} >> /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
 done
 
 # Save exact pre-stage environment
