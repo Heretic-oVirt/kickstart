@@ -158,6 +158,7 @@ ipmat() {
 
 # Create liveimg setup fragment
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
+# TODO: investigate whether we could have a local boot image without a valid embedded squash image (similar to NetInstall)
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_stage2}" | grep -q '^hd:' ; then
 	cat <<- EOF > /tmp/full-liveimg
@@ -724,6 +725,8 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 	if nmcli device show "${nic_name}" | grep -q '^GENERAL.STATE:.*(connected)' ; then
 		nmcli device disconnect "${nic_name}"
 		nmcli connection delete "${nic_name}"
+		ip addr flush dev "${nic_name}"
+		ip link set mtu 1500 dev "${nic_name}"
 	fi
 done
 
@@ -742,7 +745,6 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			res=$?
 			effective_mtu=$(cat /sys/class/net/${nic_name}/mtu 2>/dev/null)
 			if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
-				# TODO: verify whether the following is enough to restore sane interface state
 				ip addr flush dev "${nic_name}"
 				ip link set mtu 1500 dev "${nic_name}"
 				continue
@@ -753,15 +755,21 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			res=$?
 			if [ ${res} -ne 0 ] ; then
 				ip addr flush dev "${nic_name}"
+				ip link set mtu 1500 dev "${nic_name}"
 				continue
 			fi
+			# Note: adding extra sleep and ping to work around possible hardware delays
+			sleep 2
+			ping -c 3 -w 8 -i 2 "${test_ip[${zone}]}" > /dev/null 2>&1
 			if ping -c 3 -w 8 -i 2 "${test_ip[${zone}]}" > /dev/null 2>&1 ; then
 				nics["${zone}"]="${nics[${zone}]} ${nic_name}"
 				nic_assigned='true'
 				ip addr flush dev "${nic_name}"
+				ip link set mtu 1500 dev "${nic_name}"
 				break
 			fi
 			ip addr flush dev "${nic_name}"
+			ip link set mtu 1500 dev "${nic_name}"
 		done
 		if [ "${nic_assigned}" = "false" ]; then
 			nics['unused']="${nics['unused']} ${nic_name}"
@@ -844,6 +852,10 @@ fi
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
 # Note: defining statically configured single/bonded access to autodetected networks
+# Note: listing interfaces using reverse alphabetical order for networks (results in: mgmt, lan, gluster)
+# TODO: Anaconda/NetworkManager do not add DEFROUTE="no" and MTU="xxxx" parameters - adding workarounds here - remove when fixed upstream
+mkdir -p /tmp/hvp-networkmanager-conf
+pushd /tmp/hvp-networkmanager-conf
 cat << EOF > /tmp/full-network
 # Network device configuration - static version (always verify that your nic is supported by install kernel/modules)
 # Use a "void" configuration to make sure anaconda quickly steps over "onboot=no" devices
@@ -853,14 +865,23 @@ for zone in $(echo "${!network[@]}" | tr ' ' '\n' | sort -r); do
 	if [ -n "${nics[${zone}]}" ]; then
 		nics_number=$(echo ${nics[${zone}]} | wc -w)
 		nic_names=$(echo ${nics[${zone}]} | sed -e 's/^\s*//' -e 's/\s*$//')
+		if [ "${nics_number}" -eq 1 ]; then
+			ifcfg_name="${nic_names}"
+		else
+			ifcfg_name="bond${bond_index}"
+		fi
 		further_options=""
 		# Add gateway and nameserver options only if the default gateway is on this network
 		unset NETWORK
 		eval $(ipcalc -s -n "${my_gateway}" "${netmask[${zone}]}")
 		if [ "${NETWORK}" = "${network[${zone}]}" ]; then
 			further_options="${further_options} --gateway=${my_gateway} --nameserver=${my_nameserver}"
+			# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+			echo 'DEFROUTE="yes"' >> ifcfg-${ifcfg_name}
 		else
 			further_options="${further_options} --nodefroute"
+			# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+			echo 'DEFROUTE="no"' >> ifcfg-${ifcfg_name}
 		fi
 		# Add hostname option on the mgmt zone only
 		# Note: oVirt requires the node hostname to be on the ovirtmgmt network
@@ -870,16 +891,18 @@ for zone in $(echo "${!network[@]}" | tr ' ' '\n' | sort -r); do
 		if [ "${nics_number}" -eq 1 ]; then
 			# Single (plain) interface
 			cat <<- EOF >> /tmp/full-network
-			network --device=${nic_names} --activate --onboot=yes --bootproto=static --ip=${my_ip[${zone}]} --netmask=${netmask[${zone}]} --mtu=${mtu[${zone}]} ${further_options}
+			network --device=${ifcfg_name} --activate --onboot=yes --bootproto=static --ip=${my_ip[${zone}]} --netmask=${netmask[${zone}]} --mtu=${mtu[${zone}]} ${further_options}
 			EOF
 		else
 			cat <<- EOF >> /tmp/full-network
-			network --device=bond${bond_index} --bondslaves=$(echo "${nic_names}" | sed -e 's/ /,/g') --bondopts=${bondopts[${zone}]} --activate --onboot=yes --bootproto=static --ip=${my_ip[${zone}]} --netmask=${netmask[${zone}]} --mtu=${mtu[${zone}]} ${further_options}
+			network --device=${ifcfg_name} --bondslaves=$(echo "${nic_names}" | sed -e 's/ /,/g') --bondopts=${bondopts[${zone}]} --activate --onboot=yes --bootproto=static --ip=${my_ip[${zone}]} --netmask=${netmask[${zone}]} --mtu=${mtu[${zone}]} ${further_options}
 			EOF
 			# Note: saving actual interface (bond) name for further use below
-			nics[${zone}]="bond${bond_index}"
+			nics[${zone}]="${ifcfg_name}"
 			bond_index=$((bond_index+1))
 		fi
+		# TODO: workaround for Anaconda/NetworkManager bug - remove when fixed upstream
+		echo "MTU=\"${mtu[${zone}]}\"" >> ifcfg-${ifcfg_name}
 	fi
 done
 for nic_name in ${nics['unused']} ; do
@@ -890,6 +913,7 @@ for nic_name in ${nics['unused']} ; do
 	network --device=${nic_name} --no-activate --nodefroute --onboot=no
 	EOF
 done
+popd
 
 # Create users setup fragment
 cat << EOF > /tmp/full-users
@@ -1493,7 +1517,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092401"
+script_version="2017092402"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2118,6 +2142,13 @@ if [ -f /tmp/hvp-users-conf/rc.users-setup ]; then
 	chmod 755 /mnt/sysimage/etc/rc.d/rc.users-setup
 	chown root:root /mnt/sysimage/etc/rc.d/rc.users-setup
 fi
+
+# TODO: perform NetworkManager workaround configuration on interfaces as detected in pre section above - remove when fixed upstream
+for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
+	cfg_file_name=$(basename ${file})
+	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
+	cat ${file} >> /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
+done
 
 # Save exact pre-stage environment
 if [ -f /tmp/pre.out ]; then
