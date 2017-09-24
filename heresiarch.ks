@@ -1253,7 +1253,7 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 		EOF
 	else
 		# Note: since we detected use of NetInstall media (no local Packages repo) we use network install source from kickstart location
-		given_stage2=$(sed -n -e 's/^.*inst\.ks=\(\S*\).*$/\1/p' /proc/cmdline | sed -e 's>/[^/]*$>/../centos>')
+		given_stage2=$(sed -n -e 's/^.*inst\.ks=\(\S*\).*$/\1/p' /proc/cmdline | sed -e 's>/[^/]*/[^/]*$>/centos>')
 		# TODO: we assume a HTTP/FTP area - add support for NFS
 		cat <<- EOF > /tmp/full-installsource
 		# Specify a NFS network share as in:
@@ -2564,7 +2564,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092303"
+script_version="2017092401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
