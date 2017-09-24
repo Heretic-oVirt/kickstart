@@ -744,6 +744,7 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
 				# TODO: verify whether the following is enough to restore sane interface state
 				ip addr flush dev "${nic_name}"
+				ip link set mtu 1500 dev "${nic_name}"
 				continue
 			fi
 			unset PREFIX
@@ -1492,7 +1493,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017091001"
+script_version="2017092401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1592,9 +1593,7 @@ wget -P /etc/yum.repos.d https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
 chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Install custom packages for NAS functions
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gstatus
-# TODO: Install Gluster-block and its dependencies (must replace some packages in base with recompiled newer Fedora versions or wait for RHEL7.4-compatible bits in RHGS)
-#yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-fedora-rebuild install gluster-block
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
 yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-opensvswitch-rebuild install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
@@ -1611,7 +1610,7 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
 
 # Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy
+yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy ansible
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -1830,6 +1829,9 @@ firewall-offline-cmd --add-service=samba
 
 # TODO: Lower GlusterFS log level
 #sed -i -e 's/^#*\s*LOG_LEVEL=.*$/LOG_LEVEL=WARNING/' /etc/sysconfig/glusterd
+
+# TODO: Lower Gluster-block log level
+#sed -i -e 's/^#*\s*GB_LOG_LEVEL=.*$/GB_LOG_LEVEL=WARNING/' /etc/sysconfig/gluster-blockd
 
 # Limit GlusterFS/Samba/Ganesha resource usage by means of cgroup using systemd slices
 # Note: the following applies to both glusterd and glusterfsd (the latter being started on demand by the former) by means of the settings below
