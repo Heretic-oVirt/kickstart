@@ -954,7 +954,9 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 				res=$?
 				effective_mtu=$(cat /sys/class/net/${nic_name}/mtu 2>/dev/null)
 				if [ ${res} -ne 0 -o "${effective_mtu}" != "${mtu[${zone}]}" ] ; then
+					# TODO: verify whether the following is enough to restore sane interface state
 					ip addr flush dev "${nic_name}"
+					ip link set mtu 1500 dev "${nic_name}"
 					continue
 				fi
 				unset PREFIX
@@ -1241,7 +1243,7 @@ fi
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_stage2}" | grep -q '^hd:' ; then
-	if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
+	if [ -d /run/install/repo/repodata ]; then
 		# Note: we know that the local stage2 comes from a full DVD image (Packages repo included)
 		cat <<- EOF > /tmp/full-installsource
 		# Use the inserted optical media as in:
@@ -1252,7 +1254,8 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 		#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
 		EOF
 	else
-		# Note: since we detected use of NetInstall media (no local Packages repo) we use network install source from kickstart location
+		# Note: since we detected use of NetInstall media (no local repo) we use network install source deduced from kickstart location
+		# Note: a subdir tree equal to HVP site is assumed
 		given_stage2=$(sed -n -e 's/^.*inst\.ks=\(\S*\).*$/\1/p' /proc/cmdline | sed -e 's>/[^/]*/[^/]*$>/centos>')
 		# TODO: we assume a HTTP/FTP area - add support for NFS
 		cat <<- EOF > /tmp/full-installsource
@@ -2564,7 +2567,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092401"
+script_version="2017092403"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
