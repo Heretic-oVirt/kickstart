@@ -966,20 +966,20 @@ ignoredisk --only-use=${device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
 # Note: the following uses only the first disk as PV and leaves other disks unused if the first one is sufficiently big, otherwise starts using other disks too
-part pv.01 --size=42000 --grow
+part pv.01 --size=50000 --grow
 # Create a VG
 volgroup HostVG pv.01
 # Define swap space
 logvol swap --vgname=HostVG --name=swap --fstype=swap --recommended
 # Define thin provisioned LVs
-logvol none --vgname=HostVG --name=HostPool --thinpool --size=40000 --grow
+logvol none --vgname=HostVG --name=HostPool --thinpool --size=48000 --grow
 # Note: ext4 is required for oVirt Node by imgbased software
 logvol / --vgname=HostVG --name=root --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=6000 --grow
-logvol /var --vgname=HostVG --name=var --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=15000
-logvol /var/log --vgname=HostVG --name=var_log --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=8000
+logvol /var --vgname=HostVG --name=var --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=20000
+logvol /var/log --vgname=HostVG --name=var_log --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=10000
 logvol /var/log/audit --vgname=HostVG --name=var_log_audit --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
 logvol /home --vgname=HostVG --name=home --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=1000
-logvol /tmp --vgname=HostVG --name=tmp --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=1000
+logvol /tmp --vgname=HostVG --name=tmp --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
 EOF
 # Clean up disks from any previous software-RAID (Linux or BIOS based)
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
@@ -1517,7 +1517,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092402"
+script_version="2017092901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1634,7 +1634,7 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
 
 # Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy ansible
+yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc gdeploy ansible
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
