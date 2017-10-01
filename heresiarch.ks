@@ -2209,7 +2209,19 @@ done
 
 # Prepare oVirt defaults
 # Note: Ansible oVirt variable definitions thanks to Simone Tiraboschi
+unset PREFIX
+eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
 cat << EOF > hvp.yaml
+# HVP local conventions
+hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
+hvp_engine_name: ${engine_name}
+hvp_engine_domainname: ${domain_name[${dhcp_zone}]}
+hvp_engine_ip: ${engine_ip}
+hvp_engine_netprefix: ${PREFIX}
+hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
+hvp_switch_ip: ${switch_ip}
+hvp_timezone: ${local_timezone}
+
 # Engine credentials:
 url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
 username: admin@internal
@@ -2277,7 +2289,7 @@ cat << EOF > ovirtnodes.yaml
       command: vdsm-tool configure --force
       register: vdsm_result
 - name: perform oVirt Hosted Engine setup
-  hosts: "{{ groups['ovirtnodes'][${master_index}] }}"
+  hosts: "{{ hvp_master_node }}"
   remote_user: root
   tasks:
     - name: get common vars
@@ -2314,7 +2326,7 @@ cat << EOF > ovirtnodes.yaml
       command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
       register: setup_result
 - name: perform oVirt setup preparation on further nodes
-  hosts: "{{ groups['ovirtnodes'] | difference(groups['ovirtnodes'][${master_index}]) | join(',') }}"
+  hosts: "{{ groups['ovirtnodes'] | difference(hvp_master_node) | join(',') }}"
   remote_user: root
   tasks:
     - name: create target directory for answer file
@@ -2344,8 +2356,6 @@ EOF
 # Create a custom Jinja2 template to generate a proper Hosted Engine answers file
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
-unset PREFIX
-eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
 cat << EOF > he-answers.j2
 [environment:default]
 OVEHOSTED_CORE/rollbackProceed=none:None
@@ -2353,11 +2363,11 @@ OVEHOSTED_CORE/screenProceed=bool:True
 OVEHOSTED_CORE/deployProceed=bool:True
 OVEHOSTED_CORE/upgradeProceed=none:None
 OVEHOSTED_CORE/confirmSettings=bool:True
-OVEHOSTED_NETWORK/fqdn=str:${engine_name}.${domain_name[${dhcp_zone}]}
+OVEHOSTED_NETWORK/fqdn=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
 OVEHOSTED_NETWORK/bridgeIf=str:{% for eth in hostvars[inventory_hostname]['ansible_eth'] %}{% if 'ipv4' in eth %}{% if eth['ipv4']['address'] == hostvars[inventory_hostname]['ansible_default_ipv4']['address'] %}{{ eth['device'] }}{% endif %}{% endif %}{% endfor %}
 OVEHOSTED_NETWORK/bridgeName=str:ovirtmgmt
 OVEHOSTED_NETWORK/firewallManager=str:firewalld
-OVEHOSTED_NETWORK/gateway=str:${switch_ip}
+OVEHOSTED_NETWORK/gateway=str:{{ hvp_switch_ip }}
 OVEHOSTED_ENGINE/appHostName=str:{{ inventory_hostname }}
 OVEHOSTED_ENGINE/clusterName=str:{{ cluster_name }}
 OVEHOSTED_ENGINE/adminPassword=str:{{ password }}
@@ -2383,14 +2393,14 @@ OVEHOSTED_VM/vmVCpus=str:2
 OVEHOSTED_VM/ovfArchive=str:{{ ova_result.stdout }}
 OVEHOSTED_VM/vmCDRom=none:None
 OVEHOSTED_VM/automateVMShutdown=bool:True
-OVEHOSTED_VM/cloudinitInstanceDomainName=str:${domain_name[${dhcp_zone}]}
+OVEHOSTED_VM/cloudinitInstanceDomainName=str:{{ hvp_engine_domainname }}
 OVEHOSTED_VM/cloudinitExecuteEngineSetup=bool:True
-OVEHOSTED_VM/cloudinitInstanceHostName=str:${engine_name}.${domain_name[${dhcp_zone}]}
-OVEHOSTED_VM/cloudinitVMStaticCIDR=str:${engine_ip}/${PREFIX}
+OVEHOSTED_VM/cloudinitInstanceHostName=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
+OVEHOSTED_VM/cloudinitVMStaticCIDR=str:{{ hvp_engine_ip }}/{{ hvp_engine_netprefix }}
 OVEHOSTED_VM/cloudInitISO=str:generate
 OVEHOSTED_VM/cloudinitVMETCHOSTS=bool:True
-OVEHOSTED_VM/cloudinitVMDNS=str:$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
-OVEHOSTED_VM/cloudinitVMTZ=str:${local_timezone}
+OVEHOSTED_VM/cloudinitVMDNS=str:{{ hvp_engine_dnslist }}
+OVEHOSTED_VM/cloudinitVMTZ=str:{{ hvp_timezone }}
 OVEHOSTED_VM/rootSshAccess=str:yes
 OVEHOSTED_VM/rootSshPubkey=str:
 OVEHOSTED_VDSM/spicePkiSubject=str:C=EN, L=Test, O=Test, CN=Test
@@ -2495,7 +2505,7 @@ cat << EOF > ovirtengine.yaml
       ovirt_storage_domains:
         auth: "{{ ovirt_auth }}"
         name: "{{ vmstore_sd_name }}"
-        host: "{{ groups['ovirtnodes'][${master_index}] }}"
+        host: "{{ hvp_master_node }}"
         data_center: "{{ dc_name }}"
         domain_function: data
         state: present
@@ -2508,7 +2518,7 @@ cat << EOF > ovirtengine.yaml
       ovirt_storage_domains:
         auth: "{{ ovirt_auth }}"
         name: "{{ iso_sd_name }}"
-        host: "{{ groups['ovirtnodes'][${master_index}] }}"
+        host: "{{ hvp_master_node }}"
         data_center: "{{ dc_name }}"
         domain_function: iso
         state: present
@@ -2527,7 +2537,7 @@ cat << EOF > ovirtengine.yaml
         override_iptables: true
         timeout: 1200
         wait: true
-      with_items: "{{ groups['ovirtnodes'] | difference(groups['ovirtnodes'][${master_index}]) }}"
+      with_items: "{{ groups['ovirtnodes'] | difference(hvp_master_node) }}"
     - name: Revoke the SSO token
       no_log: true
       ovirt_auth:
@@ -2553,11 +2563,11 @@ cat << EOF > ad.yaml
 EOF
 
 # Create Ansible playbook for Active Directory joining of our Samba cluster
-# TODO: add actual domain join tasks
+# TODO: add actual domain join tasks (create new smb.conf from template, push to all nodes, join on master node, restart services on all nodes)
 cat << EOF > adjoin.yaml
 ---
 - name: perform Samba cluster AD joining
-  hosts: "{{ groups['glusternodes'][${master_index}] }}"
+  hosts: "{{ hvp_master_node }}"
   remote_user: root
   tasks:
     - name: get common vars
@@ -2588,7 +2598,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092406"
+script_version="2017093001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2768,7 +2778,7 @@ else
 	yum -y install mcelog
 fi
 
-# Add virtualization support on suitable physical platforms
+# Add virtualization support on suitable platforms
 if [ "${nolocalvirt}" != "true" ]; then
 	yum -y install centos-release-qemu-ev
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy
@@ -4503,7 +4513,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
         state: started
         no_block: no
 - name: Configure Samba authentication
-  hosts: "{{ groups['glusternodes'][0] }}"
+  hosts: "{{ hvp_master_node }}"
   remote_user: root
   tasks:
     - name: configure local root user
