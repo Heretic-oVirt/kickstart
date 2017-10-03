@@ -348,7 +348,7 @@ else
 		fi
 		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
 	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
-		# Note: cdrom gets accessed as real device name which must be detected - assuming it's the first removable device
+		# Note: cdrom gets accessed as real device name which must be detected - assuming it is the first removable device
 		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
 		# Note: on RHEL>=6 even IDE/ATAPI devices have SCSI device names
 		for dev in /dev/sd[a-z] /dev/sr[0-9]; do
@@ -1517,7 +1517,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017092901"
+script_version="2017100301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1681,6 +1681,7 @@ systemctl enable haveged
 # Note: users configuration script generated in pre section above and copied in third post section below
 
 # Conditionally force static the nic name<->MAC mapping to work around hardware bugs (eg nic "autoshifting" on some HP MicroServer G7)
+# TODO: oVirt setup removes HWADDR parameter from ifcfg file when enslaving it to ovirtmgmt - open a bug upstream - use bonding on mgmt as a workaround
 if [ "${nicmacfix}" = "true" ] ; then
 	for nic_cfg in /etc/sysconfig/network-scripts/ifcfg-* ; do
 		eval $(grep '^DEVICE=' "${nic_cfg}")
