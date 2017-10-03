@@ -1106,6 +1106,12 @@ if [ -z "${netbios_domain_name}" ]; then
 	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk -F. '{print toupper($1)}')
 fi
 
+# Define AD Kerberos realm name
+realm_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk '{print toupper($0)}')
+
+# Define NetBIOS machine name for storage services
+netbios_storage_name=$(echo "${storage_name}" | awk '{print toupper($0)}')
+
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
 # Note: listing interfaces using network priority order
@@ -1439,9 +1445,9 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
-	        kernel linux/hvp/vmlinuz
-	        # append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
-	        append initrd=linux/hvp/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	        kernel linux/node/vmlinuz
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
@@ -2151,7 +2157,7 @@ EOF
 
 popd
 
-# Prepare Ansible files to be copied later on below
+# Prepare Ansible variable definition files to be copied later on below
 # Note: the actual zone to access nodes/engine will be the one offering our DHCP
 # Note: the host listed last in glusternodes group will become the arbiter one in 3 node setups
 mkdir -p /tmp/hvp-ansible-files
@@ -2263,317 +2269,13 @@ engine_sd_path: /enginedomain
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 EOF
 
-# Create Ansible playbook for oVirt nodes
-# Note: oVirt Hosted Engine installation will be performed on the node selected as master above
-# Note: eth interfaces enumeration taken from https://serverfault.com/a/852093
-cat << EOF > ovirtnodes.yaml
----
-- name: Generate root ECDSA SSH key if not present
-  hosts: localhost
-  tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
-- name: perform oVirt configuration
-  hosts: ovirtnodes
-  remote_user: root
-  tasks:
-    - include: ../common/tasks/setupkeys.yaml
-    - name: define traditional ethernet facts
-      set_fact:
-        ansible_eth: "{% set ansible_eth = ansible_eth|default([]) + [hostvars[inventory_hostname]['ansible_' + item]] %}{{ ansible_eth|list }}"
-      when: hostvars[inventory_hostname]['ansible_' + item]['type'] == 'ether'
-      with_items:
-        - "{{ hostvars[inventory_hostname]['ansible_interfaces'] }}"
-    - name: reset VDSM configuration
-      command: vdsm-tool configure --force
-      register: vdsm_result
-- name: perform oVirt Hosted Engine setup
-  hosts: "{{ hvp_master_node }}"
-  remote_user: root
-  tasks:
-    - name: get common vars
-      include_vars:
-        file: ../common/vars/hvp.yaml
-    - name: generate random MAC address for Engine appliance
-      shell: echo 'from ovirt_hosted_engine_setup import util as ohostedutil; print ohostedutil.randomMAC()' | python
-      register: mac_result
-    - name: get Engine appliance ova filename
-      shell: echo /usr/share/ovirt-engine-appliance/ovirt-engine-appliance-*.ova
-      register: ova_result
-    - name: create target directory for answer file
-      file:
-        path: /root/etc
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: copy hosted engine installation answer file template
-      copy:
-        src: templates/he-answers.j2
-        dest: /root/etc/he-answers.j2
-        owner: root
-        group: root
-        mode: 0644
-    - name: prepare hosted engine installation answer file
-      template:
-        src: /root/etc/he-answers.j2
-        dest: /root/etc/he-answers.conf
-        owner: root
-        group: root
-        mode: 0644
-    - name: perform actual Hosted Engine setup
-      command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
-      register: setup_result
-- name: perform oVirt setup preparation on further nodes
-  hosts: "{{ groups['ovirtnodes'] | difference(hvp_master_node) | join(',') }}"
-  remote_user: root
-  tasks:
-    - name: create target directory for answer file
-      file:
-        path: /root/etc
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: copy add-host installation answer file template
-      copy:
-        src: templates/he-answers.j2
-        dest: /root/etc/he-answers.j2
-        owner: root
-        group: root
-        mode: 0644
-    - name: prepare add-host installation answer file
-      template:
-        src: /root/etc/he-answers.j2
-        dest: /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf
-        owner: root
-        group: root
-        mode: 0644
-...
-EOF
-
-# Create a custom Jinja2 template to generate a proper Hosted Engine answers file
-# Note: oVirt Hosted Engine installation will be performed on the node selected as master above
-# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
-cat << EOF > he-answers.j2
-[environment:default]
-OVEHOSTED_CORE/rollbackProceed=none:None
-OVEHOSTED_CORE/screenProceed=bool:True
-OVEHOSTED_CORE/deployProceed=bool:True
-OVEHOSTED_CORE/upgradeProceed=none:None
-OVEHOSTED_CORE/confirmSettings=bool:True
-OVEHOSTED_NETWORK/fqdn=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
-OVEHOSTED_NETWORK/bridgeIf=str:{% for eth in hostvars[inventory_hostname]['ansible_eth'] %}{% if 'ipv4' in eth %}{% if eth['ipv4']['address'] == hostvars[inventory_hostname]['ansible_default_ipv4']['address'] %}{{ eth['device'] }}{% endif %}{% endif %}{% endfor %}
-OVEHOSTED_NETWORK/bridgeName=str:ovirtmgmt
-OVEHOSTED_NETWORK/firewallManager=str:firewalld
-OVEHOSTED_NETWORK/gateway=str:{{ hvp_switch_ip }}
-OVEHOSTED_ENGINE/appHostName=str:{{ inventory_hostname }}
-OVEHOSTED_ENGINE/clusterName=str:{{ cluster_name }}
-OVEHOSTED_ENGINE/adminPassword=str:{{ password }}
-OVEHOSTED_ENGINE/enableHcGlusterService=bool:True
-OVEHOSTED_ENGINE/insecureSSL=none:None
-OVEHOSTED_STORAGE/imgAlias=str:hosted_engine
-OVEHOSTED_STORAGE/LunID=none:None
-OVEHOSTED_STORAGE/imgSizeGB=str:80
-OVEHOSTED_STORAGE/iSCSIPortal=none:None
-OVEHOSTED_STORAGE/iSCSIPortalIPAddress=none:None
-OVEHOSTED_STORAGE/iSCSIPortalPort=none:None
-OVEHOSTED_STORAGE/iSCSIPortalUser=none:None
-OVEHOSTED_STORAGE/iSCSITargetName=none:None
-OVEHOSTED_STORAGE/storageDatacenterName=str:{{ dc_name }}
-OVEHOSTED_STORAGE/domainType=str:{{ engine_sd_type }}
-OVEHOSTED_STORAGE/storageDomainName=str:{{ engine_sd_name }}
-OVEHOSTED_STORAGE/storageDomainConnection=str:{{ engine_sd_addr }}:{{ engine_sd_path }}
-OVEHOSTED_STORAGE/mntOptions=str:{{ engine_sd_mountopts }}
-OVEHOSTED_VM/vmMemSizeMB=int:4096
-OVEHOSTED_VM/vmMACAddr=str:{{ mac_result.stdout }}
-OVEHOSTED_VM/emulatedMachine=str:pc
-OVEHOSTED_VM/vmVCpus=str:2
-OVEHOSTED_VM/ovfArchive=str:{{ ova_result.stdout }}
-OVEHOSTED_VM/vmCDRom=none:None
-OVEHOSTED_VM/automateVMShutdown=bool:True
-OVEHOSTED_VM/cloudinitInstanceDomainName=str:{{ hvp_engine_domainname }}
-OVEHOSTED_VM/cloudinitExecuteEngineSetup=bool:True
-OVEHOSTED_VM/cloudinitInstanceHostName=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
-OVEHOSTED_VM/cloudinitVMStaticCIDR=str:{{ hvp_engine_ip }}/{{ hvp_engine_netprefix }}
-OVEHOSTED_VM/cloudInitISO=str:generate
-OVEHOSTED_VM/cloudinitVMETCHOSTS=bool:True
-OVEHOSTED_VM/cloudinitVMDNS=str:{{ hvp_engine_dnslist }}
-OVEHOSTED_VM/cloudinitVMTZ=str:{{ hvp_timezone }}
-OVEHOSTED_VM/rootSshAccess=str:yes
-OVEHOSTED_VM/rootSshPubkey=str:
-OVEHOSTED_VDSM/spicePkiSubject=str:C=EN, L=Test, O=Test, CN=Test
-OVEHOSTED_VDSM/pkiSubject=str:/C=EN/L=Test/O=Test/CN=Test
-OVEHOSTED_VDSM/caSubject=str:/C=EN/L=Test/O=Test/CN=TestCA
-OVEHOSTED_VDSM/cpu=str:{{ cpu_type }}
-OVEHOSTED_VDSM/consoleType=str:vnc
-OVEHOSTED_NOTIF/smtpPort=str:25
-OVEHOSTED_NOTIF/smtpServer=str:localhost
-OVEHOSTED_NOTIF/sourceEmail=str:root@localhost
-OVEHOSTED_NOTIF/destEmail=str:monitoring@localhost
-EOF
-
-# Create Ansible playbook for oVirt Engine
-# Note: Ansible oVirt management thanks to Simone Tiraboschi
-# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
-# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
-# TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
-# TODO: create a couple of OVN logical networks
-# TODO: add Bareos configuration both on engine and on nodes
-# TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
-cat << EOF > ovirtengine.yaml
----
-- name: Generate root ECDSA SSH key if not present
-  hosts: localhost
-  tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
-- name: perform oVirt configuration
-  hosts: ovirtengine
-  remote_user: root
-  tasks:
-    - include: ../common/tasks/setupkeys.yaml
-    - name: get common vars
-      include_vars:
-        file: ../common/vars/hvp.yaml
-    - name: add our own repo
-      get_url:
-        url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-        dest: /etc/yum.repos.d/HVP.repo
-        mode: 0644
-    - name: install the Bareos-related packages
-      yum:
-        name: "{{ item }}"
-        state: latest
-      with_items: bareos-tools bareos-client bareos-director bareos-webui
-    - name: enable and start the Bareos-related services
-      systemd:
-        name: "{{ item }}"
-        enabled: False
-        state: stopped
-        no_block: no
-      with_items: bareos-fd bareos-dir
-    - name: install the OVN-related packages
-      yum:
-        name: "{{ item }}"
-        state: latest
-      with_items: openvswitch openvswitch-ovn-common openvswitch-ovn-central python-openvswitch ovirt-provider-ovn
-    - name: enable and start the OVN-related services
-      systemd:
-        name: "{{ item }}"
-        enabled: True
-        state: started
-        no_block: no
-      with_items: ovirt-provider-ovn
-    - name: allow OVN-provider communications
-      firewalld:
-        service: ovirt-provider-ovn
-        permanent: True
-        immediate: True
-        state: enabled
-    - name: allow OVN-components communications - 1
-      firewalld:
-        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6641" accept'
-        permanent: True
-        immediate: True
-        state: enabled
-    - name: allow OVN-components communications - 2
-      firewalld:
-        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6642" accept'
-        permanent: True
-        immediate: True
-        state: enabled
-    - name: configure OVN central to listen on ports - 1
-      shell: "ovn-nbctl set-connection ptcp:6641"
-      register: centralconf1_result
-    - name: configure OVN central to listen on ports - 2
-      shell: "ovn-nbctl set-connection ptcp:6642"
-      register: centralconf2_result
-    - name: Enable libgfapi support
-      command: engine-config -s LibgfApiSupported=true
-      register: libgfapi_result
-    - name: Obtain oVirt Engine SSO token
-      no_log: true
-      ovirt_auth:
-        url: "{{ url }}"
-        username: "{{ username }}"
-        password: "{{ password }}"
-        ca_file: "{{ ca_file }}"
-    - name: Add main storage domain
-      ovirt_storage_domains:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ vmstore_sd_name }}"
-        host: "{{ hvp_master_node }}"
-        data_center: "{{ dc_name }}"
-        domain_function: data
-        state: present
-        glusterfs:
-          address: "{{ vmstore_sd_addr }}"
-          path: "{{ vmstore_sd_path }}"
-          mount_options: "{{ vmstore_sd_mountopts }}"
-        wait: true
-    - name: Add ISO storage domain
-      ovirt_storage_domains:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ iso_sd_name }}"
-        host: "{{ hvp_master_node }}"
-        data_center: "{{ dc_name }}"
-        domain_function: iso
-        state: present
-        nfs:
-          address: "{{ iso_sd_addr }}"
-          path: "{{ iso_sd_path }}"
-          version: auto
-        wait: true
-    - name: Add Host
-      ovirt_hosts:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ item }}"
-        address: "{{ item }}"
-        password: "{{ password }}"
-        cluster: "{{ cluster_name }}"
-        override_iptables: true
-        timeout: 1200
-        wait: true
-      with_items: "{{ groups['ovirtnodes'] | difference(hvp_master_node) }}"
-    - name: Revoke the SSO token
-      no_log: true
-      ovirt_auth:
-        state: absent
-        ovirt_auth: "{{ ovirt_auth }}"
-- name: perform OVN configuration on hosts
-  hosts: ovirtnodes
-  remote_user: root
-  tasks:
-    - include: ../common/tasks/setupkeys.yaml
-    - name: get common vars
-      include_vars:
-        file: ../common/vars/hvp.yaml
-    - name: configure OVN VIF driver
-      shell: "vdsm-tool ovn-config {{ hostvars[groups['ovirtengine'][0]]['ansible_default_ipv4']['address'] }} {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
-      register: vifconf_result
-...
-EOF
-
 # Prepare Active Directory defaults
-# TODO: add Active Directory variables
 cat << EOF > ad.yaml
-EOF
-
-# Create Ansible playbook for Active Directory joining of our Samba cluster
-# TODO: add actual domain join tasks (create new smb.conf from template, push to all nodes, join on master node, restart services on all nodes)
-cat << EOF > adjoin.yaml
----
-- name: perform Samba cluster AD joining
-  hosts: "{{ hvp_master_node }}"
-  remote_user: root
-  tasks:
-    - name: get common vars
-      include_vars:
-        file: ../common/vars/ad.yaml
-...
+hvp_adjoin_realm: ${realm_name}
+hvp_adjoin_username: ${winadmin_username}
+hvp_adjoin_password: ${winadmin_password}
+hvp_netbios_domainname: ${netbios_domain_name}
+hvp_netbios_storagename: ${netbios_storage_name}
 EOF
 
 popd
@@ -2598,7 +2300,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017093001"
+script_version="2017100301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3519,13 +3221,13 @@ systemctl enable dhcpd
 # Copy PXElinux and Memtest86+ files under TFTP boot area
 cp /boot/memtest86+* /var/lib/tftpboot
 cp /usr/share/syslinux/{*.{c32,0},memdisk} /var/lib/tftpboot
-mkdir -p /var/lib/tftpboot/{pxelinux.cfg,linux/{centos,hvp}}
+mkdir -p /var/lib/tftpboot/{pxelinux.cfg,linux/{centos,node}}
 pushd /var/lib/tftpboot
 # Note: PXElinux default menu created in pre section above and copied in third post section below
 touch pxelinux.cfg/default
 ln -s memtest86+* memtest86+
 ln -s pxelinux.cfg/default .
-pushd linux/hvp
+pushd linux/node
 cp /var/www/hvp-repos/el7/node/vmlinuz .
 cp /var/www/hvp-repos/el7/node/initrd.img .
 popd
@@ -3547,6 +3249,7 @@ cp /root/.ssh/id_ecdsa.pub /root/.ssh/authorized_keys
 kill ${haveged_pid}
 
 # Configure Ansible and gDeploy
+# TODO: take out all these files and place them inside a proper rpm package to be installed above - leave only variable definition files creation in kickstart
 # Note: Configured Ansible hosts file in pre above and copied in second post below
 # TODO: find a way to re-enable host key checking without impacting automation
 sed -i -e 's/^#*\s*host_key_checking\s*=.*$/host_key_checking = False/' -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
@@ -3721,10 +3424,11 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy.j2
 
 # Do a sanity check before proceding
 # Note: No need to test disks (with "-d sdb,sdc...") since we get them from a fact-gathering custom Ansible module that already skips invalid ones
-[script1]
-action=execute
-file=/usr/share/gdeploy/scripts/grafton-sanity-check.sh -h {{ groups['glusternodes'] | join(',') }}
-ignore_script_errors=no
+# TODO: Check disabled since it consistently hangs indefinitely during last pass - find out why and enable again
+#[script1]
+#action=execute
+#file=/usr/share/gdeploy/scripts/grafton-sanity-check.sh -h {{ groups['glusternodes'] | join(',') }}
+#ignore_script_errors=no
 
 # Disable multipath
 [script2]
@@ -4523,9 +4227,446 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 
-# Note: Ansible playbook for oVirt nodes created in pre section above and copied in third post section below
+# Create Ansible playbook for oVirt nodes
+# Note: oVirt Hosted Engine installation will be performed on the node selected as master above
+# Note: eth interfaces enumeration taken from https://serverfault.com/a/852093
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
+---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
+- name: perform oVirt configuration
+  hosts: ovirtnodes
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: define traditional ethernet facts
+      set_fact:
+        ansible_eth: "{% set ansible_eth = ansible_eth|default([]) + [hostvars[inventory_hostname]['ansible_' + item]] %}{{ ansible_eth|list }}"
+      when: hostvars[inventory_hostname]['ansible_' + item]['type'] == 'ether'
+      with_items:
+        - "{{ hostvars[inventory_hostname]['ansible_interfaces'] }}"
+    - name: reset VDSM configuration
+      command: vdsm-tool configure --force
+      register: vdsm_result
+- name: perform oVirt Hosted Engine setup
+  hosts: "{{ hvp_master_node }}"
+  remote_user: root
+  tasks:
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: generate random MAC address for Engine appliance
+      shell: echo 'from ovirt_hosted_engine_setup import util as ohostedutil; print ohostedutil.randomMAC()' | python
+      register: mac_result
+    - name: get Engine appliance ova filename
+      shell: echo /usr/share/ovirt-engine-appliance/ovirt-engine-appliance-*.ova
+      register: ova_result
+    - name: create target directory for answer file
+      file:
+        path: /root/etc
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+    - name: copy hosted engine installation answer file template
+      copy:
+        src: templates/he-answers.j2
+        dest: /root/etc/he-answers.j2
+        owner: root
+        group: root
+        mode: 0644
+    - name: prepare hosted engine installation answer file
+      template:
+        src: /root/etc/he-answers.j2
+        dest: /root/etc/he-answers.conf
+        owner: root
+        group: root
+        mode: 0644
+    - name: perform actual Hosted Engine setup
+      command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
+      register: setup_result
+- name: perform oVirt setup preparation on further nodes
+  hosts: "{{ groups['ovirtnodes'] | difference(hvp_master_node) | join(',') }}"
+  remote_user: root
+  tasks:
+    - name: create target directory for answer file
+      file:
+        path: /root/etc
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+    - name: copy add-host installation answer file template
+      copy:
+        src: templates/he-answers.j2
+        dest: /root/etc/he-answers.j2
+        owner: root
+        group: root
+        mode: 0644
+    - name: prepare add-host installation answer file
+      template:
+        src: /root/etc/he-answers.j2
+        dest: /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf
+        owner: root
+        group: root
+        mode: 0644
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 
-# Note: Ansible playbook for oVirt Engine created in pre section above and copied in third post section below
+# Create a custom Jinja2 template to generate a proper Hosted Engine answers file
+# Note: oVirt Hosted Engine installation will be performed on the node selected as master above
+# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
+[environment:default]
+OVEHOSTED_CORE/rollbackProceed=none:None
+OVEHOSTED_CORE/screenProceed=bool:True
+OVEHOSTED_CORE/deployProceed=bool:True
+OVEHOSTED_CORE/upgradeProceed=none:None
+OVEHOSTED_CORE/confirmSettings=bool:True
+OVEHOSTED_NETWORK/fqdn=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
+OVEHOSTED_NETWORK/bridgeIf=str:{% for eth in hostvars[inventory_hostname]['ansible_eth'] %}{% if 'ipv4' in eth %}{% if eth['ipv4']['address'] == hostvars[inventory_hostname]['ansible_default_ipv4']['address'] %}{{ eth['device'] }}{% endif %}{% endif %}{% endfor %}
+OVEHOSTED_NETWORK/bridgeName=str:ovirtmgmt
+OVEHOSTED_NETWORK/firewallManager=str:firewalld
+OVEHOSTED_NETWORK/gateway=str:{{ hvp_switch_ip }}
+OVEHOSTED_ENGINE/appHostName=str:{{ inventory_hostname }}
+OVEHOSTED_ENGINE/clusterName=str:{{ cluster_name }}
+OVEHOSTED_ENGINE/adminPassword=str:{{ password }}
+OVEHOSTED_ENGINE/enableHcGlusterService=bool:True
+OVEHOSTED_ENGINE/insecureSSL=none:None
+OVEHOSTED_ENGINE/enableLibgfapi=bool:True
+OVEHOSTED_STORAGE/imgAlias=str:hosted_engine
+OVEHOSTED_STORAGE/LunID=none:None
+OVEHOSTED_STORAGE/imgSizeGB=str:80
+OVEHOSTED_STORAGE/iSCSIPortal=none:None
+OVEHOSTED_STORAGE/iSCSIPortalIPAddress=none:None
+OVEHOSTED_STORAGE/iSCSIPortalPort=none:None
+OVEHOSTED_STORAGE/iSCSIPortalUser=none:None
+OVEHOSTED_STORAGE/iSCSITargetName=none:None
+OVEHOSTED_STORAGE/storageDatacenterName=str:{{ dc_name }}
+OVEHOSTED_STORAGE/domainType=str:{{ engine_sd_type }}
+OVEHOSTED_STORAGE/storageDomainName=str:{{ engine_sd_name }}
+OVEHOSTED_STORAGE/storageDomainConnection=str:{{ engine_sd_addr }}:{{ engine_sd_path }}
+OVEHOSTED_STORAGE/mntOptions=str:{{ engine_sd_mountopts }}
+OVEHOSTED_VM/vmMemSizeMB=int:4096
+OVEHOSTED_VM/vmMACAddr=str:{{ mac_result.stdout }}
+OVEHOSTED_VM/emulatedMachine=str:pc
+OVEHOSTED_VM/vmVCpus=str:2
+OVEHOSTED_VM/ovfArchive=str:{{ ova_result.stdout }}
+OVEHOSTED_VM/vmCDRom=none:None
+OVEHOSTED_VM/automateVMShutdown=bool:True
+OVEHOSTED_VM/cloudinitInstanceDomainName=str:{{ hvp_engine_domainname }}
+OVEHOSTED_VM/cloudinitExecuteEngineSetup=bool:True
+OVEHOSTED_VM/cloudinitInstanceHostName=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
+OVEHOSTED_VM/cloudinitVMStaticCIDR=str:{{ hvp_engine_ip }}/{{ hvp_engine_netprefix }}
+OVEHOSTED_VM/cloudInitISO=str:generate
+OVEHOSTED_VM/cloudinitVMETCHOSTS=bool:True
+OVEHOSTED_VM/cloudinitVMDNS=str:{{ hvp_engine_dnslist }}
+OVEHOSTED_VM/cloudinitVMTZ=str:{{ hvp_timezone }}
+OVEHOSTED_VM/rootSshAccess=str:yes
+OVEHOSTED_VM/rootSshPubkey=str:
+OVEHOSTED_VDSM/spicePkiSubject=str:C=EN, L=Test, O=Test, CN=Test
+OVEHOSTED_VDSM/pkiSubject=str:/C=EN/L=Test/O=Test/CN=Test
+OVEHOSTED_VDSM/caSubject=str:/C=EN/L=Test/O=Test/CN=TestCA
+OVEHOSTED_VDSM/cpu=str:{{ cpu_type }}
+OVEHOSTED_VDSM/consoleType=str:vnc
+OVEHOSTED_NOTIF/smtpPort=str:25
+OVEHOSTED_NOTIF/smtpServer=str:localhost
+OVEHOSTED_NOTIF/sourceEmail=str:root@localhost
+OVEHOSTED_NOTIF/destEmail=str:monitoring@localhost
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
+
+# Create Ansible playbook for oVirt Engine
+# Note: Ansible oVirt management thanks to Simone Tiraboschi
+# TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
+# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
+# TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
+# TODO: create a couple of OVN logical networks
+# TODO: add Bareos configuration both on engine and on nodes
+# TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
+---
+- name: Generate root ECDSA SSH key if not present
+  hosts: localhost
+  tasks:
+    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+      args:
+        creates: /root/.ssh/id_ecdsa
+- name: perform oVirt configuration
+  hosts: ovirtengine
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: add our own repo
+      get_url:
+        url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+        dest: /etc/yum.repos.d/HVP.repo
+        mode: 0644
+    - name: install the Bareos-related packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items: bareos-tools bareos-client bareos-director bareos-webui
+    - name: enable and start the Bareos-related services
+      systemd:
+        name: "{{ item }}"
+        enabled: False
+        state: stopped
+        no_block: no
+      with_items: bareos-fd bareos-dir
+    - name: install the OVN-related packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items: openvswitch openvswitch-ovn-common openvswitch-ovn-central python-openvswitch ovirt-provider-ovn
+    - name: enable and start the OVN-related services
+      systemd:
+        name: "{{ item }}"
+        enabled: True
+        state: started
+        no_block: no
+      with_items: ovirt-provider-ovn
+    - name: allow OVN-provider communications
+      firewalld:
+        service: ovirt-provider-ovn
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: allow OVN-components communications - 1
+      firewalld:
+        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6641" accept'
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: allow OVN-components communications - 2
+      firewalld:
+        rich_rule: 'rule family="ipv4" port protocol="tcp" port="6642" accept'
+        permanent: True
+        immediate: True
+        state: enabled
+    - name: configure OVN central to listen on ports - 1
+      shell: "ovn-nbctl set-connection ptcp:6641"
+      register: centralconf1_result
+    - name: configure OVN central to listen on ports - 2
+      shell: "ovn-nbctl set-connection ptcp:6642"
+      register: centralconf2_result
+    - name: Enable libgfapi support
+      command: engine-config -s LibgfApiSupported=true
+      register: libgfapi_result
+    - name: Obtain oVirt Engine SSO token
+      no_log: true
+      ovirt_auth:
+        url: "{{ url }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        ca_file: "{{ ca_file }}"
+    - name: Add main storage domain
+      ovirt_storage_domains:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ vmstore_sd_name }}"
+        host: "{{ hvp_master_node }}"
+        data_center: "{{ dc_name }}"
+        domain_function: data
+        state: present
+        glusterfs:
+          address: "{{ vmstore_sd_addr }}"
+          path: "{{ vmstore_sd_path }}"
+          mount_options: "{{ vmstore_sd_mountopts }}"
+        wait: true
+    - name: Add ISO storage domain
+      ovirt_storage_domains:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ iso_sd_name }}"
+        host: "{{ hvp_master_node }}"
+        data_center: "{{ dc_name }}"
+        domain_function: iso
+        state: present
+        nfs:
+          address: "{{ iso_sd_addr }}"
+          path: "{{ iso_sd_path }}"
+          version: auto
+        wait: true
+    - name: Add Host
+      ovirt_hosts:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ item }}"
+        address: "{{ item }}"
+        password: "{{ password }}"
+        cluster: "{{ cluster_name }}"
+        override_iptables: true
+        timeout: 1200
+        wait: true
+      with_items: "{{ groups['ovirtnodes'] | difference(hvp_master_node) }}"
+    - name: Revoke the SSO token
+      no_log: true
+      ovirt_auth:
+        state: absent
+        ovirt_auth: "{{ ovirt_auth }}"
+- name: perform OVN configuration on hosts
+  hosts: ovirtnodes
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: configure OVN VIF driver
+      shell: "vdsm-tool ovn-config {{ hostvars[groups['ovirtengine'][0]]['ansible_default_ipv4']['address'] }} {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+      register: vifconf_result
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
+
+# Create a custom Jinja2 template for AD-joined Samba configuration
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
+[global]
+   server string = Enterprise File Server
+   netbios name = {{ hvp_netbios_storagename }}
+   workgroup = {{ hvp_netbios_domainname }}
+   realm = {{ hvp_adjoin_realm }}
+   security = ads
+   kerberos method = secrets only
+   bind interfaces only = no
+   clustering = yes
+   ctdbd socket = /run/ctdb/ctdbd.socket
+   private dir = /gluster/lock
+
+   passdb backend = tdbsam
+   idmap config * : backend = autorid
+   idmap config * : range = 2000000000-3999999999
+   idmap config * : rangesize = 1000000
+   idmap config {{ hvp_netbios_domainname }} : backend = ad
+   idmap config {{ hvp_netbios_domainname }} : range = 9999-1999999999
+   idmap config {{ hvp_netbios_domainname }} : schema_mode = rfc2307
+   idmap config {{ hvp_netbios_domainname }} : unix_nss_info = yes
+   winbind nested groups = yes
+   winbind expand groups = 2
+
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+   show add printer wizard = no
+   cups options = raw
+
+   map to guest = Bad user
+   username map = /etc/samba/smbusers
+   store dos attributes = no
+   map acl inherit = no
+   dos filemode = no
+   dos filetime resolution = yes
+   create mask = 0664
+   force create mode = 440
+   directory mask = 6775
+   force directory mode = 550
+   unix extensions = no
+   hide special files = yes
+   dead time = 15
+   preserve case = yes
+   short preserve case = yes
+   default case = lower
+   case sensitive = no
+   max protocol = SMB3
+   kernel share modes = no
+   locking = yes
+   strict locking = no
+   oplocks = no
+   level2 oplocks = no
+   kernel oplocks = no
+   stat cache = no
+   max open files = 16404
+
+[IPC\$]
+   comment = Remote IPC
+   path = /tmp
+
+
+#====================== Local Share Definitions ==============================
+
+[Test]
+   comment = Test share
+   path = /
+   browseable = yes
+   writable = yes
+   available = yes
+   guest ok = yes
+   vfs objects = glusterfs recycle
+   recycle:keeptree = no
+   recycle:versions = yes
+   #glusterfs:loglevel = 7
+   #glusterfs:logfile = /var/log/samba/glusterfs-shares.log
+   glusterfs:volume = winshare
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
+
+# Create Ansible playbook for Active Directory joining of our Samba cluster
+# TODO: add nfs principal and extract/propagate keytab for kerberized NFSv4 Ganesha operations
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
+---
+- name: perform Samba AD configuration
+  hosts: "{{ groups['glusternodes'] }}"
+  remote_user: root
+  tasks:
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: get common AD vars
+      include_vars:
+        file: ../common/vars/ad.yaml
+    - name: copy Samba configuration file template
+      copy:
+        src: templates/smb.j2
+        dest: /etc/samba/smb.j2
+        owner: root
+        group: root
+        mode: 0644
+    - name: prepare Samba configuration file
+      template:
+        src: /etc/samba/smb.j2
+        dest: /etc/samba/smb.conf
+        owner: root
+        group: root
+        mode: 0644
+- name: perform Samba cluster AD joining
+  hosts: "{{ hvp_master_node }}"
+  remote_user: root
+  tasks:
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: get common AD vars
+      include_vars:
+        file: ../common/vars/ad.yaml
+    - name: obtain Kerberos ticket
+      expect:
+        command: "kinit {{ hvp_adjoin_username }}@{{ hvp_adjoin_realm }}"
+        responses:
+          (?i)password: "{{ hvp_adjoin_password }}"
+    - name: join AD domain
+      shell: net ads join -k osName="$(lsb_release -si)" osVer="$(lsb_release -sr)"
+      register: join_result
+    - name: remove Kerberos ticket
+      shell: kdestroy
+      register: kdestroy_result
+- name: restart Samba services
+  hosts: "{{ groups['glusternodes'] }}"
+  remote_user: root
+  tasks:
+    - name: Restart CTDB to apply the configuration above
+      systemd:
+        name: ctdb
+        state: restarted
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 
 # Create global Ansible playbook for the whole process (Gluster and oVirt)
 cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
@@ -4945,35 +5086,15 @@ fi
 if [ -f /tmp/hvp-ansible-files/hosts ]; then
 	cat /tmp/hvp-ansible-files/hosts > /mnt/sysimage/etc/ansible/hosts
 fi
-if [ -f /tmp/hvp-ansible-files/ovirtnodes.yaml ]; then
-	cp /tmp/hvp-ansible-files/ovirtnodes.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
-	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
-fi
-if [ -f /tmp/hvp-ansible-files/he-answers.j2 ]; then
-	cp /tmp/hvp-ansible-files/he-answers.j2 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
-	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
-fi
 if [ -f /tmp/hvp-ansible-files/hvp.yaml ]; then
 	cp /tmp/hvp-ansible-files/hvp.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 	chmod 600 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 fi
-if [ -f /tmp/hvp-ansible-files/ovirtengine.yaml ]; then
-	cp /tmp/hvp-ansible-files/ovirtengine.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
-	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
-fi
 if [ -f /tmp/hvp-ansible-files/ad.yaml ]; then
 	cp /tmp/hvp-ansible-files/ad.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
 	chmod 600 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
 	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
-fi
-if [ -f /tmp/hvp-ansible-files/adjoin.yaml ]; then
-	cp /tmp/hvp-ansible-files/adjoin.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
-	chmod 644 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 fi
 for file in /tmp/hvp-ansible-files/group_vars/* ; do
 	if [ -f "${file}" ]; then
