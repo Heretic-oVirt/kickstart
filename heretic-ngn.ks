@@ -1517,7 +1517,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017100301"
+script_version="2017100801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1714,7 +1714,7 @@ sed -i -e 's>^#*\s*CTDB_RECOVERY_LOCK=.*$>CTDB_RECOVERY_LOCK=/gluster/lock/lockf
 # Skip CTDB check of paths (not valid/needed with GlusterFS)
 sed -i -e 's/^#*\s*CTDB_SAMBA_SKIP_SHARE_CHECK=.*$/CTDB_SAMBA_SKIP_SHARE_CHECK=yes/' /etc/sysconfig/ctdb
 cat << EOF >> /etc/sysconfig/ctdb
-CTDB_SET_DeterministicIPs=1
+#CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
 CTDB_SET_TraverseTimeout=60
 # Set CTDB socket location
@@ -1985,7 +1985,7 @@ EOF
 systemctl enable named
 firewall-offline-cmd --add-service=dns
 # Reconfigure networking to use localhost DNS
-# Note: explicitly editing DNS1 in ifcfg configuration files since NetworkManager won't be running inside chroot
+# Note: explicitly editing DNS1 in ifcfg configuration files since NetworkManager will not be running inside chroot
 sed -i -e "/^DNS1=/s/\"[^\"]*\"/\"127.0.0.1\"/" $(grep -l '^DNS1=' /etc/sysconfig/network-scripts/ifcfg-* | head -1)
 sed -i -e '/^nameserver\s/d' /etc/resolv.conf
 echo 'nameserver 127.0.0.1' >> /etc/resolv.conf
