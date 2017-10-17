@@ -2160,6 +2160,7 @@ popd
 # Prepare Ansible variable definition files to be copied later on below
 # Note: the actual zone to access nodes/engine will be the one offering our DHCP
 # Note: the host listed last in glusternodes group will become the arbiter one in 3 node setups
+# Note: defining all host(s) combinations as groups here since only external variables are available in playbook headers
 mkdir -p /tmp/hvp-ansible-files
 pushd /tmp/hvp-ansible-files
 cat << EOF > hosts
@@ -2198,9 +2199,30 @@ for ((i=0;i<${node_count};i=i+1)); do
 done
 cat << EOF >> hosts
 
+# Our non-master GlusterFS Nodes
+[gluster_nonmaster_nodes]
+EOF
+for ((i=0;i<${node_count};i=i+1)); do
+	if [ ${i} -eq ${master_index} ]; then
+		continue
+	fi
+	cat <<- EOF >> hosts
+	${node_name[${i}]}.${domain_name[${zone}]}
+	EOF
+done
+cat << EOF >> hosts
+
+# Our Gluster trusted pool master
+[gluster_master]
+${node_name[${master_index}]}.${domain_name[${zone}]}
+
 # Our oVirt Engine
 [ovirtengine]
 ${engine_name}.${domain_name[${dhcp_zone}]}
+
+# Our oVirt cluster master
+[ovirt_master]
+${node_name[${master_index}]}.${domain_name[${dhcp_zone}]}
 
 ...
 EOF
@@ -2276,6 +2298,9 @@ hvp_adjoin_username: ${winadmin_username}
 hvp_adjoin_password: ${winadmin_password}
 hvp_netbios_domainname: ${netbios_domain_name}
 hvp_netbios_storagename: ${netbios_storage_name}
+hvp_ad_range: 9999-1999999999
+hvp_autorid_range: 2000000000-3999999999
+hvp_autorid_rangesize: 1000000
 EOF
 
 popd
@@ -2300,7 +2325,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017100301"
+script_version="2017101701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2482,10 +2507,15 @@ fi
 
 # Add virtualization support on suitable platforms
 if [ "${nolocalvirt}" != "true" ]; then
+	# Add support for Windows VirtIO drivers from Fedora repo
+	wget https://fedorapeople.org/groups/virt/virtio-win/virtio-win.repo -O /etc/yum.repos.d/virtio-win.repo
+	# Add support for Qemu EV version from CentOS Virt SIG repo
 	yum -y install centos-release-qemu-ev
-	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy
+	# Install packages
+	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy virtio-win
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
+	# TODO: find out why Kimchi comes up empty and unusable and correct
 	yum -y install https://github.com/kimchi-project/wok/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
 else
 	# Alternatively install Webmin for generic web management
@@ -4217,7 +4247,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
         state: started
         no_block: no
 - name: Configure Samba authentication
-  hosts: "{{ hvp_master_node }}"
+  hosts: gluster_master
   remote_user: root
   tasks:
     - name: configure local root user
@@ -4253,7 +4283,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
       command: vdsm-tool configure --force
       register: vdsm_result
 - name: perform oVirt Hosted Engine setup
-  hosts: "{{ hvp_master_node }}"
+  hosts: ovirt_master
   remote_user: root
   tasks:
     - name: get common vars
@@ -4272,16 +4302,9 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
         owner: root
         group: root
         mode: 0755
-    - name: copy hosted engine installation answer file template
-      copy:
-        src: templates/he-answers.j2
-        dest: /root/etc/he-answers.j2
-        owner: root
-        group: root
-        mode: 0644
     - name: prepare hosted engine installation answer file
       template:
-        src: /root/etc/he-answers.j2
+        src: templates/he-answers.j2
         dest: /root/etc/he-answers.conf
         owner: root
         group: root
@@ -4290,26 +4313,12 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
       command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
       register: setup_result
 - name: perform oVirt setup preparation on further nodes
-  hosts: "{{ groups['ovirtnodes'] | difference(hvp_master_node) | join(',') }}"
+  hosts: gluster_nonmaster_nodes
   remote_user: root
   tasks:
-    - name: create target directory for answer file
-      file:
-        path: /root/etc
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: copy add-host installation answer file template
-      copy:
-        src: templates/he-answers.j2
-        dest: /root/etc/he-answers.j2
-        owner: root
-        group: root
-        mode: 0644
     - name: prepare add-host installation answer file
       template:
-        src: /root/etc/he-answers.j2
+        src: templates/he-answers.j2
         dest: /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf
         owner: root
         group: root
@@ -4320,6 +4329,7 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 
 # Create a custom Jinja2 template to generate a proper Hosted Engine answers file
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
+# TODO: find out why the for loop does not insert a newline at the end - added another one as a workaround
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
 [environment:default]
@@ -4330,9 +4340,11 @@ OVEHOSTED_CORE/upgradeProceed=none:None
 OVEHOSTED_CORE/confirmSettings=bool:True
 OVEHOSTED_NETWORK/fqdn=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
 OVEHOSTED_NETWORK/bridgeIf=str:{% for eth in hostvars[inventory_hostname]['ansible_eth'] %}{% if 'ipv4' in eth %}{% if eth['ipv4']['address'] == hostvars[inventory_hostname]['ansible_default_ipv4']['address'] %}{{ eth['device'] }}{% endif %}{% endif %}{% endfor %}
+
 OVEHOSTED_NETWORK/bridgeName=str:ovirtmgmt
 OVEHOSTED_NETWORK/firewallManager=str:firewalld
 OVEHOSTED_NETWORK/gateway=str:{{ hvp_switch_ip }}
+OVEHOSTED_ENGINE/engineSetupTimeout=int:3600
 OVEHOSTED_ENGINE/appHostName=str:{{ inventory_hostname }}
 OVEHOSTED_ENGINE/clusterName=str:{{ cluster_name }}
 OVEHOSTED_ENGINE/adminPassword=str:{{ password }}
@@ -4526,6 +4538,7 @@ EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
 
 # Create a custom Jinja2 template for AD-joined Samba configuration
+# TODO: lower log level to 0 general and vfs-glusterfs too
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
 [global]
    server string = Enterprise File Server
@@ -4541,10 +4554,10 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
 
    passdb backend = tdbsam
    idmap config * : backend = autorid
-   idmap config * : range = 2000000000-3999999999
-   idmap config * : rangesize = 1000000
+   idmap config * : range = {{ hvp_autorid_range }}
+   idmap config * : rangesize = {{ hvp_autorid_rangesize }}
    idmap config {{ hvp_netbios_domainname }} : backend = ad
-   idmap config {{ hvp_netbios_domainname }} : range = 9999-1999999999
+   idmap config {{ hvp_netbios_domainname }} : range = {{ hvp_ad_range }}
    idmap config {{ hvp_netbios_domainname }} : schema_mode = rfc2307
    idmap config {{ hvp_netbios_domainname }} : unix_nss_info = yes
    winbind nested groups = yes
@@ -4556,6 +4569,12 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
    disable spoolss = yes
    show add printer wizard = no
    cups options = raw
+
+   log file = /var/log/samba/log.%m
+   log level = 2
+   max log size = 50
+   syslog = 1
+   syslog only = No
 
    map to guest = Bad user
    username map = /etc/samba/smbusers
@@ -4602,7 +4621,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
    recycle:keeptree = no
    recycle:versions = yes
    #glusterfs:loglevel = 7
-   #glusterfs:logfile = /var/log/samba/glusterfs-shares.log
+   glusterfs:logfile = /var/log/samba/glusterfs-test.log
    glusterfs:volume = winshare
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
@@ -4612,7 +4631,7 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/smb.j2
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 ---
 - name: perform Samba AD configuration
-  hosts: "{{ groups['glusternodes'] }}"
+  hosts: glusternodes
   remote_user: root
   tasks:
     - name: get common vars
@@ -4621,22 +4640,15 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
     - name: get common AD vars
       include_vars:
         file: ../common/vars/ad.yaml
-    - name: copy Samba configuration file template
-      copy:
-        src: templates/smb.j2
-        dest: /etc/samba/smb.j2
-        owner: root
-        group: root
-        mode: 0644
     - name: prepare Samba configuration file
       template:
-        src: /etc/samba/smb.j2
+        src: templates/smb.j2
         dest: /etc/samba/smb.conf
         owner: root
         group: root
         mode: 0644
 - name: perform Samba cluster AD joining
-  hosts: "{{ hvp_master_node }}"
+  hosts: gluster_master
   remote_user: root
   tasks:
     - name: get common vars
@@ -4657,7 +4669,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
       shell: kdestroy
       register: kdestroy_result
 - name: restart Samba services
-  hosts: "{{ groups['glusternodes'] }}"
+  hosts: glusternodes
   remote_user: root
   tasks:
     - name: Restart CTDB to apply the configuration above
