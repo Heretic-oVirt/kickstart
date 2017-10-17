@@ -1425,6 +1425,7 @@ pushd /tmp/hvp-samba-files
 
 # Create sample Samba configuration
 # Note: a proper configuration (AD domain member etc.) will be pushed and activated by means of Ansible once the whole infrastructure is up and running
+# TODO: lower log level to 0 general and vfs-glusterfs too
 cat << EOF > smb.conf
 [global]
    server string = Workgroup File Server
@@ -1444,6 +1445,12 @@ cat << EOF > smb.conf
    disable spoolss = yes
    show add printer wizard = no
    cups options = raw
+
+   log file = /var/log/samba/log.%m
+   log level = 2
+   max log size = 50
+   syslog = 1
+   syslog only = No
 
    map to guest = Bad user
    username map = /etc/samba/smbusers
@@ -1490,7 +1497,7 @@ cat << EOF > smb.conf
    recycle:keeptree = no
    recycle:versions = yes
    #glusterfs:loglevel = 7
-   #glusterfs:logfile = /var/log/samba/glusterfs-shares.log
+   glusterfs:logfile = /var/log/samba/glusterfs-test.log
    glusterfs:volume = winshare
 
 EOF
@@ -1517,7 +1524,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017100801"
+script_version="2017101701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
