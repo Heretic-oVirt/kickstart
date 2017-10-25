@@ -88,6 +88,10 @@ pr_ip_offset="250"
 
 pr_name="rainbowdash"
 
+vd_ip_offset="240"
+
+vd_name="grannysmith"
+
 my_nameserver="dhcp"
 
 my_forwarders="8.8.8.8"
