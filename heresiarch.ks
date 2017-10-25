@@ -30,6 +30,8 @@
 # Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
 # Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the AD network
 # Note: to force custom print server naming add hvp_prname=myprname where myprname is the unqualified (ie without domain name part) hostname of the print server
+# Note: to force custom virtual desktop IP add hvp_vd=e.e.e.e where e.e.e.e is the virtual desktop IP on the AD network
+# Note: to force custom print server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the virtual desktop
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
@@ -74,6 +76,8 @@
 # Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
 # Note: the default print server IP on the AD network is assumed to be the AD network address plus 250
 # Note: the default print server naming uses the "My Little Pony" character name rainbowdash for the print server
+# Note: the default virtual desktop IP on the AD network is assumed to be the AD network address plus 240
+# Note: the default virtual desktop naming uses the "My Little Pony" character name grannysmith for the print server
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default gateway is assumed to be the DHCP-provided router address on the external network
@@ -2396,7 +2400,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017102501"
+script_version="2017102502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4461,7 +4465,6 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 # TODO: find out why the for loop does not insert a newline at the end - added another one as a workaround
-# TODO: find out why oVirt Cluster is not found after Engine setup when closing up
 # TODO: open Bugzilla ticket and add cloudinit parameters for cluster and datacenter names here
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
 [environment:default]
