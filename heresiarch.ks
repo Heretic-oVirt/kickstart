@@ -317,6 +317,9 @@ unset dbtype
 unset pr_ip
 unset pr_ip_offset
 unset pr_name
+unset vd_ip
+unset vd_ip_offset
+unset vd_name
 unset reverse_domain_name
 unset node_name
 unset bmc_ip_offset
@@ -464,6 +467,10 @@ dbtype="postgresql"
 pr_ip_offset="250"
 
 pr_name="rainbowdash"
+
+vd_ip_offset="240"
+
+vd_name="grannysmith"
 
 my_nameserver="dhcp"
 
@@ -794,6 +801,12 @@ if echo "${given_prname}" | grep -q '^[[:alnum:]]\+$' ; then
 	pr_name="${given_prname}"
 fi
 
+# Determine virtual desktop name
+given_vdname=$(sed -n -e 's/^.*hvp_vdname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_vdname}" | grep -q '^[[:alnum:]]\+$' ; then
+	vd_name="${given_vdname}"
+fi
+
 # Determine database type
 given_dbtype=$(sed -n -e 's/^.*hvp_dbtype=\(\S*\).*$/\1/p' /proc/cmdline)
 case "${given_dbtype}" in
@@ -1101,6 +1114,15 @@ if [ -z "${pr_ip}" ]; then
 	pr_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${pr_ip_offset} +)
 fi
 
+# Determine virtual desktop IP
+given_vd=$(sed -n -e 's/^.*hvp_vd=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_vd}" ]; then
+	vd_ip="${given_vd}"
+fi
+if [ -z "${vd_ip}" ]; then
+	vd_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${vd_ip_offset} +)
+fi
+
 # Define default NetBIOS domain name if not specified
 if [ -z "${netbios_domain_name}" ]; then
 	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk -F. '{print toupper($1)}')
@@ -1388,6 +1410,19 @@ LABEL memtest+
 	MENU LABEL RAM Test (Memtest86+)
 	kernel memtest86+
 
+# Load CentOS rescue image
+LABEL rescue
+        MENU LABEL CentOS rescue image
+        kernel linux/centos/vmlinuz
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
+
+# Load guest virtual machines installation menu
+LABEL vmmenu
+	MENU LABEL Virtual Machines installation menu --->
+	kernel menu.c32
+	append vm.conf
+
+# Start kickstart-based HVP Nodes installation
 EOF
 # Note: we will automatically extend to further installations the parameters passed during our own installation
 if [ "${nicmacfix}" = "true" ] ; then
@@ -1409,13 +1444,27 @@ else
 	EOF
 fi
 # Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating common hvp_parameters.sh and specific hvp_parameters_*.sh with all other parameters (leaving a commented line as reference here)
-cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+# Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
+for (( i=0; i<${node_count}; i=i+1 )); do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+	LABEL hvpnode${i}
+	        MENU LABEL Install Heretic oVirt Project Node ${i}
+	        kernel linux/node/vmlinuz
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	
+	EOF
+done
+# Guest virtual machines installation menu
+cat << EOF > /tmp/hvp-syslinux-conf/vm.conf
+MENU TITLE --== Virtual Machines Installation PXE Menu ==--
 
-# Load CentOS rescue image
-LABEL rescue
-        MENU LABEL CentOS rescue image
-        kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
+# Go back to the main menu
+LABEL rootmenu
+	MENU LABEL <---- Main menu
+	kernel menu.c32
+	append default
+
 
 # Start kickstart-based HVP AD DC installation
 LABEL installdc
@@ -1438,19 +1487,14 @@ LABEL installpr
         # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
-# Start kickstart-based HVP Nodes installation
+# Start kickstart-based HVP Desktop installation
+LABEL installvd
+        MENU LABEL Install Virtual Desktop
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
+
 EOF
-# Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
-for (( i=0; i<${node_count}; i=i+1 )); do
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
-	LABEL hvpnode${i}
-	        MENU LABEL Install Heretic oVirt Project Node ${i}
-	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
-	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
-	
-	EOF
-done
 # Create common configuration parameters fragment
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
 # Custom defaults for all installations
@@ -1604,6 +1648,19 @@ my_nameserver="${ad_dc_ip}"
 my_ip_offset="${pr_ip_offset}"
 
 my_name="${pr_name}"
+
+domain_join="true"
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_vd.sh
+# Custom defaults for virtual desktop installation
+
+my_nameserver="${ad_dc_ip}"
+
+my_ip_offset="${vd_ip_offset}"
+
+my_name="${vd_name}"
 
 domain_join="true"
 
@@ -2184,6 +2241,27 @@ for ((i=0;i<${node_count};i=i+1)); do
 done
 cat << EOF >> hosts
 
+# Our non-master oVirt Nodes
+[ovirt_nonmaster_nodes]
+EOF
+for ((i=0;i<${node_count};i=i+1)); do
+	if [ ${i} -eq ${master_index} ]; then
+		continue
+	fi
+	cat <<- EOF >> hosts
+	${node_name[${i}]}.${domain_name[${dhcp_zone}]}
+	EOF
+done
+cat << EOF >> hosts
+
+# Our oVirt cluster master
+[ovirt_master]
+${node_name[${master_index}]}.${domain_name[${dhcp_zone}]}
+
+# Our oVirt Engine
+[ovirtengine]
+${engine_name}.${domain_name[${dhcp_zone}]}
+
 # Our GlusterFS Nodes
 [glusternodes]
 EOF
@@ -2215,14 +2293,6 @@ cat << EOF >> hosts
 # Our Gluster trusted pool master
 [gluster_master]
 ${node_name[${master_index}]}.${domain_name[${zone}]}
-
-# Our oVirt Engine
-[ovirtengine]
-${engine_name}.${domain_name[${dhcp_zone}]}
-
-# Our oVirt cluster master
-[ovirt_master]
-${node_name[${master_index}]}.${domain_name[${dhcp_zone}]}
 
 ...
 EOF
@@ -2258,24 +2328,25 @@ ca_file: ca.crt
 
 # Env:
 ## Datacenter:
+# TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
+#dc_name: ${datacenter_name}
+dc_name: "Default"
 # TODO: dynamically determine oVirt version
-dc_name: ${datacenter_name}
 compatibility_version: 4.1
 
 ## Cluster:
-# TODO: dynamically determine minimum common cpu type
-cluster_name: ${cluster_name}
-cpu_type: model_Conroe
+# TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
+#cluster_name: ${cluster_name}
+cluster_name: "Default"
 
 ## Storage
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
-# TODO: using NFS-Ganesha as soon as it is available - using an external NAS with bare IP meanwhile
+# TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
 glusterfs_addr: ${node_name[${master_index}]}.${domain_name[${gluster_zone}]}
 glusterfs_mountopts: "backup-volfile-servers={{ groups['glusternodes'] | difference(groups['glusternodes'][${master_index}]) | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
-#iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
-iso_sd_addr: 172.20.10.201
+iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
 iso_sd_name: iso_domain
 iso_sd_path: /isodomain
 iso_sd_mountopts: 
@@ -2325,7 +2396,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017101701"
+script_version="2017102501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2410,7 +2481,7 @@ yum-config-manager --enable cr > /dev/null
 #yum -y install http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
 yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
 yum -y install epel-release
-yum -y install http://www.elrepo.org/elrepo-release-7.0-2.el7.elrepo.noarch.rpm
+yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 
 # Add our own repo
 wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
@@ -2454,7 +2525,7 @@ yum -y install dhcp tftp tftp-server syslinux bind
 
 # Install Ansible and gDeploy
 # Note: using our HRGS-rebuild repo to get a newer gDeploy
-yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python
+yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath
 
 # Install Memtest86+ to be offered through PXE
 yum -y install memtest86+
@@ -3419,6 +3490,44 @@ EOM
 EOF
 chmod 755 /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_ssds
 
+# Create a custom fact-gathering module to find CPU type on nodes
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/library/hvp_cpu_type
+#!/bin/bash
+
+# Load any given parameters
+if [ -n "\${1}" -a -f "\${1}" ]; then
+	source "\${1}"
+fi
+
+# Retrieve CPU type
+cpu_vendor="\$(virsh -r capabilities | xmllint --xpath '/capabilities/host/cpu/vendor/text()' -)"
+cpu_model="\$(virsh -r capabilities | xmllint --xpath '/capabilities/host/cpu/model/text()' -)"
+
+# Retrieve all supported CPU models
+unset models
+declare -A models
+i="0"
+for model in \$(virsh -r cpu-models \$(uname -m)) ; do
+	models["\${model}"]="\${i}"
+	i=\$((i+1))
+done
+
+# Find index for our CPU model
+cpu_index="\${models[\${cpu_model}]}"
+
+# Give results in JSON format to be gathered as custom additional facts
+# TODO: detect errors in commands above and emit proper rc and msg values
+cat << EOM
+{
+    "changed" : false,
+    "ansible_facts" : {
+        "hvp_cpu_type": {"vendor": "\${cpu_vendor}", "model": "\${cpu_model}", "index": "\${cpu_index}"}
+    }
+}
+EOM
+EOF
+chmod 755 /usr/local/etc/hvp-ansible/roles/ovirtnodes/library/hvp_cpu_type
+
 # TODO: add support for the equalto test in Jinja2 selectattr - added in Jinja2 2.8 - remove when rebased upstream
 mkdir -p /usr/local/etc/hvp-ansible/roles/glusternodes/test_plugins
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/test_plugins/custom.py
@@ -3993,8 +4102,9 @@ replica=yes
 replica_count=3
 arbiter_count=1
 force=yes
-key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
-value=virt,36,36,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on
+# TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
+key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops,nfs.disable
+value=virt,36,36,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on,off
 brick_dirs=/gluster_bricks/isodomain/brick1/brick
 ignore_volume_errors=no
 
@@ -4031,8 +4141,9 @@ replica=yes
 replica_count=3
 arbiter_count=1
 force=yes
-key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
-value=metadata-cache,0,0,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on
+# TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
+key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops,nfs.disable
+value=metadata-cache,0,0,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on,off
 brick_dirs=/gluster_bricks/unixshare/brick1/brick
 ignore_volume_errors=no
 EOF
@@ -4259,6 +4370,7 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 
 # Create Ansible playbook for oVirt nodes
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
+# Note: we assume that libvirt lists the CPU models in an ordered sequence of increasing available features (apart from appending AMD models to Intel ones)
 # Note: eth interfaces enumeration taken from https://serverfault.com/a/852093
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 ---
@@ -4268,11 +4380,29 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
     - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
       args:
         creates: /root/.ssh/id_ecdsa
-- name: perform oVirt configuration
+- name: Gather cpu type across all hosts
   hosts: ovirtnodes
   remote_user: root
   tasks:
     - include: ../common/tasks/setupkeys.yaml
+    - name: gather cpu types
+      hvp_cpu_type:
+- name: Check cpu facts cluster-wide
+  hosts: localhost
+  tasks:
+    - name: make sure that the cpu vendor is homogeneous
+      assert: { that: "hostvars['{{ item }}']['hvp_cpu_type']['vendor'] == hostvars[groups['ovirt_master'][0]]['hvp_cpu_type']['vendor']", msg: "CPU vendor must be the same across all hosts" }
+      with_items: "{{ groups['ovirtnodes'] | difference(groups['ovirt_master']) }}"
+    - name: define common cpu index
+      set_fact:
+        cpu_index: "{{ groups['ovirtnodes'] | map('extract', hostvars, ['hvp_cpu_type', 'index']) | list | sort | min }}"
+    - name: define common cpu model
+      set_fact:
+        cpu_type: "model_{{ groups['ovirtnodes'] | map('extract', hostvars, 'hvp_cpu_type') | list | json_query(\\"[?index == '\\" + cpu_index + \\"'].model\\") | first }}"
+- name: perform oVirt configuration
+  hosts: ovirtnodes
+  remote_user: root
+  tasks:
     - name: define traditional ethernet facts
       set_fact:
         ansible_eth: "{% set ansible_eth = ansible_eth|default([]) + [hostvars[inventory_hostname]['ansible_' + item]] %}{{ ansible_eth|list }}"
@@ -4313,7 +4443,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
       command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
       register: setup_result
 - name: perform oVirt setup preparation on further nodes
-  hosts: gluster_nonmaster_nodes
+  hosts: ovirt_nonmaster_nodes
   remote_user: root
   tasks:
     - name: prepare add-host installation answer file
@@ -4329,8 +4459,10 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 
 # Create a custom Jinja2 template to generate a proper Hosted Engine answers file
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
-# TODO: find out why the for loop does not insert a newline at the end - added another one as a workaround
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
+# TODO: find out why the for loop does not insert a newline at the end - added another one as a workaround
+# TODO: find out why oVirt Cluster is not found after Engine setup when closing up
+# TODO: open Bugzilla ticket and add cloudinit parameters for cluster and datacenter names here
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
 [environment:default]
 OVEHOSTED_CORE/rollbackProceed=none:None
@@ -4371,6 +4503,7 @@ OVEHOSTED_VM/vmVCpus=str:2
 OVEHOSTED_VM/ovfArchive=str:{{ ova_result.stdout }}
 OVEHOSTED_VM/vmCDRom=none:None
 OVEHOSTED_VM/automateVMShutdown=bool:True
+OVEHOSTED_VM/cloudinitRootPwd=str:{{ password }}
 OVEHOSTED_VM/cloudinitInstanceDomainName=str:{{ hvp_engine_domainname }}
 OVEHOSTED_VM/cloudinitExecuteEngineSetup=bool:True
 OVEHOSTED_VM/cloudinitInstanceHostName=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
@@ -4720,7 +4853,49 @@ firewall-offline-cmd --set-log-denied=all
 
 # Note: clock panel applet under GNOME3 takes all settings from system defaults (location, time format, display etc.)
 
-# Conditionally apply custom defaults to screensaver under GNOME3 (don't start on idle, don't lock)
+# Disable user list and reboot/poweroff from GNOME login greeter
+cat << EOF > /etc/dconf/db/gdm.d/01-hvp-settings
+# Custom settings for GNOME login screen
+[org/gnome/login-screen]
+disable-restart-buttons=true
+disable-user-list=true
+EOF
+chmod 644 /etc/dconf/db/gdm.d/01-hvp-settings
+
+# Apply all GNOME3 GDM settings specified above
+rm -f /etc/dconf/db/gdm
+dconf update
+
+# Disable autorun for external media
+# TODO: verify under GNOME 3.14 / CentOS 7.2
+cat << EOF > /etc/dconf/db/local.d/01-autorun-settings
+# Custom settings for GNOME autorun
+[org/gnome/desktop/media-handling]
+autorun-never=true
+EOF
+chmod 644 /etc/dconf/db/local.d/01-autorun-settings
+
+# Disable switch user
+# TODO: verify under GNOME 3.14 / CentOS 7.2
+cat << EOF > /etc/dconf/db/local.d/01-switchuser-settings
+# Custom settings for GNOME user session switching
+[org/gnome/desktop/lockdown]
+disable-user-switching=true
+EOF
+chmod 644 /etc/dconf/db/local.d/01-switchuser-settings
+
+# Note: GNOME3 (or newer CUPS) does not show other user print jobs by default
+# TODO: verify
+
+# Disable online account providers
+cat << EOF > /etc/dconf/db/local.d/01-goa-settings
+# Custom settings for GNOME online account providers
+[org/gnome/online-accounts]
+whitelisted-providers=['']
+EOF
+chmod 644 /etc/dconf/db/local.d/01-goa-settings
+
+# Conditionally apply custom defaults to screensaver under GNOME3 (do not start on idle, do not lock)
 if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	cat <<- EOF > /etc/dconf/db/local.d/01-screensaver-settings
 	# Custom settings for GNOME screensaver
@@ -4772,6 +4947,26 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	EndSection
 	EOF
 	chmod 644 /etc/X11/xorg.conf.d/01-dpms.conf
+	# Disable power/update actions via PolKit (affects GNOME menus and other ways to perform them)
+	# TODO: verify default rules under /usr/share/polkit-1/actions/
+	cat <<- EOF > /etc/polkit-1/rules.d/60-nousershutdown.rules
+	polkit.addRule(function(action, subject) {
+	  if ((action.id.indexOf("org.freedesktop.login1.hibernate") == 0) ||
+	      (action.id.indexOf("org.freedesktop.login1.power-off") == 0) ||
+	      (action.id.indexOf("org.freedesktop.login1.reboot") == 0)    ||
+	      (action.id.indexOf("org.freedesktop.login1.suspend") == 0)   ||
+	      (action.id.indexOf("org.freedesktop.packagekit.system-update") == 0)          ||
+	      (action.id.indexOf("org.freedesktop.packagekit.trigger-offline-update") == 0) ||
+	      (action.id.indexOf("org.freedesktop.packagekit.upgrade-system") == 0))         {
+	    if (subject.user === "root") {
+	        return polkit.Result.YES;
+	    } else {
+	        return polkit.Result.NO;
+	    }
+	  }
+	});
+	EOF
+	chmod 644 /etc/polkit-1/rules.d/60-nousershutdown.rules
 fi
 
 # Note: filemanager under GNOME3 doesn't use spatial mode by default
@@ -4780,7 +4975,7 @@ fi
 rm -f /etc/dconf/db/local
 dconf update
 
-# Disable graphical initial system setup (replacement for old Firstboot)
+# Disable graphical initial system setup
 sed -i -e 's/^\(\[daemon\].*\)$/\1\nInitialSetupEnable=False/' /etc/gdm/custom.conf
 
 # Disable GNOME initial setup
@@ -5041,6 +5236,11 @@ if [ -f /tmp/hvp-syslinux-conf/default ]; then
 	cp /tmp/hvp-syslinux-conf/default /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 	chmod 644 /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
 	chown root:root /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
+fi
+if [ -f /tmp/hvp-syslinux-conf/vm.conf ]; then
+	cp /tmp/hvp-syslinux-conf/vm.conf /mnt/sysimage/var/lib/tftpboot/vm.conf
+	chmod 644 /mnt/sysimage/var/lib/tftpboot/vm.conf
+	chown root:root /mnt/sysimage/var/lib/tftpboot/vm.conf
 fi
 
 # Copy kickstart parameters files (generated in pre section above) into installed system
