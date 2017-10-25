@@ -1524,7 +1524,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017101701"
+script_version="2017102201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1729,6 +1729,133 @@ CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
 
 # Note: hosts and addresses configuration files created in pre section above and copied in third post section below
+
+# Add monitoring script for GlusterFS-based NFS
+# Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
+# Note: tracked upstream in https://bugzilla.redhat.com/show_bug.cgi?id=1371178
+# TODO: remove when included upstream and/or switching to NFS-Ganesha
+cat << EOF > /etc/ctdb/events.d/60.glusternfs
+#!/bin/sh
+# Event script to monitor GlusterFS NFS in a cluster environment
+# Source: https://xrsa.net
+# Author: Ben Draper
+# Email: ben@xrsa.net
+# Install Location: /etc/ctdb/events.d/60.glusternfs
+#
+ 
+[ -n "\$CTDB_BASE" ] || \\
+    export CTDB_BASE=\$(cd -P \$(dirname "\$0") ; dirname "\$PWD")
+ 
+. \$CTDB_BASE/functions
+ 
+service_ports="111 2049 38465 38466"
+ 
+# Placeholder
+service_name="glusterfs_nfs"
+ 
+# Verify GlusterFS Services are running
+verify_supporting_services ()
+{
+    l_ret=0
+    /usr/bin/systemctl -q is-active glusterd || {
+        echo "Service - glusterd is not running"
+        l_ret=1
+    }
+ 
+#    /usr/bin/systemctl -q is-active glusterfsd || {
+#        echo "Service - glusterfsd is not running"
+#        l_ret=1
+#    }
+ 
+    /usr/bin/systemctl -q is-active rpcbind || {
+        echo "Service - rpcbind is not running"
+        l_ret=1
+    }
+ 
+    if [ \$l_ret -eq 1 ]; then
+        exit \$l_ret
+    fi
+}
+ 
+# This will verify required ports are listening
+verify_ports ()
+{
+    l_ret=0
+    for check_port in \$service_ports; do
+        ctdb_check_tcp_ports \$check_port || {
+            l_ret=1
+        }
+    done
+ 
+    if [ \$l_ret -eq 1 ]; then
+        exit \$l_ret
+    fi
+}
+ 
+loadconfig
+case "\$1" in
+    monitor)
+        verify_supporting_services
+        verify_ports    
+        update_tickles 2049
+    ;;
+ 
+    *)
+	ctdb_standard_event_handler "\$@"
+    ;;
+esac
+ 
+exit 0
+EOF
+chmod 755 /etc/ctdb/events.d/60.glusternfs
+
+# Add SELinux support for monitoring script for GlusterFS-based NFS
+# Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
+# TODO: remove when included upstream and/or switching to NFS-Ganesha
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myglusternfsctdb.te
+ 
+module myglusternfsctdb 1.0;
+ 
+require {
+        type portmap_port_t;
+        type nfs_port_t;
+        class tcp_socket name_bind;
+	type rpcd_unit_file_t;
+	type systemd_unit_file_t;
+	type ctdbd_t;
+	class service status;
+}
+ 
+#============= ctdbd_t ==============
+allow ctdbd_t rpcd_unit_file_t:service status;
+allow ctdbd_t systemd_unit_file_t:service status;
+allow ctdbd_t nfs_port_t:tcp_socket name_bind;
+allow ctdbd_t portmap_port_t:tcp_socket name_bind;
+EOF
+chmod 644 /etc/selinux/local/myglusternfsctdb.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myglusternfsctdb.mod myglusternfsctdb.te
+semodule_package -o myglusternfsctdb.pp -m myglusternfsctdb.mod
+semodule -i myglusternfsctdb.pp
+popd
+
+# Force NFS client to NFSv3 to avoid even trying with unsupported v4
+# TODO: remove when disabling GlusterFS internal NFS and switching to NFS-Ganesha
+sed -i -e 's/^#*\s*Defaultvers=.*$/Defaultvers=3/' /etc/nfsmount.conf
+
+# Disable NFS client file locking to work a round a conflict with GlusterFS internal NFS
+# TODO: remove when disabling GlusterFS internal NFS and switching to NFS-Ganesha
+cat << EOF >> /etc/nfsmount.conf
+
+Lock=False
+
+EOF
+systemctl mask nfs-lock
+
+# Disable kernel-based NFS server
+systemctl mask nfs.target
 
 # Note: a mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
