@@ -2347,8 +2347,8 @@ cluster_name: "Default"
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
 # TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
-glusterfs_addr: ${node_name[${master_index}]}.${domain_name[${gluster_zone}]}
-glusterfs_mountopts: "backup-volfile-servers={{ groups['glusternodes'] | difference(groups['glusternodes'][${master_index}]) | join(':') }},fetch-attempts=2,log-level=WARNING"
+glusterfs_addr: "{{ groups['gluster_master'] }}"
+glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
 iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
 iso_sd_name: iso_domain
@@ -2400,7 +2400,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017102502"
+script_version="2017102601"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2591,7 +2591,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
 	# TODO: find out why Kimchi comes up empty and unusable and correct
-	yum -y install https://github.com/kimchi-project/wok/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
+	yum -y install https://github.com/kimchi-project/kimchi/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
 else
 	# Alternatively install Webmin for generic web management
 	# Add Webmin repo
@@ -2657,9 +2657,6 @@ grub2-mkconfig -o "${grub2_cfg_file}"
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
 fi
-
-# Configure systemd (no shutdown from keyboard)
-systemctl mask ctrl-alt-del.target
 
 # Configure kernel behaviour
 
@@ -4365,6 +4362,9 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
   hosts: gluster_master
   remote_user: root
   tasks:
+    - name: wait for Samba to become ready on the host
+      wait_for: timeout=300
+        port: 445
     - name: configure local root user
       shell: "echo -e '\\n{{ ansible_ssh_pass }}\\n' | smbpasswd -s -a root"
       register: smbpasswd_result
@@ -4396,7 +4396,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
   tasks:
     - name: make sure that the cpu vendor is homogeneous
       assert: { that: "hostvars['{{ item }}']['hvp_cpu_type']['vendor'] == hostvars[groups['ovirt_master'][0]]['hvp_cpu_type']['vendor']", msg: "CPU vendor must be the same across all hosts" }
-      with_items: "{{ groups['ovirtnodes'] | difference(groups['ovirt_master']) }}"
+      with_items: "{{ groups['ovirt_nonmaster_nodes'] }}"
     - name: define common cpu index
       set_fact:
         cpu_index: "{{ groups['ovirtnodes'] | map('extract', hostvars, ['hvp_cpu_type', 'index']) | list | sort | min }}"
@@ -4533,7 +4533,7 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
 # Note: Ansible oVirt management thanks to Simone Tiraboschi
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
 # TODO: add generic configuration of Engine vm (take it from our Kickstarts)
-# TODO: verify how we can override answers from first node (using the same template) using Ansible module (manually adding further nodes from commandline is unsupported on oVirt >= 4.0)
+# TODO: verify whether the above-created /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf can override answers from first node (manually adding further nodes from commandline is unsupported on oVirt >= 4.0) - remove /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf afterwards to avoid problems on further updates
 # TODO: create a couple of OVN logical networks
 # TODO: add Bareos configuration both on engine and on nodes
 # TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
@@ -4652,7 +4652,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
         override_iptables: true
         timeout: 1200
         wait: true
-      with_items: "{{ groups['ovirtnodes'] | difference(hvp_master_node) }}"
+      with_items: "{{ groups['ovirt_nonmaster_nodes'] }}"
     - name: Revoke the SSO token
       no_log: true
       ovirt_auth:
@@ -4817,6 +4817,7 @@ EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 
 # Create global Ansible playbook for the whole process (Gluster and oVirt)
+# TODO: add creation of vms from scratch (kickstart based installation - not from template) and insert before adjoin step
 cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
 ---
 - include: roles/glusternodes/glusternodes.yaml
@@ -4855,19 +4856,6 @@ firewall-offline-cmd --set-log-denied=all
 # Note: pre-seeding values with gsettings as root works for root user only and needs dbus running - using dconf instead
 
 # Note: clock panel applet under GNOME3 takes all settings from system defaults (location, time format, display etc.)
-
-# Disable user list and reboot/poweroff from GNOME login greeter
-cat << EOF > /etc/dconf/db/gdm.d/01-hvp-settings
-# Custom settings for GNOME login screen
-[org/gnome/login-screen]
-disable-restart-buttons=true
-disable-user-list=true
-EOF
-chmod 644 /etc/dconf/db/gdm.d/01-hvp-settings
-
-# Apply all GNOME3 GDM settings specified above
-rm -f /etc/dconf/db/gdm
-dconf update
 
 # Disable autorun for external media
 # TODO: verify under GNOME 3.14 / CentOS 7.2
