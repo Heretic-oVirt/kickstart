@@ -1394,10 +1394,10 @@ done
 
 # Create simple standard menu
 # Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
-# Note: to forse legacy nic names (ethN) add biosdevname=0 net.ifnames=0
+# Note: to force legacy nic names (ethN) add biosdevname=0 net.ifnames=0
 # TODO: node PXE nic names must be manually gathered (eg: by booting with the rescue image) and edited below (replacing eth0)
 mkdir -p /tmp/hvp-syslinux-conf
-cat << EOF > /tmp/hvp-syslinux-conf/default
+cat << EOF > /tmp/hvp-syslinux-conf/common.cfg
 DEFAULT menu.c32
 PROMPT 0
 TIMEOUT 600
@@ -1409,8 +1409,8 @@ LABEL bootlocal
 	MENU LABEL Local Boot
 	localboot 0
 
-# Load Memtest+
-LABEL memtest+
+# Load Memtest86+
+LABEL memtest
 	MENU LABEL RAM Test (Memtest86+)
 	kernel memtest86+
 
@@ -1424,7 +1424,7 @@ LABEL rescue
 LABEL vmmenu
 	MENU LABEL Virtual Machines installation menu --->
 	kernel menu.c32
-	append vm.conf
+	append vm.cfg
 
 # Start kickstart-based HVP Nodes installation
 EOF
@@ -1433,7 +1433,7 @@ if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
 	vm_network_params="${vm_network_params} hvp_nicmacfix"
 else
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
 	# Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 	EOF
 fi
@@ -1442,7 +1442,7 @@ if grep 'biosdevname=0' /proc/cmdline | grep -q 'net.ifnames=0' ; then
 	vm_network_params="${vm_network_params} biosdevname=0 net.ifnames=0"
 	essential_network_params="${essential_network_params} biosdevname=0 net.ifnames=0"
 else
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
 	# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
@@ -1450,7 +1450,7 @@ fi
 # Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating common hvp_parameters.sh and specific hvp_parameters_*.sh with all other parameters (leaving a commented line as reference here)
 # Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/default
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/node/vmlinuz
@@ -1460,14 +1460,14 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	EOF
 done
 # Guest virtual machines installation menu
-cat << EOF > /tmp/hvp-syslinux-conf/vm.conf
-MENU TITLE --== Virtual Machines Installation PXE Menu ==--
+cat << EOF > /tmp/hvp-syslinux-conf/vm.cfg
+MENU TITLE --== Heretic oVirt Project Virtual Machines PXE Menu ==--
 
 # Go back to the main menu
 LABEL rootmenu
 	MENU LABEL <---- Main menu
 	kernel menu.c32
-	append default
+	append common.cfg
 
 
 # Start kickstart-based HVP AD DC installation
@@ -2110,6 +2110,8 @@ allow booting;
 allow bootp;
 
 # Definition of PXE-specific options
+# Note: defining/using any of the below options will make some firmwares explicitly ask for a PXE server on port 4011
+# Note: avoiding here to use plain DHCP with PXELinux
 # Code  1: Multicast IP address of bootfile
 # Code  2: UDP port that client should monitor for MTFTP responses
 # Code  3: UDP port that MTFTP servers are using to listen for MTFTP requests
@@ -2126,51 +2128,72 @@ allow bootp;
 #         to display, and the string to display on screen
 # Code 10: How long (in seconds) the boot menu should be displayed and the
 #         text of a prompt that will be displayed during waiting time
+#option space PXE;
+#option PXE.mtftp-ip               code 1  = ip-address;
+#option PXE.mtftp-cport            code 2  = unsigned integer 16;
+#option PXE.mtftp-sport            code 3  = unsigned integer 16;
+#option PXE.mtftp-tmout            code 4  = unsigned integer 8;
+#option PXE.mtftp-delay            code 5  = unsigned integer 8;
+#option PXE.discovery-control      code 6  = unsigned integer 8;
+#option PXE.discovery-mcast-addr   code 7  = ip-address;
+#option PXE.boot-server            code 8  = { unsigned integer 16,
+#                                              unsigned integer 8,
+#                                              ip-address };
+#option PXE.boot-menu              code 9  = { unsigned integer 16,
+#                                              unsigned integer 8,
+#                                              text };
+#option PXE.menu-prompt            code 10 = { unsigned integer 8,
+#                                              text };
 
-option space PXE;
-option PXE.mtftp-ip               code 1  = ip-address;
-option PXE.mtftp-cport            code 2  = unsigned integer 16;
-option PXE.mtftp-sport            code 3  = unsigned integer 16;
-option PXE.mtftp-tmout            code 4  = unsigned integer 8;
-option PXE.mtftp-delay            code 5  = unsigned integer 8;
-option PXE.discovery-control      code 6  = unsigned integer 8;
-option PXE.discovery-mcast-addr   code 7  = ip-address;
-option PXE.boot-server            code 8  = { unsigned integer 16,
-                                              unsigned integer 8,
-                                              ip-address };
-option PXE.boot-menu              code 9  = { unsigned integer 16,
-                                              unsigned integer 8,
-                                              text };
-option PXE.menu-prompt            code 10 = { unsigned integer 8,
-                                              text };
+# Definition of PXELinux-specific options
+option space pxelinux;
+option pxelinux.magic      code 208 = string;
+option pxelinux.configfile code 209 = text;
+option pxelinux.pathprefix code 210 = text;
+option pxelinux.reboottime code 211 = unsigned integer 32;
+
+option arch code 93 = unsigned integer 16;
 
 # Define a class to enable PXE
 class "pxeclients" {
         match if substring (option vendor-class-identifier, 0, 9) = "PXEClient";
 
-#       option dhcp-parameter-request-list 60,43;
-        option vendor-class-identifier "PXEClient";
-        vendor-option-space PXE;
         # At least one of the vendor-specific options must be set in order
         # for the boot ROM on the client to recognize us as a PXE
         # compliant server. We set the MCAST IP address to 0.0.0.0 to tell
         # the boot ROM we can't provide multicast TFTP, so it will have to
         # use just plain ol' TFTP instead (address 0.0.0.0 is considered
         # as "no address").
-        option PXE.mtftp-ip 0.0.0.0;
+#       vendor-option-space PXE;
+#       option PXE.mtftp-ip 0.0.0.0;
 #       option PXE.discovery-control 7;
 #       option PXE.boot-server 15 1 ${node_lan_ip};
 #       option PXE.boot-menu 15 14 "HVP";
 #       option PXE.menu-prompt 0 "HVP";
+
 # --- Options for dynamically appearing PXE nodes
-#     (our fixed nodes override these options inside their own entries later)
         min-lease-time 300;
         default-lease-time 1800;
         max-lease-time 1800;
         next-server ${dhcp_gateway};
-#       option root-path "/var/lib/tftpboot";
-        # Using newer PXELINUX installed on next-server
-        filename "pxelinux.0";
+        # Note: option 60 switches PXE to use port 4011 - avoiding here
+        option dhcp-parameter-request-list 66,43;
+        option vendor-class-identifier "PXEClient";
+        option tftp-server-name "${dhcp_gateway}";
+        vendor-option-space pxelinux;
+	if option arch = 00:00 {
+		filename "pxelinux.0";
+		option pxelinux.configfile "bios.cfg";
+	} else if option arch = 00:06 {
+		filename "bootia32.efi";
+		option pxelinux.configfile "efi32.cfg";
+	} else if option arch = 00:07 {
+		filename "bootx64.efi";
+		option pxelinux.configfile "efi64.cfg";
+	} else if option arch = 00:09 {
+		filename "bootx64.efi";
+		option pxelinux.configfile "efi64.cfg";
+	}
 #
 # --- Workarounds for broken PXE implementations using Etherboot ROMs
         include "/etc/dhcp/dhcpd-broken-pxe.conf";
@@ -2400,7 +2423,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017102601"
+script_version="2017111103"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2525,7 +2548,8 @@ yum -y install httpd mod_ssl
 yum -y install webalizer mrtg net-snmp net-snmp-utils
 
 # Install DHCPd, TFTPd, Syslinux and Bind to support PXE
-yum -y install dhcp tftp tftp-server syslinux bind
+# Note: using our Fedora-rebuild repo to get a newer (6.x) syslinux
+yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
 # Note: using our HRGS-rebuild repo to get a newer gDeploy
@@ -2587,7 +2611,9 @@ if [ "${nolocalvirt}" != "true" ]; then
 	# Add support for Qemu EV version from CentOS Virt SIG repo
 	yum -y install centos-release-qemu-ev
 	# Install packages
-	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy virtio-win
+	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy virtio-win OVMF
+	# Perform a further upgrade to align with Qemu EV repo packages
+	yum -y upgrade
 	# Install Kimchi libvirt web management interface
 	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
 	# TODO: find out why Kimchi comes up empty and unusable and correct
@@ -3315,28 +3341,62 @@ EOF
 chmod 644 /etc/dhcp/dhcpd-broken-pxe.conf
 
 # Enable DHCPd
+# TODO: check actual need (and configuration) for proxy service
 firewall-offline-cmd --add-service=dhcp --zone=internal
+firewall-offline-cmd --add-service=proxy-dhcp --zone=internal
 systemctl enable dhcpd
 
 # Add PXE menu/setup configuration
 
 # Copy PXElinux and Memtest86+ files under TFTP boot area
 cp /boot/memtest86+* /var/lib/tftpboot
-cp /usr/share/syslinux/{*.{c32,0},memdisk} /var/lib/tftpboot
-mkdir -p /var/lib/tftpboot/{pxelinux.cfg,linux/{centos,node}}
 pushd /var/lib/tftpboot
-# Note: PXElinux default menu created in pre section above and copied in third post section below
-touch pxelinux.cfg/default
 ln -s memtest86+* memtest86+
-ln -s pxelinux.cfg/default .
-pushd linux/node
+popd
+# Note: the following assumes a newer (6.x) Syslinux package - rebuilt Fedora version installed above
+mkdir -p /var/lib/tftpboot/{pxelinux.cfg,bios,efi{32,64}}
+cp /usr/share/syslinux/bios/memdisk /var/lib/tftpboot/
+cp /usr/share/syslinux/bios/*.0 /var/lib/tftpboot/
+cp /usr/share/syslinux/bios/ldlinux.c32 /var/lib/tftpboot/
+cp /usr/share/syslinux/bios/*.c32 /var/lib/tftpboot/bios
+cp /usr/share/syslinux/efi32/efi32/ldlinux.e32 /var/lib/tftpboot/
+cp /usr/share/syslinux/efi32/efi32/*.c32 /var/lib/tftpboot/efi32
+cp /usr/share/syslinux/efi32/efi32/syslinux.efi /var/lib/tftpboot/bootia32.efi
+cp /usr/share/syslinux/efi64/efi64/ldlinux.e64 /var/lib/tftpboot/
+cp /usr/share/syslinux/efi64/efi64/*.c32 /var/lib/tftpboot/efi64
+cp /usr/share/syslinux/efi64/efi64/syslinux.efi /var/lib/tftpboot/bootx64.efi
+
+# Create PXELinux menus
+# Note: PXElinux common.cfg and vm.cfg menus created in pre section above and copied in third post section below
+touch /var/lib/tftpboot/{common,vm}.cfg
+cat << EOF > /var/lib/tftpboot/bios.cfg
+PATH bios
+INCLUDE common.cfg
+EOF
+chmod 644 /var/lib/tftpboot/bios.cfg
+pushd /var/lib/tftpboot
+ln -s ../bios.cfg pxelinux.cfg/default
+popd
+cat << EOF > /var/lib/tftpboot/efi32.cfg
+PATH efi32
+INCLUDE common.cfg
+EOF
+chmod 644 /var/lib/tftpboot/efi32.cfg
+cat << EOF > /var/lib/tftpboot/efi64.cfg
+PATH efi64
+INCLUDE common.cfg
+EOF
+chmod 644 /var/lib/tftpboot/efi64.cfg
+
+# Copy netboot images mirrored above
+mkdir -p /var/lib/tftpboot/linux/{centos,node}
+pushd /var/lib/tftpboot/linux/node
 cp /var/www/hvp-repos/el7/node/vmlinuz .
 cp /var/www/hvp-repos/el7/node/initrd.img .
 popd
-pushd linux/centos
+pushd /var/lib/tftpboot/linux/centos
 cp /var/www/hvp-repos/el7/centos/vmlinuz .
 cp /var/www/hvp-repos/el7/centos/initrd.img .
-popd
 popd
 
 # Configure SSH root login with key
@@ -5223,15 +5283,15 @@ if [ -f /tmp/hvp-dhcpd-conf/dhcpd.conf ]; then
 fi
 
 # Copy syslinux configuration (generated in pre section above) into installed system
-if [ -f /tmp/hvp-syslinux-conf/default ]; then
-	cp /tmp/hvp-syslinux-conf/default /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
-	chown root:root /mnt/sysimage/var/lib/tftpboot/pxelinux.cfg/default
+if [ -f /tmp/hvp-syslinux-conf/common.cfg ]; then
+	cp /tmp/hvp-syslinux-conf/common.cfg /mnt/sysimage/var/lib/tftpboot/common.cfg
+	chmod 644 /mnt/sysimage/var/lib/tftpboot/common.cfg
+	chown root:root /mnt/sysimage/var/lib/tftpboot/common.cfg
 fi
-if [ -f /tmp/hvp-syslinux-conf/vm.conf ]; then
-	cp /tmp/hvp-syslinux-conf/vm.conf /mnt/sysimage/var/lib/tftpboot/vm.conf
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/vm.conf
-	chown root:root /mnt/sysimage/var/lib/tftpboot/vm.conf
+if [ -f /tmp/hvp-syslinux-conf/vm.cfg ]; then
+	cp /tmp/hvp-syslinux-conf/vm.cfg /mnt/sysimage/var/lib/tftpboot/vm.cfg
+	chmod 644 /mnt/sysimage/var/lib/tftpboot/vm.cfg
+	chown root:root /mnt/sysimage/var/lib/tftpboot/vm.cfg
 fi
 
 # Copy kickstart parameters files (generated in pre section above) into installed system
