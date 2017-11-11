@@ -162,7 +162,7 @@ selinux --enforcing
 #repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/centos
 
 # Packages list - package groups are preceded by an "@" sign - excluded packages by an "-" sign
-# Note: some virtualization technologies (VMware, Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
+# Note: some virtualization technologies (Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
 %packages
 @system-admin-tools
 @console-internet
@@ -2423,7 +2423,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111103"
+script_version="2017111104"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2590,9 +2590,6 @@ elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it's included in base distro now)
 	yum -y install open-vm-tools open-vm-tools-desktop fuse
-	# Note: the following is needed to recompile external VMHGFS support from VMwareTools - separately installed since it's not needed on server machines
-	# TODO: remove the following and switch to vmware-hgfsclient (already part of open-vm-tools) as per http://planetlotus.org/profiles/dave-hay_146277
-	yum -y install fuse-devel
 fi
 
 # Tune package list to underlying platform
@@ -5129,16 +5126,22 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
-	# Note: the upstream VMwareTools installation should not override what already provided by open-vm-tools (verified on version 9.9.3)
-	# Note: installing upstream VMwareTools here to get legacy shared folders support
-	# TODO: remove the following and switch to vmware-hgfsclient (already part of open-vm-tools) as per http://planetlotus.org/profiles/dave-hay_146277
-	wget -O - https://dangerous.ovirt.life/support/VMware/VMwareTools.tar.gz | tar xzf -
-	pushd vmware-tools-distrib
-	./vmware-install.pl -d
-	popd
-	# TODO: disable thinprint from /etc/vmware-tools/services.sh
-	rm -rf vmware-tools-distrib
-	need_reboot="yes"
+	# Note: using vmware-hgfsclient (already part of open-vm-tools) for shared folders support
+	shared_folders="\$(vmware-hgfsclient)"
+	if [ -z "\${shared_folders}" ]; then
+		cat << EOM >> /etc/fstab
+		# Template line to activate boot-mounted shared folders
+		#.host:/Test	/mnt/hgfs/Test	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+		EOM
+	else
+		for shared_folder in \${shared_folders} ; do
+			mkdir -p "/mnt/hgfs/\${shared_folder}"
+			cat << EOM >> /etc/fstab
+			.host:/\${shared_folder}	/mnt/hgfs/\${shared_folder}	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+			EOM
+		done
+	fi
+	need_reboot="no"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
 	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
 	chmod a+rx VBoxLinuxAdditions.run
