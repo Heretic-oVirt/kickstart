@@ -968,7 +968,8 @@ reqpart --add-boot
 # Note: the following uses only the first disk as PV and leaves other disks unused if the first one is sufficiently big, otherwise starts using other disks too
 part pv.01 --size=50000 --grow
 # Create a VG
-volgroup HostVG pv.01
+# Note: leaving a reserved percent to allow metadata growing
+volgroup HostVG pv.01 --reserved-percent=5
 # Define swap space
 logvol swap --vgname=HostVG --name=swap --fstype=swap --recommended
 # Define thin provisioned LVs
@@ -1524,7 +1525,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017102201"
+script_version="2017111201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
