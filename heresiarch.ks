@@ -2423,7 +2423,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111104"
+script_version="2017111201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2509,6 +2509,7 @@ yum-config-manager --enable cr > /dev/null
 yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
 yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release41.rpm
 
 # Add our own repo
 wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
@@ -2553,7 +2554,7 @@ yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux sy
 
 # Install Ansible and gDeploy
 # Note: using our HRGS-rebuild repo to get a newer gDeploy
-yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath
+yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles
 
 # Install Memtest86+ to be offered through PXE
 yum -y install memtest86+
