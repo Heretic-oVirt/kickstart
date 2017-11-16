@@ -1237,11 +1237,12 @@ EOF
 # Create localization setup fragment
 # TODO: allow changing system language too
 if [ "${keyboard_layout}" != "us" ]; then
-	xlayouts="'${keyboard_layout}','us'"
+	# TODO: GNOME3 seems not to respect the keyboard layout preference order (US is always the default) - removing additional layout - restore when fixed upstream
+	#xlayouts="'${keyboard_layout}','us'"
+	xlayouts="'${keyboard_layout}'"
 else
 	xlayouts="'us'"
 fi
-# TODO: GNOME3 seems not to respect the keyboard layout preference order (US is always the default)
 cat << EOF > /tmp/full-localization
 # Default system language, additional languages can be enabled installing the appropriate packages below
 lang en_US.UTF-8
@@ -2423,7 +2424,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111201"
+script_version="2017111502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -5001,12 +5002,7 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	cat <<- EOF > /etc/polkit-1/rules.d/60-nousershutdown.rules
 	polkit.addRule(function(action, subject) {
 	  if ((action.id.indexOf("org.freedesktop.login1.hibernate") == 0) ||
-	      (action.id.indexOf("org.freedesktop.login1.power-off") == 0) ||
-	      (action.id.indexOf("org.freedesktop.login1.reboot") == 0)    ||
 	      (action.id.indexOf("org.freedesktop.login1.suspend") == 0)   ||
-	      (action.id.indexOf("org.freedesktop.packagekit.system-update") == 0)          ||
-	      (action.id.indexOf("org.freedesktop.packagekit.trigger-offline-update") == 0) ||
-	      (action.id.indexOf("org.freedesktop.packagekit.upgrade-system") == 0))         {
 	    if (subject.user === "root") {
 	        return polkit.Result.YES;
 	    } else {
