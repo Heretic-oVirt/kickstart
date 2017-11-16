@@ -1525,7 +1525,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111202"
+script_version="2017111402"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1642,10 +1642,10 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
 
 # Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc gdeploy ansible
+yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
 
 # Install further packages for additional functions: Ansible automation
-yum -y --enablerepo base --enablerepo updates --enablerepo cr ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
