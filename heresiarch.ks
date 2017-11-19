@@ -2424,7 +2424,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111502"
+script_version="2017111801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2590,7 +2590,7 @@ elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
 elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
 	yum -y install hyperv-daemons
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
-	# Note: VMware basic support installed here (since it's included in base distro now)
+	# Note: VMware basic support installed here (since it is included in base distro now)
 	yum -y install open-vm-tools open-vm-tools-desktop fuse
 fi
 
@@ -3132,7 +3132,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	semanage port -a -t http_port_t -p tcp 64667
 	# Note: nginx by default would try to bind port 80 (already bound to apache) and fail
 	sed -i -e '/^\s*server/,+19s/^/#/g' /etc/nginx/nginx.conf
-	# Add "/manage/" location with forced redirect to Wok port in Apache's configuration
+	# Add "/manage/" location with forced redirect to Wok port in Apache configuration
 	cat <<- EOF > /etc/httpd/conf.d/wok.conf
 	#
 	#  Apache-based redirection for Wok
@@ -5126,14 +5126,14 @@ elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: using vmware-hgfsclient (already part of open-vm-tools) for shared folders support
 	shared_folders="\$(vmware-hgfsclient)"
 	if [ -z "\${shared_folders}" ]; then
-		cat << EOM >> /etc/fstab
+		cat <<- EOM >> /etc/fstab
 		# Template line to activate boot-mounted shared folders
 		#.host:/Test	/mnt/hgfs/Test	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
 		EOM
 	else
 		for shared_folder in \${shared_folders} ; do
 			mkdir -p "/mnt/hgfs/\${shared_folder}"
-			cat << EOM >> /etc/fstab
+			cat <<- EOM >> /etc/fstab
 			.host:/\${shared_folder}	/mnt/hgfs/\${shared_folder}	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
 			EOM
 		done
