@@ -1632,29 +1632,29 @@ ad_dc_name="${ad_dc_name}"
 
 EOF
 
+# TODO: add a custom logic to automatically check and shift offset and name for further DCs
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
 # Custom defaults for AD DC installation
 
-# Note: when installing further AD DCs you must uncomment the following line
-#my_nameserver="${ad_dc_ip}"
+sysvolrepl_password="${sysvolrepl_password}"
 
-# Note: when installing further AD DCs you must provide a different offset
 my_ip_offset="${ad_dc_ip_offset}"
 
-# Note: when installing further AD DCs you must provide a different name
 my_name="${ad_dc_name}"
 
-# Note: when installing further AD DCs you must change the follwoing option to true
+# Note: when installing further AD DCs you must change the following option to true
 domain_join="false"
 
-sysvolrepl_password="${sysvolrepl_password}"
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+	my_ip_offset=$((${ad_dc_ip_offset} + 1))
+	my_name="${ad_dc_name}bis"
+fi
 
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_db.sh
 # Custom defaults for DB server installation
-
-my_nameserver="${ad_dc_ip}"
 
 my_ip_offset="${db_ip_offset}"
 
@@ -1664,12 +1664,14 @@ my_name="${db_name}"
 
 domain_join="true"
 
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+fi
+
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_pr.sh
 # Custom defaults for print server installation
-
-my_nameserver="${ad_dc_ip}"
 
 my_ip_offset="${pr_ip_offset}"
 
@@ -1677,18 +1679,24 @@ my_name="${pr_name}"
 
 domain_join="true"
 
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+fi
+
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_vd.sh
 # Custom defaults for virtual desktop installation
-
-my_nameserver="${ad_dc_ip}"
 
 my_ip_offset="${vd_ip_offset}"
 
 my_name="${vd_name}"
 
 domain_join="true"
+
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+fi
 
 EOF
 
@@ -2455,7 +2463,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121002"
+script_version="2017121003"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
