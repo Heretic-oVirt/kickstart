@@ -4,8 +4,8 @@
 # Install with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # elevator=deadline ip=nicname:dhcp inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
-# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
-# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface
+# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network - the ip=nicname:dhcp option can be omitted if only the right interface has DHCP available (will be autodetected, albeit with a noticeable delay)
+# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 # Note: alternatively burn this kickstart into your DVD image and append to default commandline:
 # elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg
@@ -102,7 +102,7 @@
 # Note: the default AD further admin user password is HVP_dem0
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
-# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -258,6 +258,9 @@ for pathdir in $(echo "${PATH}" | sed -e 's/:/ /'); do
 	fi
 done
 
+# A simple regex matching IP addresses
+IPregex='[0-9]*[.][0-9]*[.][0-9]*[.][0-9]*'
+
 # A general IP add/subtract function to allow classless subnets +/- offsets
 # Note: derived from https://stackoverflow.com/questions/33056385/increment-ip-address-in-a-shell-script
 # TODO: add support for IPv6
@@ -306,6 +309,7 @@ unset network
 unset netmask
 unset network_base
 unset bondmode
+unset bondopts
 unset mtu
 unset domain_name
 unset ad_subdomain_prefix
@@ -413,7 +417,7 @@ network_priority[2]="gluster"
 network_priority[3]="lan"
 network_priority[4]="internal"
 
-declare -A network netmask network_base bondmode mtu
+declare -A network netmask network_base bondmode bondopts mtu
 network['external']="dhcp"
 netmask['external']="dhcp"
 network_base['external']="dhcp"
@@ -496,13 +500,6 @@ local_timezone="UTC"
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
 ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
-ks_custom_frags="hvp_parameters.sh"
-ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
-if [ -f "/sys/class/net/${ks_nic}/address" ]; then
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
-else
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh"
-fi
 if [ -z "${ks_source}" ]; then
 	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
 else
@@ -519,7 +516,7 @@ else
 		fi
 		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
 	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
-		# Note: cdrom gets accessed as real device name which must be detected - assuming it's the first removable device
+		# Note: cdrom gets accessed as real device name which must be detected - assuming it is the first removable device
 		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
 		# Note: on RHEL>=6 even IDE/ATAPI devices have SCSI device names
 		for dev in /dev/sd[a-z] /dev/sr[0-9]; do
@@ -556,7 +553,7 @@ else
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
-		ks_dev="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
 		ks_fstype="nfs"
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
@@ -564,11 +561,12 @@ else
 			echo "Unable to determine Kickstart source path" 1>&2
 			ks_dev=""
 		else
-			ks_dev="${ks_dev}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dev="${ks_host}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
 			ks_dir="/"
 		fi
 	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
 		# Note: blindly extracting URL from Kickstart commandline
+		ks_host="$(echo ${ks_source} | sed -e 's%^.*//%%' -e 's%/.*$%%')"
 		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
 		ks_fstype="url"
 	else
@@ -577,6 +575,21 @@ else
 	if [ -z "${ks_dev}" ]; then
 		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
 	else
+		ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh"
+		# Note: for network-based kickstart retrieval methods we extract the relevant nic MAC address to get the machine-specific fragment
+		if [ "${ks_fstype}" = "url" -o "${ks_fstype}" = "nfs" ]; then
+			# Note: we detect the nic device name as the one detaining the route towards the host holding the kickstart script
+			# Note: regarding the kickstart host: we assume that if it is not already been given as an IP address then it is a DNS fqdn
+			if ! echo "${ks_host}" | grep -q "${IPregex}" ; then
+				ks_host_ip=$(nslookup "${ks_host}" | tail -n +3 | awk '/^Address/ {print $2}' | head -1)
+			else
+				ks_host_ip="${ks_host}"
+			fi
+			ks_nic=$(ip route get "${ks_host_ip}" | sed -n -e 's/^.*\s\+dev\s\+\(\S\+\)\s\+.*$/\1/p')
+			if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+				ks_custom_frags="${ks_custom_frags} hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+			fi
+		fi
 		if [ "${ks_fstype}" = "url" ]; then
 			for custom_frag in ${ks_custom_frags} ; do
 				echo "Attempting network retrieval of ${ks_dev}/${custom_frag}" 1>&2
@@ -597,20 +610,22 @@ fi
 # Load any configuration fragment found, in the proper order
 # Note: configuration-fragment defaults will override hardcoded defaults
 # Note: commandline parameters will override configuration-fragment and hardcoded defaults
-# Note: configuration fragments get executed will full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+# Note: configuration fragments get executed with full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+pushd /tmp/kscfg-pre
 for custom_frag in ${ks_custom_frags} ; do
-	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+	if [ -f "${custom_frag}" ]; then
 		# Perform a configuration fragment sanity check before loading
-		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		bash -n "${custom_frag}" > /dev/null 2>&1
 		res=$?
 		if [ ${res} -ne 0 ]; then
 			# Report invalid configuration fragment and skip it
 			logger -s -p "local7.err" -t "kickstart-pre" "Skipping invalid remote configuration fragment ${custom_frag}"
 			continue
 		fi
-		source "/tmp/kscfg-pre/${custom_frag}"
+		source "./${custom_frag}"
 	fi
 done
+popd
 
 # TODO: perform better consistency check on all commandline-given parameters
 
@@ -850,7 +865,6 @@ if [ -n "${given_dhcp_count}" ]; then
 fi
 
 # Determine network segments parameters
-fixed_mgmt_bondmode="false"
 unset my_ip
 declare -A my_ip
 for zone in "${!network[@]}" ; do
@@ -866,29 +880,28 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_network_bondmode}" ]; then
 		case "${given_network_bondmode}" in
 			lacp)
-				bondmode["${zone}"]="${given_network_bondmode}"
-				# Detect whether mgmt network bondmode has been explicitly specified
-				if [ "${zone}" = "mgmt" ]; then
-					fixed_mgmt_bondmode="true"
-				fi
+				bondopts["${zone}"]="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+				bondmode["${zone}"]="lacp"
 				;;
 			roundrobin)
 				# Note: roundrobin is supported only on GLUSTER network, otherwise we force activepassive
 				if [ "${zone}" = "gluster" ]; then
-					bondmode["${zone}"]="${given_network_bondmode}"
+					bondopts["${zone}"]="mode=balance-rr;miimon=100"
+					bondmode["${zone}"]="roundrobin"
 				else
+					echo "Unsupported bonding mode (${given_network_bondmode}) for zone ${zone} - forcing activepassive" 1>&2
+					bondopts["${zone}"]="mode=active-backup;miimon=100"
 					bondmode["${zone}"]="activepassive"
 				fi
 				;;
 			activepassive)
-				bondmode["${zone}"]="${given_network_bondmode}"
-				# Detect whether mgmt network bondmode has been explicitly specified
-				if [ "${zone}" = "mgmt" ]; then
-					fixed_mgmt_bondmode="true"
-				fi
+				bondopts["${zone}"]="mode=active-backup;miimon=100"
+				bondmode["${zone}"]="activepassive"
 				;;
 			*)
-				# In case of unrecognized mode force activepassive
+				# In case of unrecognized mode, force activepassive
+				echo "Unrecognized bonding mode (${given_network_bondmode}) for zone ${zone} - forcing activepassive" 1>&2
+				bondopts["${zone}"]="mode=active-backup;miimon=100"
 				bondmode["${zone}"]="activepassive"
 				;;
 		esac
@@ -1016,6 +1029,7 @@ for zone in "${!network[@]}" ; do
 		unset netmask[${zone}]
 		unset network_base[${zone}]
 		unset bondmode[${zone}]
+		unset bondopts[${zone}]
 		unset mtu[${zone}]
 		unset domain_name[${zone}]
 		unset reverse_domain_name[${zone}]
@@ -1024,19 +1038,23 @@ done
 
 # Adapt bonding mode to network setup
 # Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
-if [ "${fixed_mgmt_bondmode}" = "false" ]; then
+if [ -z "${bondopts['mgmt']}" ]; then
 	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
+		bondopts['mgmt']="mode=active-backup;miimon=100"
 		bondmode['mgmt']="activepassive"
 	else
+		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
 		bondmode['mgmt']="lacp"
 	fi
 fi
 
-# Derive effective bondopts from bonding mode indications
+# Derive missing bondopts from bonding mode indications
 # Note: used only for node configuration parameters file generation below
-unset bondopts
-declare -A bondopts
 for zone in "${!bondmode[@]}" ; do
+	# Skip explicitly configured zones already set above
+	if [ -n "${bondopts[${zone}]}" ]; then
+		continue
+	fi
 	case "${bondmode[${zone}]}" in
 		lacp)
 			bondopts["${zone}"]="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
@@ -1049,6 +1067,7 @@ for zone in "${!bondmode[@]}" ; do
 			;;
 		*)
 			# In case of unrecognized mode force activepassive
+			echo "Unrecognized bonding mode (${bondmode[${zone}]}) for zone ${zone} - forcing activepassive" 1>&2
 			bondopts["${zone}"]="mode=active-backup;miimon=100"
 			;;
 	esac
@@ -1394,9 +1413,9 @@ for zone in "${!network[@]}" ; do
 done
 
 # Create simple standard menu
-# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
+# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 # Note: to force legacy nic names (ethN) add biosdevname=0 net.ifnames=0
-# TODO: node PXE nic names must be manually gathered (eg: by booting with the rescue image) and edited below (replacing eth0)
+# TODO: node PXE nic names must either be manually gathered (eg: by booting with the rescue image) and edited below (replacing eth0) or the ip=nicname:dhcp paramters must be removed completely if only the right interface has DHCP available
 mkdir -p /tmp/hvp-syslinux-conf
 cat << EOF > /tmp/hvp-syslinux-conf/common.cfg
 DEFAULT menu.c32
@@ -1444,7 +1463,7 @@ if grep 'biosdevname=0' /proc/cmdline | grep -q 'net.ifnames=0' ; then
 	essential_network_params="${essential_network_params} biosdevname=0 net.ifnames=0"
 else
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
-	# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
+	# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
 fi
@@ -1526,7 +1545,7 @@ test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
 EOF
 for zone in "${!my_ip[@]}" ; do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
-	test_ip["${zone}"]="${my_ip[${zone}]}"
+	test_ip['${zone}']="${my_ip[${zone}]}"
 	EOF
 done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
@@ -2322,7 +2341,6 @@ cat << EOF >> hosts
 [gluster_master]
 ${node_name[${master_index}]}.${domain_name[${zone}]}
 
-...
 EOF
 
 # Prepare Ansible SSH access passwords
@@ -2340,19 +2358,30 @@ eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
 cat << EOF > hvp.yaml
 # HVP local conventions
 hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
+# TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
+hvp_engine_ram: 4096
+hvp_engine_cpus: 2
+hvp_engine_imgsize: 80
+hvp_engine_setup_timeout: 3600
 hvp_engine_name: ${engine_name}
 hvp_engine_domainname: ${domain_name[${dhcp_zone}]}
 hvp_engine_ip: ${engine_ip}
 hvp_engine_netprefix: ${PREFIX}
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 hvp_switch_ip: ${switch_ip}
+hvp_gateway_ip: ${dhcp_gateway}
 hvp_timezone: ${local_timezone}
+hvp_mgmt_bridge_name: "ovirtmgmt"
+hvp_firewall_manager: "firewalld"
+hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
+hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
+hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 
 # Engine credentials:
 url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
 username: admin@internal
 password: ${root_password}
-ca_file: ca.crt
+ca_file: /etc/pki/ovirt-engine/ca.pem
 
 # Env:
 ## Datacenter:
@@ -2370,8 +2399,8 @@ cluster_name: "Default"
 ## Storage
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
-# TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
-glusterfs_addr: "{{ groups['gluster_master'] }}"
+# TODO: use NFS-Ganesha as soon as a proper CTDB-based configuration hac been devised - using internal Gluster-NFS meanwhile
+glusterfs_addr: "{{ groups['gluster_master'] | first }}"
 glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
 iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
@@ -2412,8 +2441,8 @@ popd
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
 for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${custom_frag}" ]; then
-		mkdir -p /mnt/sysimage/tmp/kscfg-pre
-		cp "${custom_frag}" /mnt/sysimage/tmp/kscfg-pre/
+		mkdir -p /mnt/sysimage/root/etc/kscfg-pre
+		cp "${custom_frag}" /mnt/sysimage/root/etc/kscfg-pre/
 	fi
 done
 
@@ -2424,7 +2453,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111801"
+script_version="2017120901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2446,6 +2475,12 @@ hostname ${HOSTNAME}
 # Set the homedir for apps that need it
 export HOME="/root"
 
+# Define associative arrays
+declare -A node_name
+declare -A network netmask network_base bondmode bondopts mtu
+declare -A domain_name
+declare -A reverse_domain_name
+
 # Hardcoded defaults
 
 unset nicmacfix
@@ -2453,26 +2488,22 @@ unset nicmacfix
 nicmacfix="false"
 
 # Load configuration parameters files (generated in pre section above)
-ks_custom_frags="hvp_parameters.sh"
-ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
-if [ -f "/sys/class/net/${ks_nic}/address" ]; then
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
-else
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heresiarch.sh"
-fi
+ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_*:*.sh"
+pushd /root/etc/kscfg-pre
 for custom_frag in ${ks_custom_frags} ; do
-	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+	if [ -f "${custom_frag}" ]; then
 		# Perform a configuration fragment sanity check before loading
-		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		bash -n "${custom_frag}" > /dev/null 2>&1
 		res=$?
 		if [ ${res} -ne 0 ]; then
 			# Report invalid configuration fragment and skip it
 			logger -s -p "local7.err" -t "kickstart-post" "Skipping invalid remote configuration fragment ${custom_frag}"
 			continue
 		fi
-		source "/tmp/kscfg-pre/${custom_frag}"
+		source "./${custom_frag}"
 	fi
 done
+popd
 
 # Determine choice of nic MAC fixed assignment
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
@@ -2511,6 +2542,13 @@ yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmfor
 yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release41.rpm
+
+# Add YUM priorities plugin
+yum -y install yum-plugin-priorities
+
+# Make sure the we prefer our own RHGS rebuild repo versus oVirt-dependency repos
+yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
 
 # Add our own repo
 wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
@@ -2554,8 +2592,7 @@ yum -y install webalizer mrtg net-snmp net-snmp-utils
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
-# Note: using our HRGS-rebuild repo to get a newer gDeploy
-yum -y --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
 
 # Install Memtest86+ to be offered through PXE
 yum -y install memtest86+
@@ -2565,6 +2602,9 @@ yum -y install squid
 
 # Install X2Go
 yum -y install x2goserver x2goserver-xsession
+
+# Install PDSH
+yum -y install pdsh pdsh-rcmd-ssh
 
 # Install Midnight Commander
 yum -y install mc
@@ -2632,9 +2672,6 @@ else
 	chmod 644 /etc/yum.repos.d/webmin.repo
 	yum -y install webmin
 fi
-
-# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' gdeploy
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -3441,8 +3478,17 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/shutdown.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/shutdown.yaml
 
-# Create a task to setup key-based SSH access
+# Create tasks to setup key-based SSH access
 # Note: if the password-containing var has been skipped/removed from above then the following must be invoked with: --ask-pass
+cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/createkeys.yaml
+---
+- name: Generate root ECDSA SSH key if not present
+  shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
+  args:
+    creates: /root/.ssh/id_ecdsa
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/createkeys.yaml
 cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
 ---
 - name: Set authorized ssh key to allow ssh passwordless access
@@ -3450,6 +3496,11 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
     user: root
     state: present
     key: "{{ lookup('file', '/root/.ssh/id_ecdsa.pub') }}"
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
+cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/securessh.yaml
+---
 - name: Disallow ssh password-based root access
   lineinfile: dest=/etc/ssh/sshd_config
               regexp="^PermitRootLogin"
@@ -3461,7 +3512,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
     state: restarted
 ...
 EOF
-chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/setupkeys.yaml
+chmod 644 /usr/local/etc/hvp-ansible/roles/common/tasks/securessh.yaml
 
 # Create a custom fact-gathering module to find free (not already partitioned/used) disks on nodes
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/library/hvp_free_disks
@@ -4259,17 +4310,15 @@ service=glusterd
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy-cleanup.j2
 
-# Create Ansible playbook for GlusterFS nodes nic bonding forced LACP setup
+# Create Ansible playbook for nodes nic bonding forced LACP setup
 # Note: the following will powerdown the nodes at the end so that manual switch configuration can be performed before powering them up again
 # Note: the rationale behind this playbook is that LACP seriously interfers both with standard PXE booting and our custom network bonding autodetection logic above - use AP/RR during installation, then use this to convert every bond to LACP afterwards
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 ---
-- name: Generate root ECDSA SSH key if not present
+- name: Generate SSH key if not present
   hosts: localhost
   tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
+    - include: ../common/tasks/createkeys.yaml
 - name: reconfigure gluster nodes bonding to LACP mode
   hosts: glusternodes
   remote_user: root
@@ -4291,12 +4340,10 @@ chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/lacp.yaml
 # TODO: add NFS-Ganesha and Gluster-block when ready
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 ---
-- name: Generate root ECDSA SSH key if not present
+- name: Generate SSH key if not present
   hosts: localhost
   tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
+    - include: ../common/tasks/createkeys.yaml
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -4353,16 +4400,14 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glustercleanup.yaml
 
-# Create Ansible playbook for GlusterFS nodes
-# TODO: add NFS-Ganesha and Gluster-block when ready
+# Create Ansible playbooks for GlusterFS nodes
+# Note: CTDB-based configurations demanded to separate playbook (needs all oVirt nodes added to cluster to get proper interface/bridge names)
 cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
 ---
-- name: Generate root ECDSA SSH key if not present
+- name: Generate SSH key if not present
   hosts: localhost
   tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
+    - include: ../common/tasks/createkeys.yaml
 - name: inspect gluster nodes
   hosts: glusternodes
   remote_user: root
@@ -4389,6 +4434,28 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
     - name: perform actual gdeploy-based Gluster configuration
       command: gdeploy -k -vv -c "{{ playbook_dir }}/gdeploy.conf"
       register: gdeploy_result
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
+# TODO: add NFS-Ganesha and Gluster-block when ready
+cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/ctdb.yaml
+---
+- name: Generate SSH key if not present
+  hosts: localhost
+  tasks:
+    - include: ../common/tasks/createkeys.yaml
+- name: inspect gluster nodes
+  hosts: glusternodes
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: gather suitable disks
+      hvp_free_disks: min_size_bytes=100000000000 accept_ssds=1
+    - name: gather suitable ssds
+      hvp_free_ssds: min_size_bytes=100000000000
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
 - name: Configure and start CTDB
   hosts: glusternodes
   remote_user: root
@@ -4422,27 +4489,25 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
   remote_user: root
   tasks:
     - name: wait for Samba to become ready on the host
-      wait_for: timeout=300
-        port: 445
+      wait_for: port=445 timeout=300
     - name: configure local root user
-      shell: "echo -e '\\n{{ ansible_ssh_pass }}\\n' | smbpasswd -s -a root"
+      shell: "echo -e '\\n{{ ansible_ssh_pass }}\\n{{ ansible_ssh_pass }}\\n' | smbpasswd -s -a root"
       register: smbpasswd_result
 ...
 EOF
-chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/glusternodes.yaml
+chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/ctdb.yaml
 
 # Create Ansible playbook for oVirt nodes
 # Note: oVirt Hosted Engine installation will be performed on the node selected as master above
 # Note: we assume that libvirt lists the CPU models in an ordered sequence of increasing available features (apart from appending AMD models to Intel ones)
 # Note: eth interfaces enumeration taken from https://serverfault.com/a/852093
+# TODO: add support for VLAN eth (not only plain and bond)
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
 ---
-- name: Generate root ECDSA SSH key if not present
+- name: Generate SSH key if not present
   hosts: localhost
   tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
+    - include: ../common/tasks/createkeys.yaml
 - name: Gather cpu type across all hosts
   hosts: ovirtnodes
   remote_user: root
@@ -4469,7 +4534,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
     - name: define traditional ethernet facts
       set_fact:
         ansible_eth: "{% set ansible_eth = ansible_eth|default([]) + [hostvars[inventory_hostname]['ansible_' + item]] %}{{ ansible_eth|list }}"
-      when: hostvars[inventory_hostname]['ansible_' + item]['type'] == 'ether'
+      when: (hostvars[inventory_hostname]['ansible_' + item]['type'] == 'ether') or (hostvars[inventory_hostname]['ansible_' + item]['type'] == 'bonding')
       with_items:
         - "{{ hostvars[inventory_hostname]['ansible_interfaces'] }}"
     - name: reset VDSM configuration
@@ -4505,17 +4570,6 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
     - name: perform actual Hosted Engine setup
       command: hosted-engine --deploy --config-append=/root/etc/he-answers.conf
       register: setup_result
-- name: perform oVirt setup preparation on further nodes
-  hosts: ovirt_nonmaster_nodes
-  remote_user: root
-  tasks:
-    - name: prepare add-host installation answer file
-      template:
-        src: templates/he-answers.j2
-        dest: /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf
-        owner: root
-        group: root
-        mode: 0644
 ...
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/ovirtnodes.yaml
@@ -4535,10 +4589,10 @@ OVEHOSTED_CORE/confirmSettings=bool:True
 OVEHOSTED_NETWORK/fqdn=str:{{ hvp_engine_name }}.{{ hvp_engine_domainname }}
 OVEHOSTED_NETWORK/bridgeIf=str:{% for eth in hostvars[inventory_hostname]['ansible_eth'] %}{% if 'ipv4' in eth %}{% if eth['ipv4']['address'] == hostvars[inventory_hostname]['ansible_default_ipv4']['address'] %}{{ eth['device'] }}{% endif %}{% endif %}{% endfor %}
 
-OVEHOSTED_NETWORK/bridgeName=str:ovirtmgmt
-OVEHOSTED_NETWORK/firewallManager=str:firewalld
+OVEHOSTED_NETWORK/bridgeName=str:{{ hvp_mgmt_bridge_name }}
+OVEHOSTED_NETWORK/firewallManager=str:{{ hvp_firewall_manager }}
 OVEHOSTED_NETWORK/gateway=str:{{ hvp_switch_ip }}
-OVEHOSTED_ENGINE/engineSetupTimeout=int:3600
+OVEHOSTED_ENGINE/engineSetupTimeout=int:{{ hvp_engine_setup_timeout }}
 OVEHOSTED_ENGINE/appHostName=str:{{ inventory_hostname }}
 OVEHOSTED_ENGINE/clusterName=str:{{ cluster_name }}
 OVEHOSTED_ENGINE/adminPassword=str:{{ password }}
@@ -4547,7 +4601,7 @@ OVEHOSTED_ENGINE/insecureSSL=none:None
 OVEHOSTED_ENGINE/enableLibgfapi=bool:True
 OVEHOSTED_STORAGE/imgAlias=str:hosted_engine
 OVEHOSTED_STORAGE/LunID=none:None
-OVEHOSTED_STORAGE/imgSizeGB=str:80
+OVEHOSTED_STORAGE/imgSizeGB=str:{{ hvp_engine_imgsize }}
 OVEHOSTED_STORAGE/iSCSIPortal=none:None
 OVEHOSTED_STORAGE/iSCSIPortalIPAddress=none:None
 OVEHOSTED_STORAGE/iSCSIPortalPort=none:None
@@ -4558,10 +4612,10 @@ OVEHOSTED_STORAGE/domainType=str:{{ engine_sd_type }}
 OVEHOSTED_STORAGE/storageDomainName=str:{{ engine_sd_name }}
 OVEHOSTED_STORAGE/storageDomainConnection=str:{{ engine_sd_addr }}:{{ engine_sd_path }}
 OVEHOSTED_STORAGE/mntOptions=str:{{ engine_sd_mountopts }}
-OVEHOSTED_VM/vmMemSizeMB=int:4096
+OVEHOSTED_VM/vmMemSizeMB=int:{{ hvp_engine_ram }}
 OVEHOSTED_VM/vmMACAddr=str:{{ mac_result.stdout }}
 OVEHOSTED_VM/emulatedMachine=str:pc
-OVEHOSTED_VM/vmVCpus=str:2
+OVEHOSTED_VM/vmVCpus=str:{{ hvp_engine_cpus }}
 OVEHOSTED_VM/ovfArchive=str:{{ ova_result.stdout }}
 OVEHOSTED_VM/vmCDRom=none:None
 OVEHOSTED_VM/automateVMShutdown=bool:True
@@ -4576,10 +4630,10 @@ OVEHOSTED_VM/cloudinitVMDNS=str:{{ hvp_engine_dnslist }}
 OVEHOSTED_VM/cloudinitVMTZ=str:{{ hvp_timezone }}
 OVEHOSTED_VM/rootSshAccess=str:yes
 OVEHOSTED_VM/rootSshPubkey=str:
-OVEHOSTED_VDSM/spicePkiSubject=str:C=EN, L=Test, O=Test, CN=Test
-OVEHOSTED_VDSM/pkiSubject=str:/C=EN/L=Test/O=Test/CN=Test
-OVEHOSTED_VDSM/caSubject=str:/C=EN/L=Test/O=Test/CN=TestCA
-OVEHOSTED_VDSM/cpu=str:{{ cpu_type }}
+OVEHOSTED_VDSM/spicePkiSubject=str:{{ hvp_spice_pki_subject }}
+OVEHOSTED_VDSM/pkiSubject=str:{{ hvp_pki_subject }}
+OVEHOSTED_VDSM/caSubject=str:{{ hvp_ca_subject }}
+OVEHOSTED_VDSM/cpu=str:{{ hostvars['localhost']['cpu_type'] }}
 OVEHOSTED_VDSM/consoleType=str:vnc
 OVEHOSTED_NOTIF/smtpPort=str:25
 OVEHOSTED_NOTIF/smtpServer=str:localhost
@@ -4588,22 +4642,17 @@ OVEHOSTED_NOTIF/destEmail=str:monitoring@localhost
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtnodes/templates/he-answers.j2
 
-# Create Ansible playbook for oVirt Engine
+# Create Ansible playbooks for oVirt Engine
 # Note: Ansible oVirt management thanks to Simone Tiraboschi
+# Note: SSH hardening (root access allowed only with key) demanded to post add-host due to inability to authenticate from Engine with publickey
+# Note: NFS-based storage domains configuration demanded to separate playbook (needs CTDB active which in turn needs all further nodes added to oVirt cluster)
 # TODO: find a way to determine the local mgmt network address also when mgmt is not the main interface (eg default gateway on lan network)
-# TODO: add generic configuration of Engine vm (take it from our Kickstarts)
-# TODO: verify whether the above-created /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf can override answers from first node (manually adding further nodes from commandline is unsupported on oVirt >= 4.0) - remove /etc/ovirt-host-deploy.conf.d/99-hosted_engine.conf afterwards to avoid problems on further updates
-# TODO: create a couple of OVN logical networks
-# TODO: add Bareos configuration both on engine and on nodes
-# TODO: add provisioning of virtual machines (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops)
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
 ---
-- name: Generate root ECDSA SSH key if not present
+- name: Generate SSH key if not present
   hosts: localhost
   tasks:
-    - shell: ssh-keygen -q -t ecdsa -b 521 -N "" -f /root/.ssh/id_ecdsa
-      args:
-        creates: /root/.ssh/id_ecdsa
+    - include: ../common/tasks/createkeys.yaml
 - name: perform oVirt configuration
   hosts: ovirtengine
   remote_user: root
@@ -4612,6 +4661,12 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
+    - name: reconfigure default gateway
+      nmcli:
+        conn_name: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['interface'] }}"
+        gw4: "{{ hvp_gateway_ip }}"
+        type: ethernet
+        state: present
     - name: add our own repo
       get_url:
         url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
@@ -4629,6 +4684,151 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
         state: stopped
         no_block: no
       with_items: bareos-fd bareos-dir
+    - name: Enable libgfapi support
+      command: engine-config -s LibgfApiSupported=true
+      register: libgfapi_result
+    - name: Obtain oVirt Engine SSO token
+      no_log: true
+      ovirt_auth:
+        url: "{{ url }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        ca_file: "{{ ca_file }}"
+    - name: Add main storage domain
+      ovirt_storage_domains:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ vmstore_sd_name }}"
+        host: "{{ hvp_master_node }}"
+        data_center: "{{ dc_name }}"
+        domain_function: data
+        state: present
+        glusterfs:
+          address: "{{ vmstore_sd_addr }}"
+          path: "{{ vmstore_sd_path }}"
+          mount_options: "{{ vmstore_sd_mountopts }}"
+        wait: true
+    - name: Add Host
+      ovirt_hosts:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ item }}"
+        address: "{{ item }}"
+        hosted_engine: deploy
+        force: true
+        public_key: no
+        password: "{{ password }}"
+        cluster: "{{ cluster_name }}"
+        override_iptables: true
+        poll_interval: 30
+        timeout: 1200
+        wait: true
+      with_items: "{{ groups['ovirt_nonmaster_nodes'] }}"
+    - name: Revoke the SSO token
+      no_log: true
+      ovirt_auth:
+        state: absent
+        ovirt_auth: "{{ ovirt_auth }}"
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/nfsdomains.yaml
+---
+- name: Generate SSH key if not present
+  hosts: localhost
+  tasks:
+    - include: ../common/tasks/createkeys.yaml
+- name: perform oVirt configuration
+  hosts: ovirtengine
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: Obtain oVirt Engine SSO token
+      no_log: true
+      ovirt_auth:
+        url: "{{ url }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        ca_file: "{{ ca_file }}"
+    - name: Add ISO storage domain
+      ovirt_storage_domains:
+        auth: "{{ ovirt_auth }}"
+        name: "{{ iso_sd_name }}"
+        host: "{{ hvp_master_node }}"
+        data_center: "{{ dc_name }}"
+        domain_function: iso
+        state: present
+        nfs:
+          address: "{{ iso_sd_addr }}"
+          path: "{{ iso_sd_path }}"
+          version: auto
+        wait: true
+    - name: Revoke the SSO token
+      no_log: true
+      ovirt_auth:
+        state: absent
+        ovirt_auth: "{{ ovirt_auth }}"
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/nfsdomains.yaml
+# TODO: add generic configuration of Engine vm (take it from our other Kickstarts)
+# TODO: add Bareos configuration both on engine and on nodes - maybe separate into independent bareos.yaml playbook
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/enginevmreconf.yaml
+---
+- name: Generate SSH key if not present
+  hosts: localhost
+  tasks:
+    - include: ../common/tasks/createkeys.yaml
+- name: perform oVirt configuration
+  hosts: ovirtengine
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
+    - name: reconfigure default gateway
+      nmcli:
+        conn_name: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['interface'] }}"
+        gw4: "{{ hvp_gateway_ip }}"
+        type: ethernet
+        state: present
+    - name: add our own repo
+      get_url:
+        url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+        dest: /etc/yum.repos.d/HVP.repo
+        mode: 0644
+    - name: install the Bareos-related packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items: bareos-tools bareos-client bareos-director bareos-webui
+    - name: enable and start the Bareos-related services
+      systemd:
+        name: "{{ item }}"
+        enabled: False
+        state: stopped
+        no_block: no
+      with_items: bareos-fd bareos-dir
+...
+EOF
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/enginevmreconf.yaml
+# TODO: create a couple of OVN logical networks
+cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovn.yaml
+---
+- name: Generate SSH key if not present
+  hosts: localhost
+  tasks:
+    - include: ../common/tasks/createkeys.yaml
+- name: perform oVirt configuration
+  hosts: ovirtengine
+  remote_user: root
+  tasks:
+    - include: ../common/tasks/setupkeys.yaml
+    - name: get common vars
+      include_vars:
+        file: ../common/vars/hvp.yaml
     - name: install the OVN-related packages
       yum:
         name: "{{ item }}"
@@ -4665,63 +4865,12 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
     - name: configure OVN central to listen on ports - 2
       shell: "ovn-nbctl set-connection ptcp:6642"
       register: centralconf2_result
-    - name: Enable libgfapi support
-      command: engine-config -s LibgfApiSupported=true
-      register: libgfapi_result
-    - name: Obtain oVirt Engine SSO token
-      no_log: true
-      ovirt_auth:
-        url: "{{ url }}"
-        username: "{{ username }}"
-        password: "{{ password }}"
-        ca_file: "{{ ca_file }}"
-    - name: Add main storage domain
-      ovirt_storage_domains:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ vmstore_sd_name }}"
-        host: "{{ hvp_master_node }}"
-        data_center: "{{ dc_name }}"
-        domain_function: data
-        state: present
-        glusterfs:
-          address: "{{ vmstore_sd_addr }}"
-          path: "{{ vmstore_sd_path }}"
-          mount_options: "{{ vmstore_sd_mountopts }}"
-        wait: true
-    - name: Add ISO storage domain
-      ovirt_storage_domains:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ iso_sd_name }}"
-        host: "{{ hvp_master_node }}"
-        data_center: "{{ dc_name }}"
-        domain_function: iso
-        state: present
-        nfs:
-          address: "{{ iso_sd_addr }}"
-          path: "{{ iso_sd_path }}"
-          version: auto
-        wait: true
-    - name: Add Host
-      ovirt_hosts:
-        auth: "{{ ovirt_auth }}"
-        name: "{{ item }}"
-        address: "{{ item }}"
-        password: "{{ password }}"
-        cluster: "{{ cluster_name }}"
-        override_iptables: true
-        timeout: 1200
-        wait: true
-      with_items: "{{ groups['ovirt_nonmaster_nodes'] }}"
-    - name: Revoke the SSO token
-      no_log: true
-      ovirt_auth:
-        state: absent
-        ovirt_auth: "{{ ovirt_auth }}"
 - name: perform OVN configuration on hosts
   hosts: ovirtnodes
   remote_user: root
   tasks:
     - include: ../common/tasks/setupkeys.yaml
+    - include: ../common/tasks/securessh.yaml
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
@@ -4730,7 +4879,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
       register: vifconf_result
 ...
 EOF
-chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
+chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/ovn.yaml
 
 # Create a custom Jinja2 template for AD-joined Samba configuration
 # TODO: lower log level to 0 general and vfs-glusterfs too
@@ -4876,12 +5025,15 @@ EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/adjoin.yaml
 
 # Create global Ansible playbook for the whole process (Gluster and oVirt)
-# TODO: add creation of vms from scratch (kickstart based installation - not from template) and insert before adjoin step
+# TODO: add provisioning of vms (AD DC, printer server, DB server, application server, firewall/proxy and virtual desktops) from scratch (kickstart based installation - not from template) and insert before adjoin step (to allow for AD DC vm creation)
 cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
 ---
 - include: roles/glusternodes/glusternodes.yaml
 - include: roles/ovirtnodes/ovirtnodes.yaml
 - include: roles/ovirtengine/ovirtengine.yaml
+- include: roles/glusternodes/ctdb.yaml
+- include: roles/ovirtengine/nfsdomains.yaml
+- include: roles/ovirtengine/ovn.yaml
 - include: roles/glusternodes/adjoin.yaml
 ...
 EOF
@@ -4917,7 +5069,6 @@ firewall-offline-cmd --set-log-denied=all
 # Note: clock panel applet under GNOME3 takes all settings from system defaults (location, time format, display etc.)
 
 # Disable autorun for external media
-# TODO: verify under GNOME 3.14 / CentOS 7.2
 cat << EOF > /etc/dconf/db/local.d/01-autorun-settings
 # Custom settings for GNOME autorun
 [org/gnome/desktop/media-handling]
@@ -4926,7 +5077,6 @@ EOF
 chmod 644 /etc/dconf/db/local.d/01-autorun-settings
 
 # Disable switch user
-# TODO: verify under GNOME 3.14 / CentOS 7.2
 cat << EOF > /etc/dconf/db/local.d/01-switchuser-settings
 # Custom settings for GNOME user session switching
 [org/gnome/desktop/lockdown]
@@ -5266,13 +5416,15 @@ if [ -d /tmp/hvp-bind-zones ]; then
 		chgrp 25 /mnt/sysimage/etc/named.conf
 	fi
 	# Reconfigure networking to use localhost DNS
-	nic_cfg_file=$(basename $(ls /tmp/hvp-bind-zones/ifcfg-* 2>/dev/null))
-	if [ -f "/tmp/hvp-bind-zones/${nic_cfg_file}" ]; then
-		sed -i -e '/^PEERDNS/d' -e '/^DNS[0-9]/d' "/etc/sysconfig/network-scripts/${nic_cfg_file}"
-		cat "/tmp/hvp-bind-zones/${nic_cfg_file}" >> "/etc/sysconfig/network-scripts/${nic_cfg_file}"
-		sed -i -e '/^nameserver\s/d' /mnt/sysimage/etc/resolv.conf
-		echo 'nameserver 127.0.0.1' >> /mnt/sysimage/etc/resolv.conf
-	fi
+	for file in /tmp/hvp-bind-zones/ifcfg-* ; do
+		if [ -f "${file}" ]; then
+			nic_cfg_file=$(basename "${file}")
+			sed -i -e '/^PEERDNS/d' -e '/^DNS[0-9]/d' "/mnt/sysimage/etc/sysconfig/network-scripts/${nic_cfg_file}"
+			cat "${file}" >> "/mnt/sysimage/etc/sysconfig/network-scripts/${nic_cfg_file}"
+			sed -i -e '/^nameserver\s/d' /mnt/sysimage/etc/resolv.conf
+			echo 'nameserver 127.0.0.1' >> /mnt/sysimage/etc/resolv.conf
+		fi
+	done
 fi
 
 # Copy dhcpd configuration (generated in pre section above) into installed system
@@ -5298,7 +5450,7 @@ fi
 # Note: the following will overwrite the generic samples mirrored from the HVP official site
 for parameters_file in /tmp/hvp-syslinux-conf/hvp_parameters*.sh ; do
 	if [ -f "${parameters_file}" ]; then
-		cp --backup --suffix .orig ${parameters_file} /mnt/sysimage/var/www/hvp-repos/el7/ks/
+		cp --backup --suffix .orig "${parameters_file}" /mnt/sysimage/var/www/hvp-repos/el7/ks/
 	fi
 done
 chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
@@ -5372,9 +5524,11 @@ done
 
 # TODO: perform NetworkManager workaround configuration on interfaces as detected in pre section above - remove when fixed upstream
 for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
-	cfg_file_name=$(basename ${file})
-	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
-	cat ${file} >> /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
+	if [ -f "${file}" ]; then
+		cfg_file_name=$(basename "${file}")
+		sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' "/mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}"
+		cat "${file}" >> "/mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}"
+	fi
 done
 
 # Save exact pre-stage environment
@@ -5384,7 +5538,7 @@ fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
 cp /run/install/ks.cfg /mnt/sysimage/root/etc
-for full_frag in /tmp/full-* /tmp/kscfg-pre/*.sh ; do
+for full_frag in /tmp/full-* ; do
 	if [ -f "${full_frag}" ]; then
 		cp "${full_frag}" /mnt/sysimage/root/etc
 	fi
