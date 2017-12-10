@@ -3,8 +3,8 @@
 
 # Install with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
-# elevator=deadline ip=nicname:dhcp inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
-# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network - the ip=nicname:dhcp option can be omitted if only the right interface has DHCP available (will be autodetected, albeit with a noticeable delay)
+# elevator=deadline inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
+# Note: DHCP is assumed to be available on one and only one network (the external one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 # Note: alternatively burn this kickstart into your DVD image and append to default commandline:
@@ -1415,7 +1415,9 @@ done
 # Create simple standard menu
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 # Note: to force legacy nic names (ethN) add biosdevname=0 net.ifnames=0
-# TODO: node PXE nic names must either be manually gathered (eg: by booting with the rescue image) and edited below (replacing eth0) or the ip=nicname:dhcp paramters must be removed completely if only the right interface has DHCP available
+# Note: DHCP is assumed to be available on one and only one network (the mgmt one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
+# TODO: node PXE nic names can be manually gathered (eg: by booting with the rescue image)
+
 mkdir -p /tmp/hvp-syslinux-conf
 cat << EOF > /tmp/hvp-syslinux-conf/common.cfg
 DEFAULT menu.c32
@@ -1474,8 +1476,8 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
-	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
@@ -1494,29 +1496,29 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
 LABEL installdb
         MENU LABEL Install Database Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Printserver installation
 LABEL installpr
         MENU LABEL Install Print Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Desktop installation
 LABEL installvd
         MENU LABEL Install Virtual Desktop
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline ip=eth0:dhcp inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
 
 EOF
 # Create common configuration parameters fragment
@@ -1634,7 +1636,7 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
 # Custom defaults for AD DC installation
 
 # Note: when installing further AD DCs you must uncomment the following line
-my_nameserver="${ad_dc_ip}"
+#my_nameserver="${ad_dc_ip}"
 
 # Note: when installing further AD DCs you must provide a different offset
 my_ip_offset="${ad_dc_ip_offset}"
@@ -2399,7 +2401,7 @@ cluster_name: "Default"
 ## Storage
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
-# TODO: use NFS-Ganesha as soon as a proper CTDB-based configuration hac been devised - using internal Gluster-NFS meanwhile
+# TODO: use NFS-Ganesha as soon as a proper CTDB-based configuration has been devised - using internal Gluster-NFS meanwhile
 glusterfs_addr: "{{ groups['gluster_master'] | first }}"
 glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
@@ -2453,7 +2455,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017120901"
+script_version="2017121002"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
