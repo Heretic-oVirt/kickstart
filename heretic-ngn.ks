@@ -4,8 +4,8 @@
 # Install from PXE with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # nomodeset elevator=deadline ip=nicname:dhcp inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
-# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network
-# Note: to force custom/predictable nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: not honored for bond slaves)
+# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network - the ip=nicname:dhcp option can be omitted if only the right interface has DHCP available (will be autodetected, albeit with a noticeable delay)
+# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface (beware: not honored for bond slaves)
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 # Note: alternatively to install from DVD burn this kickstart into your oVirt Node image and append to default commandline:
 # nomodeset elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg hvp_nodeid=[0123]
@@ -68,7 +68,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
-# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file, if specified with the ip=nicname:... option)
+# Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
 install
@@ -135,6 +135,9 @@ for pathdir in $(echo "${PATH}" | sed -e 's/:/ /'); do
 		ls "${pathdir}"/* >> /tmp/pre.out
 	fi
 done
+
+# A simple regex matching IP addresses
+IPregex='[0-9]*[.][0-9]*[.][0-9]*[.][0-9]*'
 
 # A general IP add/subtract function to allow classless subnets +/- offsets
 # Note: derived from https://stackoverflow.com/questions/33056385/increment-ip-address-in-a-shell-script
@@ -325,13 +328,6 @@ local_timezone="UTC"
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
 ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
-ks_custom_frags="hvp_parameters.sh"
-ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
-if [ -f "/sys/class/net/${ks_nic}/address" ]; then
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
-else
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh"
-fi
 if [ -z "${ks_source}" ]; then
 	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
 else
@@ -385,7 +381,7 @@ else
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
-		ks_dev="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
 		ks_fstype="nfs"
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
@@ -393,11 +389,12 @@ else
 			echo "Unable to determine Kickstart source path" 1>&2
 			ks_dev=""
 		else
-			ks_dev="${ks_dev}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dev="${ks_host}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
 			ks_dir="/"
 		fi
 	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
 		# Note: blindly extracting URL from Kickstart commandline
+		ks_host="$(echo ${ks_source} | sed -e 's%^.*//%%' -e 's%/.*$%%')"
 		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
 		ks_fstype="url"
 	else
@@ -406,6 +403,21 @@ else
 	if [ -z "${ks_dev}" ]; then
 		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
 	else
+		ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh"
+		# Note: for network-based kickstart retrieval methods we extract the relevant nic MAC address to get the machine-specific fragment
+		if [ "${ks_fstype}" = "url" -o "${ks_fstype}" = "nfs" ]; then
+			# Note: we detect the nic device name as the one detaining the route towards the host holding the kickstart script
+			# Note: regarding the kickstart host: we assume that if it is not already been given as an IP address then it is a DNS fqdn
+			if ! echo "${ks_host}" | grep -q "${IPregex}" ; then
+				ks_host_ip=$(nslookup "${ks_host}" | tail -n +3 | awk '/^Address/ {print $2}' | head -1)
+			else
+				ks_host_ip="${ks_host}"
+			fi
+			ks_nic=$(ip route get "${ks_host_ip}" | sed -n -e 's/^.*\s\+dev\s\+\(\S\+\)\s\+.*$/\1/p')
+			if [ -f "/sys/class/net/${ks_nic}/address" ]; then
+				ks_custom_frags="${ks_custom_frags} hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
+			fi
+		fi
 		if [ "${ks_fstype}" = "url" ]; then
 			for custom_frag in ${ks_custom_frags} ; do
 				echo "Attempting network retrieval of ${ks_dev}/${custom_frag}" 1>&2
@@ -426,20 +438,22 @@ fi
 # Load any configuration fragment found, in the proper order
 # Note: configuration-fragment defaults will override hardcoded defaults
 # Note: commandline parameters will override configuration-fragment and hardcoded defaults
-# Note: configuration fragments get executed will full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+# Note: configuration fragments get executed with full privileges and no further controls beside a bare syntax check: obvious security implications must be taken care of (use HTTPS for network-retrieved kickstart and fragments)
+pushd /tmp/kscfg-pre
 for custom_frag in ${ks_custom_frags} ; do
-	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+	if [ -f "${custom_frag}" ]; then
 		# Perform a configuration fragment sanity check before loading
-		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		bash -n "${custom_frag}" > /dev/null 2>&1
 		res=$?
 		if [ ${res} -ne 0 ]; then
 			# Report invalid configuration fragment and skip it
 			logger -s -p "local7.err" -t "kickstart-pre" "Skipping invalid remote configuration fragment ${custom_frag}"
 			continue
 		fi
-		source "/tmp/kscfg-pre/${custom_frag}"
+		source "./${custom_frag}"
 	fi
 done
+popd
 
 # TODO: perform better consistency check on all commandline-given parameters
 
@@ -661,6 +675,7 @@ for zone in "${!network[@]}" ; do
 				if [ "${zone}" = "gluster" ]; then
 					bondopts["${zone}"]="mode=balance-rr;miimon=100"
 				else
+					echo "Unsupported bonding mode (${given_network_bondmode}) for zone ${zone} - forcing activepassive" 1>&2
 					bondopts["${zone}"]="mode=active-backup;miimon=10"
 				fi
 				;;
@@ -673,6 +688,7 @@ for zone in "${!network[@]}" ; do
 				;;
 			*)
 				# In case of unrecognized mode force activepassive
+				echo "Unrecognized bonding mode (${given_network_bondmode}) for zone ${zone} - forcing activepassive" 1>&2
 				bondopts["${zone}"]="mode=active-backup;miimon=100"
 				;;
 		esac
@@ -951,6 +967,14 @@ timezone ${local_timezone} --isUtc
 EOF
 
 # Create disk setup fragment
+# Note: all sizes in MiB except for data_block_size which is in KiB
+data_dev_size=$((${device_size} / 1024 / 1024))
+data_block_size="2048"
+min_metadata_size="3072"
+metadata_size=$((48 * ${data_dev_size} / ${data_block_size} / 1024))
+if [ "${metadata_size}" -lt "${min_metadata_size}" ]; then
+	metadata_size="${min_metadata_size}"
+fi
 cat << EOF > /tmp/full-disk
 # oVirt Node hyperconverged disk configuration: there will surely be multiple SCSI/SATA disks but only one will be used for OS
 # Initialize partition table (GPT) on all available disks
@@ -973,7 +997,7 @@ volgroup HostVG pv.01 --reserved-percent=5
 # Define swap space
 logvol swap --vgname=HostVG --name=swap --fstype=swap --recommended
 # Define thin provisioned LVs
-logvol none --vgname=HostVG --name=HostPool --thinpool --size=48000 --grow
+logvol none --vgname=HostVG --name=HostPool --thinpool --size=48000 --metadatasize=${metadata_size} --chunksize=${data_block_size} --grow
 # Note: ext4 is required for oVirt Node by imgbased software
 logvol / --vgname=HostVG --name=root --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=6000 --grow
 logvol /var --vgname=HostVG --name=var --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=20000
@@ -1510,11 +1534,12 @@ popd
 
 # Post-installation script (run with bash from installation image at the end of installation)
 %post --nochroot
+
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
 for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${custom_frag}" ]; then
-		mkdir -p /mnt/sysimage/tmp/kscfg-pre
-		cp "${custom_frag}" /mnt/sysimage/tmp/kscfg-pre/
+		mkdir -p /mnt/sysimage/root/etc/kscfg-pre
+		cp "${custom_frag}" /mnt/sysimage/root/etc/kscfg-pre/
 	fi
 done
 
@@ -1525,7 +1550,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017111402"
+script_version="2017120807"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1549,37 +1574,38 @@ hostname ${HOSTNAME}
 # Set the homedir for apps that need it
 export HOME="/root"
 
-# Hardcoded defaults
+# Define associative arrays
+declare -A node_name
+declare -A network netmask network_base bondopts mtu
+declare -A domain_name
+declare -A reverse_domain_name
+declare -A test_ip
+declare -A bridge_name
 
-unset nicmacfix
+# Hardcoded defaults
 unset my_index
 unset master_index
-
+unset nicmacfix
 master_index="0"
-
 nicmacfix="false"
 
 # Load configuration parameters files (generated in pre section above)
-ks_custom_frags="hvp_parameters.sh"
-ks_nic="$(cat /proc/cmdline | sed -e 's/^.*\s*ip=\([^:]*\):.*$/\1/')"
-if [ -f "/sys/class/net/${ks_nic}/address" ]; then
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh hvp_parameters_$(cat /sys/class/net/${ks_nic}/address).sh"
-else
-	ks_custom_frags="${ks_custom_frags} hvp_parameters_heretic_ngn.sh"
-fi
+ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_*:*.sh"
+pushd /root/etc/kscfg-pre
 for custom_frag in ${ks_custom_frags} ; do
-	if [ -f "/tmp/kscfg-pre/${custom_frag}" ]; then
+	if [ -f "${custom_frag}" ]; then
 		# Perform a configuration fragment sanity check before loading
-		bash -n "/tmp/kscfg-pre/${custom_frag}" > /dev/null 2>&1
+		bash -n "${custom_frag}" > /dev/null 2>&1
 		res=$?
 		if [ ${res} -ne 0 ]; then
 			# Report invalid configuration fragment and skip it
 			logger -s -p "local7.err" -t "kickstart-post" "Skipping invalid remote configuration fragment ${custom_frag}"
 			continue
 		fi
-		source "/tmp/kscfg-pre/${custom_frag}"
+		source "./${custom_frag}"
 	fi
 done
+popd
 
 # Determine choice of nic MAC fixed assignment
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
@@ -1639,18 +1665,30 @@ fi
 yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
-yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-gluster
+yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
 yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
 
 # Install further packages for additional functions: Ansible automation
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles
+# TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
 
 # TODO: Decide which part to configure here and which part to demand to Ansible
+
+# TODO: nodectl profile fragments have uncommon permissions - remove when fixed upstream
+chmod 644 /etc/profile.d/nodectl-*
+# TODO: nodectl active login messages are an overhead on each logon (think of Ansible via SSH) so we disable them - remove when fixed upstream
+rename .sh .sh.disabled /etc/profile.d/nodectl-*
+# TODO: a static workaround does not work
+#cat << EOF > /etc/cron.d/nodectl-motd
+#@reboot root /sbin/nodectl motd > /etc/motd 2>&1 ; /sbin/nodectl generate-banner >> /etc/motd 2>&1
+#*/10 * * * * root /sbin/nodectl motd > /etc/motd 2>&1 ; /sbin/nodectl generate-banner >> /etc/motd 2>&1
+#EOF
+#chmod 644 /etc/cron.d/nodectl-motd
 
 # Configure legal warning messages
 cat << EOF > /etc/issue
@@ -1819,12 +1857,13 @@ chmod 755 /etc/ctdb/events.d/60.glusternfs
 mkdir -p /etc/selinux/local
 cat << EOF > /etc/selinux/local/myglusternfsctdb.te
  
-module myglusternfsctdb 1.0;
+module myglusternfsctdb 5.0;
  
 require {
         type portmap_port_t;
         type nfs_port_t;
         class tcp_socket name_bind;
+        class netlink_tcpdiag_socket {create setopt bind getattr};
 	type rpcd_unit_file_t;
 	type systemd_unit_file_t;
 	type ctdbd_t;
@@ -1836,6 +1875,7 @@ allow ctdbd_t rpcd_unit_file_t:service status;
 allow ctdbd_t systemd_unit_file_t:service status;
 allow ctdbd_t nfs_port_t:tcp_socket name_bind;
 allow ctdbd_t portmap_port_t:tcp_socket name_bind;
+allow ctdbd_t self:netlink_tcpdiag_socket {create setopt bind getattr};
 EOF
 chmod 644 /etc/selinux/local/myglusternfsctdb.te
 
@@ -1919,11 +1959,11 @@ chmod 644 /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
 # TODO: remove when supported explicitly in systemd
 cat << EOF > /etc/systemd/system/cgroup-rt-bandwidth.service
 [Unit]
-Description=Set apart RT bandwidth in cgroup hierarchy
+Description=Set apart RT bandwidth for storage uses in cgroup hierarchy
 Before=ctdb.service multi-user.target
 
 [Service]
-ExecStart=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/gluster.slice/cpu.rt_runtime_us'
+ExecStart=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/cpu.rt_runtime_us'
 
 [Install]
 WantedBy=ctdb.service multi-user.target
@@ -1969,6 +2009,32 @@ chmod 644 /etc/samba/smbusers
 #
 #EOF
 #chmod 644 /etc/security/limits.d/10-smb.conf
+
+# Add SELinux support for Samba access to FUSE-mounte GlusterFS-based shared lock area
+# TODO: remove when included upstream
+setsebool samba_share_fusefs on
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myglustersmb.te
+
+module myglustersmb 1.0;
+
+require {
+	type fusefs_t;
+	type smbd_t;
+	class sock_file create;
+}
+
+#============= smbd_t ==============
+
+allow smbd_t fusefs_t:sock_file create;
+EOF
+chmod 644 /etc/selinux/local/myglustersmb.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myglustersmb.mod myglustersmb.te
+semodule_package -o myglustersmb.pp -m myglustersmb.mod
+semodule -i myglustersmb.pp
+popd
 
 # Disable Samba services (will be managed by CTDB anyway)
 for service in smb nmb winbind; do
@@ -2296,7 +2362,7 @@ fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
 cp /run/install/ks.cfg /mnt/sysimage/root/etc
-for full_frag in /tmp/full-* /tmp/kscfg-pre/*.sh ; do
+for full_frag in /tmp/full-* ; do
 	if [ -f "${full_frag}" ]; then
 		cp "${full_frag}" /mnt/sysimage/root/etc
 	fi
