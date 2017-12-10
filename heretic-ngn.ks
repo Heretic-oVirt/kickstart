@@ -3,8 +3,8 @@
 
 # Install from PXE with commandline (see below for comments):
 # TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
-# nomodeset elevator=deadline ip=nicname:dhcp inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
-# Note: nicname is the name of the network interface to be used for installation (eg: ens32) - DHCP is assumed available on that network - the ip=nicname:dhcp option can be omitted if only the right interface has DHCP available (will be autodetected, albeit with a noticeable delay)
+# nomodeset elevator=deadline inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
+# Note: DHCP is assumed to be available on one and only one network (the mgmt one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface (beware: not honored for bond slaves)
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 # Note: alternatively to install from DVD burn this kickstart into your oVirt Node image and append to default commandline:
@@ -1550,7 +1550,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017120807"
+script_version="2017121002"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
