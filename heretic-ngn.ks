@@ -1549,9 +1549,9 @@ popd
 %post --nochroot
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
+mkdir -p /mnt/sysimage/root/etc/kscfg-pre
 for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${custom_frag}" ]; then
-		mkdir -p /mnt/sysimage/root/etc/kscfg-pre
 		cp "${custom_frag}" /mnt/sysimage/root/etc/kscfg-pre/
 	fi
 done
@@ -1563,7 +1563,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121003"
+script_version="2017121004"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
