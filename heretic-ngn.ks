@@ -27,6 +27,7 @@
 # Note: to force custom node count add hvp_nodecount=N where N is the number of nodes in the cluster
 # Note: to force custom master node identity add hvp_masternodeid=Y where Y is the master node index
 # Note: to force custom node naming add hvp_nodename=nodename0,nodename1,nodename2,nodename3 where nodenameN are the unqualified (ie without domain name part) hostnames
+# Note: to force custom installer naming add hvp_installername=myinstallername where myinstallername is the unqualified (ie without domain name part) hostname of the installer management interface
 # Note: to force custom switch naming add hvp_switchname=myswitchname where myswitchname is the unqualified (ie without domain name part) hostname of the switch management interface
 # Note: to force custom engine naming add hvp_enginename=myenginename where myenginename is the unqualified (ie without domain name part) hostname of the Engine
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
@@ -56,6 +57,7 @@
 # Note: the default node count is 3
 # Note: the default master node id is assumed to be 0
 # Note: the default node naming uses "My Little Pony" character names {pinkiepie,applejack,rarity,fluttershy} for node ids {0,1,2,3} and nodeN for further ones
+# Note: the default installer naming uses the "My Little Pony" character name twilight for the switch
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
@@ -197,6 +199,7 @@ unset test_ip
 unset test_ip_offset
 unset switch_ip
 unset switch_ip_offset
+unset installer_name
 unset switch_name
 unset engine_name
 unset storage_name
@@ -230,6 +233,8 @@ node_name[0]="pinkiepie"
 node_name[1]="applejack"
 node_name[2]="rarity"
 node_name[3]="fluttershy"
+
+installer_name="twilight"
 
 switch_name="scootaloo"
 
@@ -556,6 +561,12 @@ for name in $(echo "${given_names}" | sed -e 's/,/ /g'); do
 	fi
 done
 my_name="${node_name[${my_index}]}"
+
+# Determine installer name
+given_installer_name=$(sed -n -e 's/^.*hvp_installername=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_installer_name}" | grep -q '^[-[:alnum:]]\+$' ; then
+	installer_name="${given_installer_name}"
+fi
 
 # Determine switch name
 given_switch_name=$(sed -n -e 's/^.*hvp_switchname=\(\S*\).*$/\1/p' /proc/cmdline)
@@ -1038,9 +1049,10 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		; Names for static addresses assigned to our virtual/physical machines
 		
 		EOF
-		# Note: switch, engine and BMCs are connected only on the MGMT network
+		# Note: installer, switch, engine and BMCs are connected only on the MGMT network
 		if [ "${zone}" = "mgmt" ]; then
 			cat <<- EOF >> ${domain_name[${zone}]}.db
+			${installer_name}	A	${test_ip[${zone}]}
 			${switch_name}		A	${switch_ip}
 			${engine_name}		A	${engine_ip}
 			EOF
@@ -1079,9 +1091,10 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		; Static addresses assigned to our virtual/physical machines
 		
 		EOF
-		# Note: switch, engine and BMCs are connected only on the MGMT network
+		# Note: installer, switch, engine and BMCs are connected only on the MGMT network
 		if [ "${zone}" = "mgmt" ]; then
 			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+			$(echo ${test_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${installer_name}.${domain_name[${zone}]}.
 			$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
 			$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
 			EOF
@@ -1550,7 +1563,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121002"
+script_version="2017121003"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
