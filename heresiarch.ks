@@ -1476,7 +1476,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -1528,6 +1528,8 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
 nicmacfix="${nicmacfix}"
 
 default_node_count="${node_count}"
+
+installer_name="${my_name}"
 
 switch_name="${switch_name}"
 
@@ -1641,6 +1643,8 @@ sysvolrepl_password="${sysvolrepl_password}"
 my_ip_offset="${ad_dc_ip_offset}"
 
 my_name="${ad_dc_name}"
+
+my_forwarders=$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 
 # Note: when installing further AD DCs you must change the following option to true
 domain_join="false"
@@ -2463,7 +2467,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121003"
+script_version="2017121004"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
