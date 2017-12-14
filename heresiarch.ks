@@ -2468,7 +2468,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121005"
+script_version="2017121401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3695,10 +3695,11 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy.j2
 #file=/usr/share/gdeploy/scripts/grafton-sanity-check.sh -h {{ groups['glusternodes'] | join(',') }}
 #ignore_script_errors=no
 
-# Disable multipath
+# Blacklist devices in multipath.conf
 [script2]
 action=execute
-file=/usr/share/gdeploy/scripts/disable-multipath.sh
+file=/usr/share/gdeploy/scripts/blacklist_all_disks.sh
+ignore_script_errors=no
 
 # Disable hooks
 [script3]
@@ -4193,6 +4194,7 @@ services=glusterfs
 
 # Gluster volume definitions
 # TODO: add support for more than 3 nodes (replicated+distributed volumes)
+# Note: shard block size lowered from 512 mib to 64 MiB as per https://bugzilla.redhat.com/show_bug.cgi?id=1468969
 
 [volume1]
 action=create
@@ -4203,7 +4205,7 @@ replica_count=3
 arbiter_count=1
 force=yes
 key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
-value=virt,36,36,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on
+value=virt,36,36,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on
 brick_dirs=/gluster_bricks/enginedomain/brick1/brick
 ignore_volume_errors=no
 
@@ -4216,7 +4218,7 @@ replica_count=3
 arbiter_count=1
 force=yes
 key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
-value=virt,36,36,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on
+value=virt,36,36,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on
 brick_dirs=/gluster_bricks/vmstoredomain/brick1/brick
 ignore_volume_errors=no
 
@@ -4230,7 +4232,7 @@ arbiter_count=1
 force=yes
 # TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
 key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops,nfs.disable
-value=virt,36,36,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on,off
+value=virt,36,36,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on,off
 brick_dirs=/gluster_bricks/isodomain/brick1/brick
 ignore_volume_errors=no
 
@@ -4255,7 +4257,7 @@ replica_count=3
 arbiter_count=1
 force=yes
 key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
-value=metadata-cache,0,0,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on
+value=metadata-cache,0,0,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on
 brick_dirs=/gluster_bricks/winshare/brick1/brick
 ignore_volume_errors=no
 
@@ -4269,7 +4271,7 @@ arbiter_count=1
 force=yes
 # TODO: use NFS-Ganesha as soon as it is available - using internal Gluster-NFS meanwhile
 key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops,nfs.disable
-value=metadata-cache,0,0,on,512MB,32,full,granular,10000,8,10,off,on,off,on,on,off
+value=metadata-cache,0,0,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on,off
 brick_dirs=/gluster_bricks/unixshare/brick1/brick
 ignore_volume_errors=no
 EOF
