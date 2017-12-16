@@ -11,7 +11,7 @@
 # elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing/configuring local virtualization support irrespective of hardware capabilities add hvp_novirt
-# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest (default)
+# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest (default), last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom host naming add hvp_myname=myhostname where myhostname is the unqualified (ie without domain name part) hostname
 # Note: to force custom addressing add hvp_{external,mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the machine IP or the network address on the given network and yy is the prefix on the given network
@@ -26,6 +26,7 @@
 # Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
 # Note: to force custom AD DC naming add hvp_dcname=mydcname where mydcname is the unqualified (ie without domain name part) hostname of the AD DC
 # Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird or sqlserver)
+# Note: to force custom desktop type add hvp_detype=eeee where eeee is the desktop type (either gnome, kde, xfce or lxde)
 # Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the AD network
 # Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
 # Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the AD network
@@ -61,8 +62,8 @@
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default host naming uses the "My Little Pony" character name twilight
 # Note: the default addressing on connected networks is assumed to be 172.20.{10,11,12,13}.1/24 on {mgmt,gluster,lan,internal} and DHCP-provided on external
-# Note: the default node bonding mode is assumed to be activepassive on mgmt (if there are separate gluster and lan, otherwise lacp) and lacp on {lan,gluster,internal}
-# Note: the default MTU is assumed to be 1500 on {external,mgmt,lan} and 9000 on {gluster,internal}
+# Note: the default node bonding mode is assumed to be activepassive on {mgmt,lan,gluster,internal}
+# Note: the default MTU is assumed to be 1500 on {external,mgmt,lan,gluster,internal}
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default machine IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default domain names are assumed to be {external,mgmt,gluster,lan,internal}.private
@@ -72,6 +73,7 @@
 # Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
 # Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
 # Note: the default database type is postgresql
+# Note: the default desktop type is gnome
 # Note: the default DB server IP on the AD network is assumed to be the AD network address plus 230
 # Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
 # Note: the default print server IP on the AD network is assumed to be the AD network address plus 250
@@ -322,6 +324,7 @@ unset db_ip
 unset db_ip_offset
 unset db_name
 unset dbtype
+unset detype
 unset pr_ip
 unset pr_ip_offset
 unset pr_name
@@ -361,7 +364,7 @@ nicmacfix="false"
 
 nolocalvirt="false"
 
-default_nodeosdisk="last-smallest"
+default_nodeosdisk="smallest"
 
 default_node_count="3"
 
@@ -431,18 +434,18 @@ mtu['mgmt']="1500"
 network['gluster']="172.20.11.0"
 netmask['gluster']="255.255.255.0"
 network_base['gluster']="172.20.11"
-bondmode['gluster']="lacp"
-mtu['gluster']="9000"
+bondmode['gluster']="activepassive"
+mtu['gluster']="1500"
 network['lan']="172.20.12.0"
 netmask['lan']="255.255.255.0"
 network_base['lan']="172.20.12"
-bondmode['lan']="lacp"
+bondmode['lan']="activepassive"
 mtu['lan']="1500"
 network['internal']="172.20.13.0"
 netmask['internal']="255.255.255.0"
 network_base['internal']="172.20.13"
-bondmode['internal']="lacp"
-mtu['internal']="9000"
+bondmode['internal']="activepassive"
+mtu['internal']="1500"
 
 declare -A domain_name
 domain_name['external']="external.private"
@@ -471,6 +474,8 @@ db_ip_offset="230"
 db_name="bigmcintosh"
 
 dbtype="postgresql"
+
+detype="gnome"
 
 pr_ip_offset="250"
 
@@ -834,6 +839,14 @@ case "${given_dbtype}" in
 		;;
 esac
 
+# Determine desktop type
+given_detype=$(sed -n -e 's/^.*hvp_detype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_detype}" in
+	gnome|kde|xfce|lxde)
+		detype="${given_detype}"
+		;;
+esac
+
 # Determine nameserver address
 given_nameserver=$(sed -n -e "s/^.*hvp_nameserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_nameserver}" ]; then
@@ -1036,17 +1049,18 @@ for zone in "${!network[@]}" ; do
 	fi
 done
 
-# Adapt bonding mode to network setup
+# TODO: Adapt bonding mode to network setup
+# TODO: disabled for maximum compatibility (LACP needs switch support)
 # Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
-if [ -z "${bondopts['mgmt']}" ]; then
-	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
-		bondopts['mgmt']="mode=active-backup;miimon=100"
-		bondmode['mgmt']="activepassive"
-	else
-		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
-		bondmode['mgmt']="lacp"
-	fi
-fi
+#if [ -z "${bondopts['mgmt']}" ]; then
+#	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
+#		bondopts['mgmt']="mode=active-backup;miimon=100"
+#		bondmode['mgmt']="activepassive"
+#	else
+#		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+#		bondmode['mgmt']="lacp"
+#	fi
+#fi
 
 # Derive missing bondopts from bonding mode indications
 # Note: used only for node configuration parameters file generation below
@@ -1517,7 +1531,7 @@ LABEL installpr
 LABEL installvd
         MENU LABEL Install Virtual Desktop
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_detype=${detype} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
 
 EOF
@@ -1693,6 +1707,8 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_vd.sh
 # Custom defaults for virtual desktop installation
 
 my_ip_offset="${vd_ip_offset}"
+
+detype="${detype}"
 
 my_name="${vd_name}"
 
@@ -2468,7 +2484,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121401"
+script_version="2017121501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3734,7 +3750,7 @@ yes
 #  the arbiter-only node will use only one suitable disk/PV/VG (the first smallest) for all arbiter (thin 10 GiB) LVs
 #  find the minimum number of suitable disks-per-node available among all active (non arbiter-only) nodes
 #   if it is one then all LVs will be in one single VG on that single PV disk
-#   if it is two then all oVirt LVs will be in one VG (PV: the last smaller disk) and the CTDB/share LVs on the other VG (PV: the first bigger disk)
+#   if it is two then all oVirt LVs will be in one VG (PV: the last smallest disk) and the CTDB/share LVs on the other VG (PV: the first bigger disk)
 #   if it is three then CTDB/share LVs will be in one VG (PV: the first biggest disk), the enginedomain/isodomain LVs on another VG (PV: the last smallest disk) and the vmstoredomain LV will be in the other VG (PV: the first remaining disk excluding those already selected)
 #  suitable disks exceeding the number of three-per-node will be left unused (but which disks get used will be decided according to the rules detailed above)
 
@@ -4194,7 +4210,7 @@ services=glusterfs
 
 # Gluster volume definitions
 # TODO: add support for more than 3 nodes (replicated+distributed volumes)
-# Note: shard block size lowered from 512 mib to 64 MiB as per https://bugzilla.redhat.com/show_bug.cgi?id=1468969
+# Note: shard block size lowered from 512 MiB to 64 MiB as per https://bugzilla.redhat.com/show_bug.cgi?id=1468969
 
 [volume1]
 action=create
