@@ -5,7 +5,7 @@ nicmacfix="false"
 
 nolocalvirt="false"
 
-default_nodeosdisk="last-smallest"
+default_nodeosdisk="smallest"
 
 default_node_count="3"
 
@@ -54,16 +54,16 @@ bondmode['mgmt']="activepassive"
 mtu['mgmt']="1500"
 network['gluster']="172.20.11.0"
 netmask['gluster']="255.255.255.0"
-bondmode['gluster']="lacp"
-mtu['gluster']="9000"
+bondmode['gluster']="activepassive"
+mtu['gluster']="1500"
 network['lan']="172.20.12.0"
 netmask['lan']="255.255.255.0"
-bondmode['lan']="lacp"
+bondmode['lan']="activepassive"
 mtu['lan']="1500"
 network['internal']="172.20.13.0"
 netmask['internal']="255.255.255.0"
-bondmode['internal']="lacp"
-mtu['internal']="9000"
+bondmode['internal']="activepassive"
+mtu['internal']="1500"
 
 # Note: reverse_domain_name values are derived automatically anyway
 domain_name['external']="external.private"
@@ -91,6 +91,8 @@ pr_name="rainbowdash"
 vd_ip_offset="240"
 
 vd_name="grannysmith"
+
+detype="gnome"
 
 my_nameserver="dhcp"
 
