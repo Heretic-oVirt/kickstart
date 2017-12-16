@@ -10,7 +10,7 @@
 # Note: alternatively to install from DVD burn this kickstart into your oVirt Node image and append to default commandline:
 # nomodeset elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg hvp_nodeid=[0123]
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
-# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest (default)
+# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest (default), last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
 # Note: to force custom addressing add hvp_{mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the node IP or the network address on the given network and yy is the prefix on the given network - other node addresses will count up and down from current node IP
@@ -44,8 +44,8 @@
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default node id is assumed to be 0
 # Note: the default addressing on connected networks is assumed to be 172.20.{10,11,12,13}.0/24 on {mgmt,gluster,lan,internal} respectively with nodes addresses starting from 10 (adding node id)
-# Note: the default node bonding mode is assumed to be activepassive on mgmt (if there are separate gluster and lan, otherwise lacp) and lacp on {lan,gluster,internal}
-# Note: the default MTU is assumed to be 1500 on {mgmt,lan} and 9000 on {gluster,internal}
+# Note: the default node bonding mode is assumed to be activepassive on {mgmt,lan,gluster,internal}
+# Note: the default MTU is assumed to be 1500 on {mgmt,lan,gluster,internal}
 # Note: the default test IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default domain names are assumed to be {mgmt,gluster,lan,internal}.private
@@ -222,7 +222,7 @@ unset local_timezone
 
 nicmacfix="false"
 
-default_nodeosdisk="last-smallest"
+default_nodeosdisk="smallest"
 
 default_node_count="3"
 
@@ -279,18 +279,18 @@ mtu['mgmt']="1500"
 network['gluster']="172.20.11.0"
 netmask['gluster']="255.255.255.0"
 network_base['gluster']="172.20.11"
-bondopts['gluster']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
-mtu['gluster']="9000"
+bondopts['gluster']="mode=active-backup;miimon=100"
+mtu['gluster']="1500"
 network['lan']="172.20.12.0"
 netmask['lan']="255.255.255.0"
 network_base['lan']="172.20.12"
-bondopts['lan']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+bondopts['lan']="mode=active-backup;miimon=100"
 mtu['lan']="1500"
 network['internal']="172.20.13.0"
 netmask['internal']="255.255.255.0"
 network_base['internal']="172.20.13"
-bondopts['internal']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
-mtu['internal']="9000"
+bondopts['internal']="mode=active-backup;miimon=100"
+mtu['internal']="1500"
 
 declare -A domain_name
 domain_name['mgmt']="mgmt.private"
@@ -490,14 +490,14 @@ else
 		*)
 			# Note: we allow for choosing either the first smallest device (default, if only "smallest" has been indicated) or the last one
 			case "${given_nodeosdisk}" in
-				smallest)
-					# If we want the first of the smallests then change the selected device only if the size is strictly smaller
-					comparison_logic="-lt"
-					;;
-				*)
-					# In case of unrecognized/unsupported indication use last-smallest as default choice
+				last-smallest)
 					# If we want the last of the smallests then keep changing selected device even for the same size
 					comparison_logic="-le"
+					;;
+				*)
+					# In case of unrecognized/unsupported indication use smallest as default choice
+					# If we want the first of the smallests then change the selected device only if the size is strictly smaller
+					comparison_logic="-lt"
 					;;
 			esac
 			device_name=""
@@ -827,15 +827,16 @@ for zone in "${!network[@]}" ; do
 	fi
 done
 
-# Adapt bonding mode to network setup
+# TODO: Adapt bonding mode to network setup
+# TODO: disabled for maximum compatibility (LACP needs switch support)
 # Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
-if [ "${fixed_mgmt_bondmode}" = "false" ]; then
-	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
-		bondopts['mgmt']="mode=active-backup;miimon=100"
-	else
-		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
-	fi
-fi
+#if [ "${fixed_mgmt_bondmode}" = "false" ]; then
+#	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
+#		bondopts['mgmt']="mode=active-backup;miimon=100"
+#	else
+#		bondopts['mgmt']="mode=802.3ad;xmit_hash_policy=layer2+3;miimon=100"
+#	fi
+#fi
 
 # Determine network segment identity
 if [ -n "${nics['gluster']}" ]; then
@@ -1563,7 +1564,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121004"
+script_version="2017121502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
