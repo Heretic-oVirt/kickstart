@@ -65,6 +65,11 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+bridge_name['mgmt']="ovirtmgmt"
+bridge_name['gluster']=""
+bridge_name['lan']="lan"
+bridge_name['internal']="internal"
+
 ad_subdomain_prefix="ad"
 
 ad_dc_ip_offset="220"
