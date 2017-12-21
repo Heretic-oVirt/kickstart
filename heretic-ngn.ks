@@ -10,7 +10,8 @@
 # Note: alternatively to install from DVD burn this kickstart into your oVirt Node image and append to default commandline:
 # nomodeset elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg hvp_nodeid=[0123]
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
-# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest (default), last-smallest
+# Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
+# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
 # Note: to force custom addressing add hvp_{mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the node IP or the network address on the given network and yy is the prefix on the given network - other node addresses will count up and down from current node IP
@@ -19,6 +20,7 @@
 # Note: to force custom network MTU add hvp_{mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom network bridge naming add hvp_{mgmt,gluster,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
 # Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
 # Note: to force custom nameserver IP (during installation) add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
@@ -40,7 +42,8 @@
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
-# Note: the default node OS disk is sda
+# Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
+# Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default node id is assumed to be 0
 # Note: the default addressing on connected networks is assumed to be 172.20.{10,11,12,13}.0/24 on {mgmt,gluster,lan,internal} respectively with nodes addresses starting from 10 (adding node id)
@@ -49,6 +52,7 @@
 # Note: the default test IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default domain names are assumed to be {mgmt,gluster,lan,internal}.private
+# Note: the default bridge names are assumed to be {ovirtmgmt,,lan,internal}
 # Note: the default AD subdomain name is assumed to be ad
 # Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
 # Note: the default nameserver IP is assumed to be 8.8.8.8 during installation (afterwards it will be switched to 127.0.0.1 unconditionally)
@@ -65,7 +69,7 @@
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
 # Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
-# Note: the default root user password is hvpdemo
+# Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
 # Note: the default keyboard layout is us
@@ -180,6 +184,7 @@ fi
 # Define all cluster default network data
 # Note: engine-related data will only be used for automatic DNS zones configuration
 unset nicmacfix
+unset orthodox_mode
 unset node_count
 unset network
 unset netmask
@@ -221,6 +226,8 @@ unset local_timezone
 # Hardcoded defaults
 
 nicmacfix="false"
+
+orthodox_mode="false"
 
 default_nodeosdisk="smallest"
 
@@ -304,6 +311,12 @@ reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
 reverse_domain_name['lan']="12.20.172.in-addr.arpa"
 reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
+declare -A bridge_name
+bridge_name['mgmt']="ovirtmgmt"
+bridge_name['gluster']=""
+bridge_name['lan']="lan"
+bridge_name['internal']="internal"
+
 ad_subdomain_prefix="ad"
 
 ad_dc_ip_offset="220"
@@ -311,18 +324,11 @@ ad_dc_ip_offset="220"
 declare -A test_ip
 # Note: default values for test_ip derived below - defined here to allow loading as configuration parameters
 
-# TODO: make the following configurable from commandline
-declare -A bridge_name
-bridge_name['mgmt']="ovirtmgmt"
-bridge_name['gluster']=""
-bridge_name['lan']="lan"
-bridge_name['internal']="internal"
-
 my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
 
-root_password="hvpdemo"
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
@@ -467,11 +473,16 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
-# Determine OS disk choice
+# Determine choice of skipping custom packages intallation
+if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
+	orthodox_mode="true"
+fi
+
+# Determine node OS disk choice
 given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
 # Note: we want the devices list alphabetically ordered anyway
 all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
-# No indication on OS disk choice: use default choice
+# No indication on node OS disk choice: use default choice
 if [ -z "${given_nodeosdisk}" ]; then
 	given_nodeosdisk="${default_nodeosdisk}"
 fi
@@ -666,6 +677,14 @@ for zone in "${!network[@]}" ; do
 	given_network_domain_name=$(sed -n -e "s/^.*hvp_${zone}_domainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
+	fi
+	given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_network_bridge_name}" ]; then
+		bridge_name["${zone}"]="${given_network_bridge_name}"
+		# Correctly detect an empty (disabled) bridge name
+		if [ "${bridge_name[${zone}]}" = '""' -o "${bridge_name[${zone}]}" = "''" ]; then
+			bridge_name["${zone}"]=""
+		fi
 	fi
 	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_mtu}" ]; then
@@ -992,7 +1011,7 @@ cat << EOF > /tmp/full-disk
 # Initialize partition table (GPT) on all available disks
 clearpart --all --initlabel --disklabel=gpt
 # Bootloader placed on MBR, with 3 seconds waiting, with password protection, disabling high res text console, disabling CPU C-states and with I/O scheduler optimized for a virtualization/storage server
-bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomodeset elevator=deadline processor.max_cstate=1 intel_idle.max_cstate=0"
+bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomodeset processor.max_cstate=1 intel_idle.max_cstate=0"
 # Ignore further disks
 # Note: further disks will be used as bricks later on
 ignoredisk --only-use=${device_name}
@@ -1270,6 +1289,7 @@ view "localhost_resolver"
         };
 
         // These are your "authoritative" internal zones :
+
         zone "${ad_zone}" IN {
                 type slave;
                 masters { ${ad_dc_ip}; };
@@ -1321,6 +1341,7 @@ view "internal"
 
         // These are your "authoritative" internal zones, and would probably
         // also be included in the "localhost_resolver" view above :
+
         zone "${ad_zone}" IN {
                 type slave;
                 masters { ${ad_dc_ip}; };
@@ -1564,7 +1585,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121502"
+script_version="2017122004"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1600,8 +1621,11 @@ declare -A bridge_name
 unset my_index
 unset master_index
 unset nicmacfix
+unset orthodox_mode
+
 master_index="0"
 nicmacfix="false"
+orthodox_mode="false"
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_*:*.sh"
@@ -1626,6 +1650,11 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
+# Determine choice of skipping custom packages intallation
+if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
+	orthodox_mode="true"
+fi
+
 # Determine cluster member identity
 my_index=$(sed -n -e 's/^.*hvp_nodeid=\(\S*\).*$/\1/p' /proc/cmdline)
 if ! echo "${my_index}" | grep -q '^[[:digit:]]\+$' ; then
@@ -1644,31 +1673,66 @@ fi
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
-# TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
-sed -i -e '/^mirrorlist=/s/^/#/g' -e '/^#baseurl=/s/^#//g' /etc/yum.repos.d/CentOS-Base.repo
+# Add HVP custom repo
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
+wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+chmod 644 /etc/yum.repos.d/HVP.repo
+
+# Add YUM priorities plugin
+yum -y --enablerepo extras install yum-plugin-priorities
+
+# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
+if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-opensvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-opensvswitch-rebuild.priority=50' > /dev/null
+fi
 
 # Enable EPEL
+# TODO: add haveged to include list in already provided EPEL repo and remove this
 yum -y --enablerepo extras install epel-release
 # Limit EPEL as per oVirt recommendations
 yum-config-manager --save --setopt='epel.exclude=collectd*' > /dev/null
+
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
-sed -i -e '/^mirrorlist=/s/^/#/g' -e '/^#baseurl=/s/^#//g' /etc/yum.repos.d/epel.repo
+# TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
+for repofile in /etc/yum.repos.d/*.repo; do
+	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+		sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+	fi
+done
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Add HVP custom repo
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
-wget -P /etc/yum.repos.d https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-chmod 644 /etc/yum.repos.d/HVP.repo
+# Install Memtest86+
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install memtest86+
+
+# Install MCE logging/management service
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
+
+# Install oVirt Host
+# Note: the following packages should already be present on a Node image
+# Note: python-virtinst not present anymore - substituted by virt-install as a separate package (but without python module functionality)
+# Note: tuned and qemu-kvm-tools are needed to add host to datacenter
+# Note: the following already brings in GlusterFS as a dependency
+# Note: explicitly adding virt-v2v as per https://bugzilla.redhat.com/show_bug.cgi?id=1250376 - needs CentOS >= 7.2
+yum -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
+
+# Install GlusterFS
+# Note: the following packages should already be present on a Node image
+# Note: rpm post scriptlet for glusterfs-server fails - errors can be safely ignored
+yum -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
 
 # Install custom packages for NAS functions
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-opensvswitch-rebuild install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
@@ -1681,9 +1745,6 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
-# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
-
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
 yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
@@ -1691,7 +1752,81 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-r
 # Clean up after all installations
 yum --enablerepo '*' clean all
 
+# Remove package update leftovers
+find /etc -type f -name '*.rpmnew' -exec rename .rpmnew "" '{}' ';'
+find /etc -type f -name '*.rpmsave' -exec rm -f '{}' ';'
+
+# Now configure the Node OS
 # TODO: Decide which part to configure here and which part to demand to Ansible
+
+# Autodetecting BIOS/UEFI
+# Note: the following identifies the symlink under /etc to abstract from BIOS/UEFI actual file placement
+if [ -d /sys/firmware/efi ]; then
+	grub2_cfg_file="/etc/grub2-efi.cfg"
+else
+	grub2_cfg_file="/etc/grub2.cfg"
+fi
+
+# TODO: Setup a serial terminal
+# TODO: find a way to detect actual serial hardware presence
+#sed -i -e '/^GRUB_CMDLINE_LINUX/s/quiet/quiet console=tty0 console=ttyS0,115200n8/' /etc/default/grub
+#cat << EOF >> /etc/default/grub
+#GRUB_TERMINAL="console serial"
+#GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
+#EOF
+# Note: the following uses the generic symlink under /etc to abstract from BIOS/UEFI actual file placement
+#grub2-mkconfig -o "${grub2_cfg_file}"
+
+# Add memory test entry to boot loader
+memtest-setup
+grub2-mkconfig -o "${grub2_cfg_file}"
+
+# Configure kernel I/O scheduler policy
+sed -i -e '/^GRUB_CMDLINE_LINUX/s/\selevator=[^[:space:]"]*//' -e '/^GRUB_CMDLINE_LINUX/s/"$/ elevator=deadline"/' /etc/default/grub
+grub2-mkconfig -o "${grub2_cfg_file}"
+
+# Configuration of session/system management (ignore power actions initiated by keyboard etc.)
+# Note: interactive startup is disabled by default (enable with systemd.confirm_spawn=true on kernel commandline) and single user mode uses sulogin by default
+sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
+
+# Configure kernel behaviour
+
+# Console verbosity
+# TODO: check kernel cmdline option loglevel
+cat << EOF > /etc/sysctl.d/console-log.conf
+# Controls the severity level of kernel messages on local consoles
+kernel.printk = 1
+EOF
+chmod 644 /etc/sysctl.d/console-log.conf
+
+# Reboot on panic
+cat << EOF > /etc/sysctl.d/panic.conf
+# Controls the timeout for automatic reboot on panic
+kernel.panic = 5
+EOF
+chmod 644 /etc/sysctl.d/panic.conf
+
+# Configure Chronyd to always serve NTP to all networks
+sed -i -e 's/^#allow.*$/allow/' -e 's/^#local/local/' /etc/chrony.conf
+firewall-offline-cmd --add-service=ntp
+
+# TODO: configure TCP wrappers
+
+# Configure SSH (show legal banner, limit authentication tries, no DNS tracing of incoming connections)
+sed -i -e 's/^#\s*MaxAuthTries.*$/MaxAuthTries 3/' -e 's/^#\s*UseDNS.*$/UseDNS no/' -e 's%^#\s*Banner.*$%Banner /etc/issue.net%' /etc/ssh/sshd_config
+# Force security-conscious length of host keys by pre-creating them here
+# Note: ED25519 keys have a fixed length so they are not created here
+# Note: using haveged to ensure enough entropy (but rngd could be already running from installation environment)
+# Note: starting service manually since systemd inside a chroot would need special treatment
+haveged -w 1024 -F &
+haveged_pid=$!
+ssh-keygen -b 4096 -t rsa -N "" -f /etc/ssh/ssh_host_rsa_key
+ssh-keygen -b 1024 -t dsa -N "" -f /etc/ssh/ssh_host_dsa_key
+ssh-keygen -b 521 -t ecdsa -N "" -f /etc/ssh/ssh_host_ecdsa_key
+chgrp ssh_keys /etc/ssh/ssh_host_{rsa,dsa,ecdsa}_key
+chmod 640 /etc/ssh/ssh_host_{rsa,dsa,ecdsa}_key
+# Stopping haveged started above
+kill ${haveged_pid}
 
 # TODO: nodectl profile fragments have uncommon permissions - remove when fixed upstream
 chmod 644 /etc/profile.d/nodectl-*
@@ -1737,6 +1872,64 @@ Continued use of this computer implies acceptance of the above conditions.
 
 EOF
 chmod 644 /etc/{issue*,motd}
+
+# Configure Bind
+# Note: base configuration files generated in pre section above - actual file copying happens in non-chroot post section below
+
+# Note: using haveged to ensure enough entropy (but rngd could be already running from installation environment)
+# Note: starting service manually since systemd inside a chroot would need special treatment
+haveged -w 1024 -F &
+haveged_pid=$!
+pushd /etc
+
+# Generate key for rndc control connections
+rndckey=$(grep Key $(/usr/sbin/dnssec-keygen -a HMAC-MD5 -b 512 -n HOST -T KEY rndc_key).private | awk '{print $2}')
+cat << EOM > rndc.key
+// rndc key for control connections
+key "rndc_key" {
+        algorithm hmac-md5;
+        secret "${rndckey}";
+};
+EOM
+chgrp named rndc.key
+chmod 640 rndc.key
+cat << EOM > rndc.conf
+// rndc configuration for control connections
+options {
+        default-server  localhost;
+        default-key     "rndc_key";
+};
+
+server localhost {
+        key  "rndc_key";
+};
+
+// rndc key for control connections
+include "/etc/rndc.key";
+
+EOM
+chmod 644 rndc.conf
+popd
+
+# Stopping haveged started above
+kill ${haveged_pid}
+
+# TODO: disabling IPv6 DNS resolution - remove when smoothly working everywhere
+cat << EOF >> /etc/sysconfig/named
+OPTIONS="-4"
+EOF
+
+# Enable Bind
+systemctl enable named
+firewall-offline-cmd --add-service=dns
+# Reconfigure networking to use localhost DNS
+# Note: explicitly editing DNS1 in ifcfg configuration files since NetworkManager will not be running inside chroot
+sed -i -e "/^DNS1=/s/\"[^\"]*\"/\"127.0.0.1\"/" $(grep -l '^DNS1=' /etc/sysconfig/network-scripts/ifcfg-* | head -1)
+sed -i -e '/^nameserver\s/d' /etc/resolv.conf
+echo 'nameserver 127.0.0.1' >> /etc/resolv.conf
+
+# Configure log rotation (keep 6 years of logs, compressed)
+sed -i -e 's/^rotate.*$/rotate 312/' -e 's/^#\s*compress.*$/compress/' /etc/logrotate.conf
 
 # Enable HAVEGEd
 systemctl enable haveged
@@ -2153,65 +2346,6 @@ chmod 644 /etc/systemd/system/nfs-ganesha.service.d/custom-slice.conf
 firewall-offline-cmd --add-service=ovn-host-firewall-service
 systemctl enable ovn-controller
 
-# Configure Bind
-# Note: base configuration files generated in pre section above - actual file copying happens in non-chroot post section below
-
-# Note: using haveged to ensure enough entropy (but rngd could be already running from installation environment)
-# Note: starting service manually since systemd inside a chroot would need special treatment
-haveged -w 1024 -F &
-haveged_pid=$!
-pushd /etc
-
-# Generate key for rndc control connections
-rndckey=$(grep Key $(/usr/sbin/dnssec-keygen -a HMAC-MD5 -b 512 -n HOST -T KEY rndc_key).private | awk '{print $2}')
-cat << EOM > rndc.key
-// rndc key for control connections
-key "rndc_key" {
-        algorithm hmac-md5;
-        secret "${rndckey}";
-};
-EOM
-chgrp named rndc.key
-chmod 640 rndc.key
-cat << EOM > rndc.conf
-// rndc configuration for control connections
-options {
-        default-server  localhost;
-        default-key     "rndc_key";
-};
-
-server localhost {
-        key  "rndc_key";
-};
-
-// rndc key for control connections
-include "/etc/rndc.key";
-
-EOM
-chmod 644 rndc.conf
-popd
-
-# Stopping haveged started above
-kill ${haveged_pid}
-
-# TODO: disabling IPv6 DNS resolution - remove when smoothly working everywhere
-cat << EOF >> /etc/sysconfig/named
-OPTIONS="-4"
-EOF
-
-# Enable Bind
-systemctl enable named
-firewall-offline-cmd --add-service=dns
-# Reconfigure networking to use localhost DNS
-# Note: explicitly editing DNS1 in ifcfg configuration files since NetworkManager will not be running inside chroot
-sed -i -e "/^DNS1=/s/\"[^\"]*\"/\"127.0.0.1\"/" $(grep -l '^DNS1=' /etc/sysconfig/network-scripts/ifcfg-* | head -1)
-sed -i -e '/^nameserver\s/d' /etc/resolv.conf
-echo 'nameserver 127.0.0.1' >> /etc/resolv.conf
-
-# Configure Chronyd to always serve NTP to all networks
-sed -i -e 's/^#allow.*$/allow/' -e 's/^#local/local/' /etc/chrony.conf
-firewall-offline-cmd --add-service=ntp
-
 # TODO: Debug - enable verbose logging in firewalld - maybe disable for production use?
 firewall-offline-cmd --set-log-denied=all
 
@@ -2383,7 +2517,6 @@ for full_frag in /tmp/full-* ; do
 done
 cp /tmp/kickstart_pre.log /mnt/sysimage/root/log
 mv /mnt/sysimage/root/kickstart_post.log /mnt/sysimage/root/log
-mv /mnt/sysimage/root/*-ks.cfg /mnt/sysimage/root/etc
 %end
 
 # Post-installation script (run with bash from chroot after the third post section)
