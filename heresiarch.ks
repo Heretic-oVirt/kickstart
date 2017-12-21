@@ -11,7 +11,8 @@
 # elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing/configuring local virtualization support irrespective of hardware capabilities add hvp_novirt
-# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest (default), last-smallest
+# Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
+# Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom host naming add hvp_myname=myhostname where myhostname is the unqualified (ie without domain name part) hostname
 # Note: to force custom addressing add hvp_{external,mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the machine IP or the network address on the given network and yy is the prefix on the given network
@@ -20,6 +21,7 @@
 # Note: to force custom network MTU add hvp_{external,mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom network bridge naming add hvp_{mgmt,gluster,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
 # Note: to force custom NetBIOS domain naming add hvp_netbiosdomain=MYDOM where MYDOM is the NetBIOS domain name
 # Note: to force custom sysvol replication password add hvp_sysvolpassword=mysysvolsecret where mysysvolsecret is the sysvol replication password
@@ -57,8 +59,10 @@
 # Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
+# Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
 # Note: the default behaviour involves installing/configuring local virtualization support when virtualization hardware capabilities are detected
-# Note: the default node OS disk is sda
+# Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
+# Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default host naming uses the "My Little Pony" character name twilight
 # Note: the default addressing on connected networks is assumed to be 172.20.{10,11,12,13}.1/24 on {mgmt,gluster,lan,internal} and DHCP-provided on external
@@ -67,6 +71,7 @@
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default machine IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default domain names are assumed to be {external,mgmt,gluster,lan,internal}.private
+# Note: the default bridge names are assumed to be {ovirtmgmt,,lan,internal}
 # Note: the default AD subdomain name is assumed to be ad
 # Note: the default NetBIOS domain name is equal to the first part of the AD DNS subdomain name (on the lan network, or mgmt if there is only one network) in uppercase
 # Note: the default sysvol replication password is HVP_dem0
@@ -104,6 +109,7 @@
 # Note: the default AD further admin user password is HVP_dem0
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
+# Note: the default oVirt version is 4.1
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
@@ -305,6 +311,7 @@ ipdiff() {
 # Note: engine-related data will only be used for automatic DNS zones configuration
 unset nicmacfix
 unset nolocalvirt
+unset orthodox_mode
 unset network_priority
 unset node_count
 unset network
@@ -332,6 +339,7 @@ unset vd_ip
 unset vd_ip_offset
 unset vd_name
 unset reverse_domain_name
+unset bridge_name
 unset node_name
 unset bmc_ip_offset
 unset node_ip_offset
@@ -357,12 +365,15 @@ unset winadmin_username
 unset winadmin_password
 unset keyboard_layout
 unset local_timezone
+unset ovirt_version
 
 # Hardcoded defaults
 
 nicmacfix="false"
 
 nolocalvirt="false"
+
+orthodox_mode="false"
 
 default_nodeosdisk="smallest"
 
@@ -461,6 +472,12 @@ reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
 reverse_domain_name['lan']="12.20.172.in-addr.arpa"
 reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
+declare -A bridge_name
+bridge_name['mgmt']="ovirtmgmt"
+bridge_name['gluster']=""
+bridge_name['lan']="lan"
+bridge_name['internal']="internal"
+
 ad_subdomain_prefix="ad"
 
 sysvolrepl_password="HVP_dem0"
@@ -499,6 +516,8 @@ admin_password="hvpdemo"
 winadmin_password="HVP_dem0"
 keyboard_layout="us"
 local_timezone="UTC"
+
+ovirt_version="4.1"
 
 # Detect any configuration fragments and load them into the pre environment
 # Note: BIOS based devices, file and DHCP methods are unsupported
@@ -639,6 +658,11 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
+# Determine choice of skipping custom packages intallation
+if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
+	orthodox_mode="true"
+fi
+
 # Determine choice of skipping local virtualization support
 if grep -w -q 'hvp_novirt' /proc/cmdline ; then
 	nolocalvirt="true"
@@ -649,6 +673,7 @@ fi
 
 # Determine node OS disk choice
 given_nodeosdisk=$(sed -n -e 's/^.*hvp_nodeosdisk=\(\S*\).*$/\1/p' /proc/cmdline)
+# No indication on node OS disk choice: use default choice
 if [ -z "${given_nodeosdisk}" ]; then
 	given_nodeosdisk="${default_nodeosdisk}"
 fi
@@ -771,6 +796,12 @@ if [ -n "${given_local_timezone}" ]; then
 	local_timezone="${given_local_timezone}"
 fi
 
+# Determine oVirt version
+given_ovirt_version=$(sed -n -e "s/^.*hvp_ovirt_version=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ovirt_version}" ]; then
+	ovirt_version="${given_ovirt_version}"
+fi
+
 # Determine node BMC IPs offset base
 given_bmcs_offset=$(sed -n -e 's/^.*hvp_bmcs_offset=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_bmcs_offset}" | grep -q '^[[:digit:]]\+$' ; then
@@ -885,6 +916,14 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
 	fi
+	given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_network_bridge_name}" ]; then
+		bridge_name["${zone}"]="${given_network_bridge_name}"
+		# Correctly detect an empty (disabled) bridge name
+		if [ "${bridge_name[${zone}]}" = '""' -o "${bridge_name[${zone}]}" = "''" ]; then
+			bridge_name["${zone}"]=""
+		fi
+	fi
 	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_network_mtu}" ]; then
 		mtu["${zone}"]="${given_network_mtu}"
@@ -912,7 +951,7 @@ for zone in "${!network[@]}" ; do
 				bondmode["${zone}"]="activepassive"
 				;;
 			*)
-				# In case of unrecognized mode, force activepassive
+				# In case of unrecognized mode force activepassive
 				echo "Unrecognized bonding mode (${given_network_bondmode}) for zone ${zone} - forcing activepassive" 1>&2
 				bondopts["${zone}"]="mode=active-backup;miimon=100"
 				bondmode["${zone}"]="activepassive"
@@ -1421,7 +1460,13 @@ for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" ]; then
 		unset PREFIX
 		eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
-		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
+		# Correctly insert an empty bridge name
+		if [ -z "${bridge_name[${zone}]}" ]; then
+			zone_bridge_name="''"
+		else
+			zone_bridge_name="${bridge_name[${zone}]}"
+		fi
+		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]} hvp_${zone}_bridge=${zone_bridge_name}"
 		vm_network_params="${vm_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
 	fi
 done
@@ -1462,14 +1507,61 @@ LABEL vmmenu
 	kernel menu.c32
 	append vm.cfg
 
-# Start kickstart-based HVP Nodes installation
+# Load HVP Nodes installation menu
+LABEL ngnmenu
+	MENU LABEL HVP Nodes installation menu --->
+	kernel menu.c32
+	append ngn.cfg
+
+# Load HVP Hosts installation menu
+LABEL hostmenu
+	MENU LABEL HVP Hosts installation menu --->
+	kernel menu.c32
+	append host.cfg
+
+EOF
+# Nodes installation menu
+cat << EOF > /tmp/hvp-syslinux-conf/ngn.cfg
+MENU TITLE --== Heretic oVirt Project Nodes PXE Menu ==--
+
+# Go back to the main menu
+LABEL rootmenu
+	MENU LABEL <---- Main menu
+	kernel menu.c32
+	append common.cfg
+
+EOF
+# Hosts installation menu
+cat << EOF > /tmp/hvp-syslinux-conf/host.cfg
+MENU TITLE --== Heretic oVirt Project Hosts PXE Menu ==--
+
+# Go back to the main menu
+LABEL rootmenu
+	MENU LABEL <---- Main menu
+	kernel menu.c32
+	append common.cfg
+
 EOF
 # Note: we will automatically extend to further installations the parameters passed during our own installation
+if [ "${orthodox_mode}" = "true" ] ; then
+	common_network_params="${common_network_params} hvp_orthodox"
+else
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
+	# Note: to skip using custom Gluster-related/OVN packages add the option hvp_nicmacfix
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
+	# Note: to skip using custom Gluster-related/OVN packages add the option hvp_nicmacfix
+	EOF
+fi
 if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
+	# TODO: verify whether it actually makes sense to propagate nicmacfix to vms
 	vm_network_params="${vm_network_params} hvp_nicmacfix"
 else
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
+	# Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
 	# Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 	EOF
 fi
@@ -1478,7 +1570,11 @@ if grep 'biosdevname=0' /proc/cmdline | grep -q 'net.ifnames=0' ; then
 	vm_network_params="${vm_network_params} biosdevname=0 net.ifnames=0"
 	essential_network_params="${essential_network_params} biosdevname=0 net.ifnames=0"
 else
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
+	# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
+	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
 	# Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (legacy ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 	# Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
 	EOF
@@ -1486,12 +1582,20 @@ fi
 # Note: workaround for "too many boot env vars" kernel panic - minimizing the cmdline below removing all hvp_* parameters - creating common hvp_parameters.sh and specific hvp_parameters_*.sh with all other parameters (leaving a commented line as reference here)
 # Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
-	cat <<- EOF >> /tmp/hvp-syslinux-conf/common.cfg
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
 	LABEL hvpnode${i}
 	        MENU LABEL Install Heretic oVirt Project Node ${i}
 	        kernel linux/node/vmlinuz
 	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
+	LABEL hvphost${i}
+	        MENU LABEL Install Heretic oVirt Project Host ${i}
+	        kernel linux/node/vmlinuz
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
@@ -1540,6 +1644,8 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
 # Custom defaults for all installations
 
 nicmacfix="${nicmacfix}"
+
+orthodox_mode="${orthodox_mode}"
 
 default_node_count="${node_count}"
 
@@ -1590,6 +1696,19 @@ for zone in "${!network[@]}" ; do
 	fi
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 	domain_name['${zone}']="${domain_name[${zone}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+
+# TODO: verify bridge names for OVN networks
+# TODO: verify bridge name different from "ovirtmgmt" for oVirt management
+EOF
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+	bridge_name['${zone}']="${bridge_name[${zone}]}"
 	EOF
 done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
@@ -1645,6 +1764,13 @@ ad_dc_ip="${ad_dc_ip}"
 ad_dc_ip_offset="${ad_dc_ip_offset}"
 
 ad_dc_name="${ad_dc_name}"
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_host.sh
+# Custom defaults for hosts installation
+
+ovirt_version="${ovirt_version}"
 
 EOF
 
@@ -2401,7 +2527,7 @@ hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [
 hvp_switch_ip: ${switch_ip}
 hvp_gateway_ip: ${dhcp_gateway}
 hvp_timezone: ${local_timezone}
-hvp_mgmt_bridge_name: "ovirtmgmt"
+hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
 hvp_firewall_manager: "firewalld"
 hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
@@ -2418,8 +2544,8 @@ ca_file: /etc/pki/ovirt-engine/ca.pem
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
 #dc_name: ${datacenter_name}
 dc_name: "Default"
-# TODO: dynamically determine oVirt version
-compatibility_version: 4.1
+# TODO: verify whether "master" is a valid compatibility_version - replace otherwise
+compatibility_version: ${ovirt_version}
 
 ## Cluster:
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
@@ -2467,6 +2593,7 @@ popd
 %end
 
 # Post-installation script (run with bash from installation image at the end of installation)
+# Note: console logging to support commandline virt-install invocation
 %post --nochroot --log /dev/console
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
@@ -2484,7 +2611,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017121501"
+script_version="2017122004"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2511,12 +2638,19 @@ declare -A node_name
 declare -A network netmask network_base bondmode bondopts mtu
 declare -A domain_name
 declare -A reverse_domain_name
+declare -A bridge_name
 
 # Hardcoded defaults
 
 unset nicmacfix
+unset orthodox_mode
+unset nolocalvirt
+unset ovirt_version
 
 nicmacfix="false"
+orthodox_mode="false"
+nolocalvirt="false"
+ovirt_version="4.1"
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_*:*.sh"
@@ -2541,12 +2675,23 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
+# Determine choice of skipping custom packages intallation
+if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
+	orthodox_mode="true"
+fi
+
 # Determine choice of skipping local virtualization support
 if grep -w -q 'hvp_novirt' /proc/cmdline ; then
 	nolocalvirt="true"
 fi
 if ! egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo ; then
 	nolocalvirt="true"
+fi
+
+# Determine oVirt version
+given_ovirt_version=$(sed -n -e "s/^.*hvp_ovirt_version=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ovirt_version}" ]; then
+	ovirt_version="${given_ovirt_version}"
 fi
 
 # Create /dev/root symlink for grubby (must differentiate for use of LVM or MD based "/")
@@ -2563,8 +2708,18 @@ then
 fi
 ln -sf $rootdisk /dev/root
 
+# Correctly initialize YUM cache to avoid 404 errors
+# Note: following advice in https://access.redhat.com/articles/1320623
+# TODO: remove when fixed upstream
+rm -rf /var/cache/yum/*
+yum --enablerepo '*' clean all
+
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
 yum-config-manager --enable cr > /dev/null
+
+# Add HVP custom repo
+wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
+chmod 644 /etc/yum.repos.d/HVP.repo
 
 # Add upstream repository definitions
 # TODO: use a specific mirror to avoid transient errors - replace when fixed upstream
@@ -2572,18 +2727,22 @@ yum-config-manager --enable cr > /dev/null
 yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
 yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
-yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release41.rpm
+ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
+if [ "${ovirt_release_package_suffix}" = "master" ]; then
+	ovirt_release_package_suffix="-master"
+fi
+yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
 
-# Make sure the we prefer our own RHGS rebuild repo versus oVirt-dependency repos
-yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
-yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
-
-# Add our own repo
-wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-chmod 644 /etc/yum.repos.d/HVP.repo
+# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
+if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-opensvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-opensvswitch-rebuild.priority=50' > /dev/null
+fi
 
 # Enable use of delta rpms since we are not using our local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
@@ -2619,13 +2778,13 @@ yum -y install httpd mod_ssl
 yum -y install webalizer mrtg net-snmp net-snmp-utils
 
 # Install DHCPd, TFTPd, Syslinux and Bind to support PXE
-# Note: using our Fedora-rebuild repo to get a newer (6.x) syslinux
+# Note: using our Fedora-rebuild repo to get a newer (6.x) Syslinux
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
 yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
 
-# Install Memtest86+ to be offered through PXE
+# Install Memtest86+ to be also offered through PXE
 yum -y install memtest86+
 
 # Install Squid
@@ -2788,8 +2947,8 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	#
 	# VirtIO block devices settings
 	#
-	ACTION=="add|change", KERNEL=="vd*", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{queue/nr_requests}="8"
-	ACTION=="add|change", KERNEL=="vd*", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{bdi/read_ahead_kb}="4096"
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{queue/nr_requests}="8"
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{bdi/read_ahead_kb}="4096"
 	EOF
 	chmod 644 /etc/udev/rules.d/99-virtio-block.rules
 
@@ -2808,8 +2967,8 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	chmod 644 /etc/sysctl.d/virtualguest.conf
 fi
 
-# Configure log rotation (keep 2.5 years of logs, compressed)
-sed -i -e 's/^rotate.*$/rotate 130/' -e 's/^#\s*compress.*$/compress/' /etc/logrotate.conf
+# Configure log rotation (keep 6 years of logs, compressed)
+sed -i -e 's/^rotate.*$/rotate 312/' -e 's/^#\s*compress.*$/compress/' /etc/logrotate.conf
 
 # Enable HAVEGEd
 systemctl enable haveged
@@ -3112,15 +3271,15 @@ cat << EOF > /var/www/html/index.html
 					<h2>Risorse di pubblico accesso:</h2>
 					<p>Le seguenti risorse web offerte da questa macchina sono liberamente accessibili.
 					<ul>
-						<li>L'archivio pubblico dei pacchetti RPM &egrave; disponibile <a href="/hvp-repos/">qui</a>.</li>
+						<li>Un archivio pubblico dei pacchetti RPM &egrave; disponibile <a href="/hvp-repos/">qui</a>.</li>
 					</ul>
 					</p>
 					<h2>Se siete parte del personale tecnico:</h2>
-					<p>Le funzionalit&agrave; predisposte per l'amministrazione/controllo sono elencate di seguito.
+					<p>Le funzionalit&agrave; predisposte per amministrazione/controllo sono elencate di seguito.
 					<ul>
 						<li>Lo strumento web di gestione &egrave; disponibile <a href="/manage/">qui</a>.</li>
-						<li>Lo strumento web di visualizzazione dell'utilizzo rete &egrave; disponibile <a href="/mrtg/">qui</a>.</li>
-						<li>Lo strumento web di visualizzazione dell'utilizzo http &egrave; disponibile <a href="/usage/">qui</a>.</li>
+						<li>Lo strumento web di visualizzazione utilizzo rete &egrave; disponibile <a href="/mrtg/">qui</a>.</li>
+						<li>Lo strumento web di visualizzazione utilizzo http &egrave; disponibile <a href="/usage/">qui</a>.</li>
 					</ul>
 					</p>
 				</div>
@@ -3153,9 +3312,11 @@ chmod 644 /var/www/html/index.html
 # Prepare network installation area
 mkdir -p /var/www/hvp-repos/el7/{centos,node,ks}
 # Mirror web contents here using wget
-for subdir in ks centos node; do
+for subdir in ks centos node-${ovirt_version}; do
 	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
 done
+# Note: providing link for compatibility purposes
+ln -s node-${ovirt_version} /var/www/hvp-repos/el7/node
 
 # Enable virtual host configuration
 sed -i -e 's/^#*\s*NameVirtualHost.*$/NameVirtualHost *:80/' /etc/httpd/conf/httpd.conf
@@ -3234,7 +3395,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	firewall-offline-cmd --add-service=wokd --zone=external
 	systemctl enable wokd
 else
-	# Add "/manage/" location with forced redirect to Webmin port in Apache's configuration
+	# Add "/manage/" location with forced redirect to Webmin port in Apache configuration
 	cat <<- EOF > /etc/httpd/conf.d/webmin.conf
 	#
 	#  Apache-based redirection for Webmin
@@ -4694,29 +4855,6 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovirtengine.yaml
     - name: get common vars
       include_vars:
         file: ../common/vars/hvp.yaml
-    - name: reconfigure default gateway
-      nmcli:
-        conn_name: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['interface'] }}"
-        gw4: "{{ hvp_gateway_ip }}"
-        type: ethernet
-        state: present
-    - name: add our own repo
-      get_url:
-        url: https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-        dest: /etc/yum.repos.d/HVP.repo
-        mode: 0644
-    - name: install the Bareos-related packages
-      yum:
-        name: "{{ item }}"
-        state: latest
-      with_items: bareos-tools bareos-client bareos-director bareos-webui
-    - name: enable and start the Bareos-related services
-      systemd:
-        name: "{{ item }}"
-        enabled: False
-        state: stopped
-        no_block: no
-      with_items: bareos-fd bareos-dir
     - name: Enable libgfapi support
       command: engine-config -s LibgfApiSupported=true
       register: libgfapi_result
@@ -4848,6 +4986,7 @@ cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/enginevmreconf.yaml
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/ovirtengine/enginevmreconf.yaml
 # TODO: create a couple of OVN logical networks
+# TODO: add OVN networks for lan (needed for CTDB) and internal zones if present
 cat << EOF > /usr/local/etc/hvp-ansible/roles/ovirtengine/ovn.yaml
 ---
 - name: Generate SSH key if not present
@@ -5064,9 +5203,9 @@ cat << EOF > /usr/local/etc/hvp-ansible/hvp.yaml
 - include: roles/glusternodes/glusternodes.yaml
 - include: roles/ovirtnodes/ovirtnodes.yaml
 - include: roles/ovirtengine/ovirtengine.yaml
+- include: roles/ovirtengine/ovn.yaml
 - include: roles/glusternodes/ctdb.yaml
 - include: roles/ovirtengine/nfsdomains.yaml
-- include: roles/ovirtengine/ovn.yaml
 - include: roles/glusternodes/adjoin.yaml
 ...
 EOF
@@ -5472,6 +5611,16 @@ if [ -f /tmp/hvp-syslinux-conf/common.cfg ]; then
 	cp /tmp/hvp-syslinux-conf/common.cfg /mnt/sysimage/var/lib/tftpboot/common.cfg
 	chmod 644 /mnt/sysimage/var/lib/tftpboot/common.cfg
 	chown root:root /mnt/sysimage/var/lib/tftpboot/common.cfg
+fi
+if [ -f /tmp/hvp-syslinux-conf/ngn.cfg ]; then
+	cp /tmp/hvp-syslinux-conf/ngn.cfg /mnt/sysimage/var/lib/tftpboot/ngn.cfg
+	chmod 644 /mnt/sysimage/var/lib/tftpboot/ngn.cfg
+	chown root:root /mnt/sysimage/var/lib/tftpboot/ngn.cfg
+fi
+if [ -f /tmp/hvp-syslinux-conf/host.cfg ]; then
+	cp /tmp/hvp-syslinux-conf/host.cfg /mnt/sysimage/var/lib/tftpboot/host.cfg
+	chmod 644 /mnt/sysimage/var/lib/tftpboot/host.cfg
+	chown root:root /mnt/sysimage/var/lib/tftpboot/host.cfg
 fi
 if [ -f /tmp/hvp-syslinux-conf/vm.cfg ]; then
 	cp /tmp/hvp-syslinux-conf/vm.cfg /mnt/sysimage/var/lib/tftpboot/vm.cfg
