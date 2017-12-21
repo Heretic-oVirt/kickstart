@@ -445,7 +445,7 @@ my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
 
-root_password="hvpdemo"
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
@@ -1710,7 +1710,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122004"
+script_version="2017122005"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
