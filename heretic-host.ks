@@ -62,7 +62,7 @@
 # Note: the default node count is 3
 # Note: the default master node id is assumed to be 0
 # Note: the default node naming uses "My Little Pony" character names {pinkiepie,applejack,rarity,fluttershy} for node ids {0,1,2,3} and nodeN for further ones
-# Note: the default installer naming uses the "My Little Pony" character name twilight for the switch
+# Note: the default installer naming uses the "My Little Pony" character name twilight for the installer
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
@@ -1140,27 +1140,20 @@ bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomo
 # Ignore further disks
 # Note: further disks will be used as bricks later on
 ignoredisk --only-use=${device_name}
-# Either all automatic...
-#autopart --type=thinp
-# ...or explicitly detailed as per https://github.com/oVirt/ovirt-node-ng/blob/master/docs/book/install.md and https://bugzilla.redhat.com/show_bug.cgi?id=1369874
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
 # Note: the following uses only the first disk as PV and leaves other disks unused if the first one is sufficiently big, otherwise starts using other disks too
 part pv.01 --size=50000 --grow
 # Create a VG
-# Note: leaving a reserved percent to allow metadata growing
-volgroup HostVG pv.01 --reserved-percent=5
+volgroup HostVG pv.01
 # Define swap space
 logvol swap --vgname=HostVG --name=swap --fstype=swap --recommended
-# Define thin provisioned LVs
-logvol none --vgname=HostVG --name=HostPool --thinpool --size=48000 --metadatasize=${metadata_size} --chunksize=${data_block_size} --grow
-# Note: ext4 is required for oVirt Node by imgbased software
-logvol / --vgname=HostVG --name=root --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=6000 --grow
-logvol /var --vgname=HostVG --name=var --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=20000
-logvol /var/log --vgname=HostVG --name=var_log --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=10000
-logvol /var/log/audit --vgname=HostVG --name=var_log_audit --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
-logvol /home --vgname=HostVG --name=home --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=1000
-logvol /tmp --vgname=HostVG --name=tmp --thin --fstype=ext4 --poolname=HostPool --fsoptions="defaults,discard" --size=2000
+logvol / --vgname=HostVG --name=root --size=6000
+logvol /var --vgname=HostVG --name=var --size=20000 --grow
+logvol /var/log --vgname=HostVG --name=var_log --size=10000
+logvol /var/log/audit --vgname=HostVG --name=var_log_audit --size=2000
+logvol /home --vgname=HostVG --name=home --size=1000
+logvol /tmp --vgname=HostVG --name=tmp --size=2000
 EOF
 # Clean up disks from any previous software-RAID (Linux or BIOS based)
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
@@ -1710,7 +1703,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122005"
+script_version="2017122501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1818,40 +1811,35 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
+# Add YUM priorities plugin
+yum -y install yum-plugin-priorities
+
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-chmod 644 /etc/yum.repos.d/HVP.repo
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
+# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
+if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+fi
 
 # Add upstream repository definitions
-# TODO: use a specific mirror to avoid transient errors - replace when fixed upstream
-#yum -y install http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
-yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
-# TODO: add haveged to include list in already provided EPEL repo and remove this
-yum -y install epel-release
+yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
+# Note: restricting packages from 3rd party repo
+yum-config-manager --save --setopt='psychotic.include=unrar*' > /dev/null
+yum-config-manager --enable psychotic > /dev/null
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
 if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
-
-# Add YUM priorities plugin
-yum -y install yum-plugin-priorities
-
-# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
-if [ "${orthodox_mode}" = "false" ]; then
-	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
-	yum-config-manager --enable hvp-opensvswitch-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-opensvswitch-rebuild.priority=50' > /dev/null
-fi
-
-# Limit EPEL as per oVirt recommendations
-# TODO: add haveged to include list in already provided EPEL repo and remove this
-yum-config-manager --save --setopt='epel.exclude=collectd*' > /dev/null
+# Note: adding to already present package restrictions on EPEL repo
+sed -i -e '/^include.*=epel-release,/s/\s*$/,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
@@ -1862,9 +1850,11 @@ for repofile in /etc/yum.repos.d/*.repo; do
 		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 	fi
 done
+# Modify baseurl definitions to allow effective use of our proxy cache
+sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 
-# Disable use of delta rpms since we are using our local mirror
-yum-config-manager --save --setopt='deltarpm=0' > /dev/null
+# Enable use of delta rpms since we are not using a local mirror
+yum-config-manager --save --setopt='deltarpm=1' > /dev/null
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
 yum -y upgrade
@@ -1880,8 +1870,8 @@ grubby --set-default=/boot/vmlinuz-$(rpm -q --last kernel | head -1 | cut -f 1 -
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip, RAR, UnRAR and ARJ
-yum -y install hping p7zip{,-plugins} rar unrar arj pwgen
+# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip, UnRAR and ARJ
+yum -y install hping3 p7zip{,-plugins} unrar arj pwgen
 yum -y install yum-cron yum-plugin-ps gdisk
 
 # Install Nmon and Dstat
@@ -1893,11 +1883,38 @@ yum -y install httpd mod_ssl
 # Install Webalizer and MRTG
 yum -y install webalizer mrtg net-snmp net-snmp-utils
 
-# Install Memtest86+
-yum -y install memtest86+
+# Install PDSH
+yum -y install pdsh pdsh-rcmd-ssh
 
-# Install MCE logging/management service
-yum -y install mcelog
+# Install virtualization tools support packages
+if dmidecode -s system-manufacturer | egrep -q "(innotek|Parallels)" ; then
+	# Install dkms for virtualization tools support
+	# TODO: configure virtualization tools under dkms
+	# TODO: disabled since required development packages cannot be installed
+	#yum -y install dkms
+	echo "DKMS unsupported"
+elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
+	yum -y install qemu-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
+	yum -y install ovirt-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
+	yum -y install hyperv-daemons
+elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
+	# Note: VMware basic support installed here (since it is included in base distro now)
+	yum -y install open-vm-tools open-vm-tools-desktop fuse
+fi
+
+# Tune package list to underlying platform
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	# Exclude CPU microcode updates to avoid errors on virtualized platform
+	yum -y erase microcode_ctl
+else
+	# Install Memtest86+
+	yum -y install memtest86+
+
+	# Install MCE logging/management service
+	yum -y install mcelog
+fi
 
 # Install oVirt Host
 # Note: tuned and qemu-kvm-tools are needed to add host to datacenter
@@ -1929,6 +1946,21 @@ yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bar
 # Install further packages for additional functions: Ansible automation
 yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
 
+# Install Webmin for generic web management
+# TODO: adapt Cockpit from NGN installation and switch to using that instead
+# Add Webmin repo
+cat << EOF > /etc/yum.repos.d/webmin.repo
+[webmin]
+name = Webmin Distribution Neutral
+baseurl = http://download.webmin.com/download/yum
+gpgcheck = 1
+enabled = 1
+gpgkey = http://www.webmin.com/jcameron-key.asc
+skip_if_unavailable = 1
+EOF
+chmod 644 /etc/yum.repos.d/webmin.repo
+yum -y install webmin
+
 # Clean up after all installations
 yum --enablerepo '*' clean all
 
@@ -1940,7 +1972,7 @@ find /etc -type f -name '*.rpmsave' -exec rm -f '{}' ';'
 # TODO: Decide which part to configure here and which part to demand to Ansible
 
 # Setup auto-update via yum-cron (ala CentOS4, replacement for yum-updatesd in CentOS5)
-# Note: Updates left to the user/owner manual intervention
+# Note: Updates left to the administrator manual intervention
 sed -i -e 's/^update_messages\s.*$/update_messages = no/' -e 's/^download_updates\s.*$/download_updates = no/' -e 's/^apply_updates\s.*$/apply_updates = no/' -e 's/^emit_via\s.*$/emit_via = None/' /etc/yum/yum-cron*.conf
 systemctl disable yum-cron
 
@@ -1970,9 +2002,11 @@ fi
 sed -i -e '/^GRUB_CMDLINE_LINUX/s/\s*rhgb//' -e '/^GRUB_TIMEOUT/s/=.*$/="5"/' /etc/default/grub
 grub2-mkconfig -o "${grub2_cfg_file}"
 
-# Add memory test entry to boot loader
-memtest-setup
-grub2-mkconfig -o "${grub2_cfg_file}"
+# Conditionally add memory test entry to boot loader
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	memtest-setup
+	grub2-mkconfig -o "${grub2_cfg_file}"
+fi
 
 # Configure kernel I/O scheduler policy
 sed -i -e '/^GRUB_CMDLINE_LINUX/s/\selevator=[^[:space:]"]*//' -e '/^GRUB_CMDLINE_LINUX/s/"$/ elevator=deadline"/' /etc/default/grub
@@ -1980,7 +2014,9 @@ grub2-mkconfig -o "${grub2_cfg_file}"
 
 # Configuration of session/system management (ignore power actions initiated by keyboard etc.)
 # Note: interactive startup is disabled by default (enable with systemd.confirm_spawn=true on kernel commandline) and single user mode uses sulogin by default
-sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
+fi
 
 # Configure kernel behaviour
 
@@ -2115,6 +2151,11 @@ for repokeyurl in $(grep -h '^gpgkey' /etc/yum.repos.d/*.repo | grep -v 'file://
 done
 # Disable automatic reporting by email
 sed -i -e 's/^/#/' /etc/libreport/events.d/mailx_event.conf
+
+# Disable SMARTd on a virtual machine
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	systemctl disable smartd
+fi
 
 # Configure Net-SNMP
 cp -a /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.orig
@@ -2386,7 +2427,7 @@ EOF
 chmod 644 /etc/firewalld/services/webmin.xml
 
 # Enable Webmin
-firewall-offline-cmd --add-service=webmin --zone=external
+firewall-offline-cmd --add-service=webmin
 systemctl enable webmin
 
 # Configure Webalizer (allow access from everywhere)
@@ -2396,7 +2437,7 @@ sed -i -e 's/^\(\s*\)\(Require local.*\)$/\1#\2/' /etc/httpd/conf.d/webalizer.co
 sed -i -e '/WEBALIZER_CRON=/s/^#*\(WEBALIZER_CRON=\).*$/\1yes/' /etc/sysconfig/webalizer
 
 # Enable Apache
-firewall-offline-cmd --add-service=http --zone=internal
+firewall-offline-cmd --add-service=http
 systemctl enable httpd
 
 # Configure Bind
@@ -2453,6 +2494,46 @@ firewall-offline-cmd --add-service=dns
 sed -i -e "/^DNS1=/s/\"[^\"]*\"/\"127.0.0.1\"/" $(grep -l '^DNS1=' /etc/sysconfig/network-scripts/ifcfg-* | head -1)
 sed -i -e '/^nameserver\s/d' /etc/resolv.conf
 echo 'nameserver 127.0.0.1' >> /etc/resolv.conf
+
+# Conditionally add virtual guest optimizations
+# TODO: verify wether we can skip this and delegate to tuned
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	# Configure block devices for a virtual guest
+	
+	# Configure timeout for Qemu devices
+	# Note: VirtIO devices do not need this (neither do they expose any timeout parameter)
+	cat <<- EOF > /etc/udev/rules.d/99-qemu-block-timeout.rules
+	#
+	# Qemu block devices timeout settings
+	#
+	ACTION=="add|change", SUBSYSTEMS=="block", ATTRS{model}=="QEMU_HARDDISK", RUN+="/bin/sh -c 'echo 180 >/sys\$DEVPATH/timeout'"
+	EOF
+	chmod 644 /etc/udev/rules.d/99-qemu-block-timeout.rules
+	
+	# Configure readahead and requests for VirtIO devices
+	cat <<- EOF > /etc/udev/rules.d/99-virtio-block.rules
+	#
+	# VirtIO block devices settings
+	#
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{queue/nr_requests}="8"
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{bdi/read_ahead_kb}="4096"
+	EOF
+	chmod 644 /etc/udev/rules.d/99-virtio-block.rules
+
+	# Configure scheduler and memory for a virtual guest
+	cat <<- EOF > /etc/sysctl.d/virtualguest.conf
+	# Tune for a KVM virtualization guest
+	kernel.sched_min_granularity_ns = 10000000
+	kernel.sched_wakeup_granularity_ns = 15000000
+	vm.dirty_background_ratio = 10
+	vm.dirty_ratio = 40
+	vm.dirty_expire_centisecs = 500
+	vm.dirty_writeback_centisecs = 100
+	vm.swappiness = 30
+	kernel.sched_migration_cost = 5000000
+	EOF
+	chmod 644 /etc/sysctl.d/virtualguest.conf
+fi
 
 # Configure log rotation (keep 6 years of logs, compressed)
 sed -i -e 's/^rotate.*$/rotate 312/' -e 's/^#\s*compress.*$/compress/' /etc/logrotate.conf
@@ -2888,6 +2969,11 @@ sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cf
 systemctl disable bareos-fd
 systemctl disable bareos-sd
 
+# Conditionally enable MCE logging/management service
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	systemctl enable mcelog
+fi
+
 # Configure root home dir (with utility script for basic configuration backup)
 mkdir -p /root/{etc,bin,log,tmp,backup}
 cat << EOF > /root/bin/backup-conf
@@ -2933,6 +3019,69 @@ if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Par
 		systemctl start lm_sensors
 	fi
 fi
+
+# Setup virtualization tools (Hyper-V/KVM/VMware/VirtualBox/Parallels supported)
+# TODO: Verify that VirtIO drivers get used for Xen/KVM, warn otherwise
+# TODO: disable kernel updating or configure dkms (if not already done above or by tools installation)
+pushd /tmp
+need_reboot="no"
+if dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
+	# TODO: configure Hyper-V integration agents
+	systemctl enable hypervkvpd hypervvssd hypervfcopyd
+	systemctl start hypervkvpd hypervvssd hypervfcopyd
+elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
+	# Enable ARP notifications for vm migrations
+	cat <<- EOM > /etc/sysctl.d/99-xen-guest.conf
+	net.ipv4.conf.all.arp_notify=1
+	EOM
+	chmod 644 /etc/sysctl.d/99-xen-guest.conf
+	sysctl -p
+	wget https://dangerous.ovirt.life/support/Xen/xe-guest-utilities*.rpm
+	yum -y --nogpgcheck install ./xe-guest-utilities*.rpm
+	rm -f xe-guest-utilities*.rpm
+elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
+	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# Note: using vmware-hgfsclient (already part of open-vm-tools) for shared folders support
+	shared_folders="\$(vmware-hgfsclient)"
+	if [ -z "\${shared_folders}" ]; then
+		cat <<- EOM >> /etc/fstab
+		# Template line to activate boot-mounted shared folders
+		#.host:/Test	/mnt/hgfs/Test	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+		EOM
+	else
+		for shared_folder in \${shared_folders} ; do
+			mkdir -p "/mnt/hgfs/\${shared_folder}"
+			cat <<- EOM >> /etc/fstab
+			.host:/\${shared_folder}	/mnt/hgfs/\${shared_folder}	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+			EOM
+		done
+	fi
+	need_reboot="no"
+elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
+	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
+	chmod a+rx VBoxLinuxAdditions.run
+	./VBoxLinuxAdditions.run --nox11
+	usermod -a -G vboxsf mwtouser
+	rm -f VBoxLinuxAdditions.run
+	need_reboot="yes"
+elif dmidecode -s system-manufacturer | grep -q "Parallels" ; then
+	wget https://dangerous.ovirt.life/support/Parallels/ParallelsTools.tar.gz | tar xzf -
+	pushd parallels-tools-distrib
+	./install --install-unattended-with-deps
+	popd
+	rm -rf parallels-tools-distrib
+	need_reboot="yes"
+elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
+	# TODO: configure Qemu agent
+	systemctl enable qemu-guest-agent
+	systemctl start qemu-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
+	# TODO: configure oVirt agent
+	systemctl enable qemu-guest-agent ovirt-guest-agent
+	systemctl start qemu-guest-agent ovirt-guest-agent
+fi
+popd
+# Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
 
 # Initialize MRTG configuration (needs Net-SNMP up)
 # TODO: add CPU/RAM/disk/etc. resource monitoring
