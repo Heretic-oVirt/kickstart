@@ -1507,9 +1507,9 @@ LABEL vmmenu
 	kernel menu.c32
 	append vm.cfg
 
-# Load HVP Nodes installation menu
+# Load HVP NGNs installation menu
 LABEL ngnmenu
-	MENU LABEL HVP Nodes installation menu --->
+	MENU LABEL HVP NGNs installation menu --->
 	kernel menu.c32
 	append ngn.cfg
 
@@ -1520,9 +1520,9 @@ LABEL hostmenu
 	append host.cfg
 
 EOF
-# Nodes installation menu
+# NGNs installation menu
 cat << EOF > /tmp/hvp-syslinux-conf/ngn.cfg
-MENU TITLE --== Heretic oVirt Project Nodes PXE Menu ==--
+MENU TITLE --== Heretic oVirt Project NGNs PXE Menu ==--
 
 # Go back to the main menu
 LABEL rootmenu
@@ -1583,8 +1583,8 @@ fi
 # Note: the hvp_nodeid parameter could be removed too but then an hvp_parameters_hh:hh:hh:hh:hh:hh.sh file containing a different default should be created for each node
 for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
-	LABEL hvpnode${i}
-	        MENU LABEL Install Heretic oVirt Project Node ${i}
+	LABEL hvpngn${i}
+	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
 	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
@@ -2611,7 +2611,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122004"
+script_version="2017122403"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2714,17 +2714,19 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
+# Add YUM priorities plugin
+yum -y install yum-plugin-priorities
+
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-chmod 644 /etc/yum.repos.d/HVP.repo
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
 
 # Add upstream repository definitions
-# TODO: use a specific mirror to avoid transient errors - replace when fixed upstream
-#yum -y install http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
-yum -y install http://mirror.team-cymru.org/rpmforge/redhat/el7/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
+yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
+yum-config-manager --save --setopt='psychotic.include=unrar*' > /dev/null
+yum-config-manager --enable psychotic > /dev/null
 yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
@@ -2733,15 +2735,12 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
 
-# Add YUM priorities plugin
-yum -y install yum-plugin-priorities
-
 # If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
-	yum-config-manager --enable hvp-opensvswitch-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-opensvswitch-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
 fi
 
 # Enable use of delta rpms since we are not using our local mirror
@@ -2764,8 +2763,8 @@ yum -y install socat
 # Note: even in presence of an actual/virtualized hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip, RAR, UnRAR and ARJ
-yum -y install hping p7zip{,-{gui,plugins}} rar unrar arj pwgen
+# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip, UnRAR and ARJ
+yum -y install hping3 p7zip{,-{gui,plugins}} unrar arj pwgen
 yum -y install yum-cron yum-plugin-ps gdisk
 
 # Install Nmon and Dstat
@@ -2841,6 +2840,8 @@ if [ "${nolocalvirt}" != "true" ]; then
 	yum -y install centos-release-qemu-ev
 	# Install packages
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy virtio-win OVMF
+	# Explicitly add package requirements to allow NGN development as per https://gerrit.ovirt.org/gitweb?p=ovirt-node-ng.git;a=blob;f=README
+	yum -y install lorax libvirt libvirt-daemon-kvm virt-install libguestfs-tools
 	# Perform a further upgrade to align with Qemu EV repo packages
 	yum -y upgrade
 	# Install Kimchi libvirt web management interface
@@ -2873,7 +2874,7 @@ find /etc -type f -name '*.rpmsave' -exec rm -f '{}' ';'
 # Now configure the base OS
 
 # Setup auto-update via yum-cron (ala CentOS4, replacement for yum-updatesd in CentOS5)
-# Note: Enable updates but leave to the user/owner the final authority on download and installation
+# Note: Enable updates but leave to the user/administrator the final authority on download and installation
 sed -i -e 's/^update_messages\s.*$/update_messages = yes/' -e 's/^download_updates\s.*$/download_updates = no/' -e 's/^apply_updates\s.*$/apply_updates = no/' -e 's/^emit_via\s.*$/emit_via = None/' /etc/yum/yum-cron*.conf
 systemctl enable yum-cron
 
