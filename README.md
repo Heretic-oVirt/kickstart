@@ -4,7 +4,7 @@ This repository contains the kickstart files used for Heretic oVirt Project infr
 
 heresiarch.ks - the kickstart file for the installer machine (install this machine *first*)
 
-heretic-ngn.ks - the kickstart file for the oVirt Node machines (you will find this kickstart file automatically copied inside the installer machine in the proper location)
+heretic-ngn.ks - the kickstart file for the oVirt NGN machines (you will find this kickstart file automatically copied inside the installer machine in the proper location)
 
 heretic-host.ks - the kickstart file for the oVirt Host machines (you will find this kickstart file automatically copied inside the installer machine in the proper location)
 
