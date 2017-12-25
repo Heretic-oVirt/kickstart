@@ -61,7 +61,7 @@
 # Note: the default node count is 3
 # Note: the default master node id is assumed to be 0
 # Note: the default node naming uses "My Little Pony" character names {pinkiepie,applejack,rarity,fluttershy} for node ids {0,1,2,3} and nodeN for further ones
-# Note: the default installer naming uses the "My Little Pony" character name twilight for the switch
+# Note: the default installer naming uses the "My Little Pony" character name twilight for the installer
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
@@ -1585,7 +1585,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122004"
+script_version="2017122501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1673,27 +1673,21 @@ fi
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Add HVP custom repo
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
-wget -P /etc/yum.repos.d/ https://dangerous.ovirt.life/hvp-repos/el7/HVP.repo
-chmod 644 /etc/yum.repos.d/HVP.repo
-
 # Add YUM priorities plugin
 yum -y --enablerepo extras install yum-plugin-priorities
 
+# Add HVP custom repo
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
 # If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
-	yum-config-manager --enable hvp-opensvswitch-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-opensvswitch-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
 fi
 
-# Enable EPEL
-# TODO: add haveged to include list in already provided EPEL repo and remove this
-yum -y --enablerepo extras install epel-release
-# Limit EPEL as per oVirt recommendations
-yum-config-manager --save --setopt='epel.exclude=collectd*' > /dev/null
+# Note: adding to already present package restrictions on EPEL repo
+sed -i -e '/^include.*=epel-release,/s/\s*$/,haveged/' /etc/yum.repos.d/ovirt-*-dependencies.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
@@ -1704,6 +1698,11 @@ for repofile in /etc/yum.repos.d/*.repo; do
 		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 	fi
 done
+# Modify baseurl definitions to allow effective use of our proxy cache
+sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-*-dependencies.repo
+
+# Install Wget
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
@@ -1717,7 +1716,6 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
 
 # Install oVirt Host
 # Note: the following packages should already be present on a Node image
-# Note: python-virtinst not present anymore - substituted by virt-install as a separate package (but without python module functionality)
 # Note: tuned and qemu-kvm-tools are needed to add host to datacenter
 # Note: the following already brings in GlusterFS as a dependency
 # Note: explicitly adding virt-v2v as per https://bugzilla.redhat.com/show_bug.cgi?id=1250376 - needs CentOS >= 7.2
