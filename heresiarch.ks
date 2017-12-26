@@ -2611,7 +2611,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122501"
+script_version="2017122502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2834,8 +2834,6 @@ fi
 
 # Add virtualization support on suitable platforms
 if [ "${nolocalvirt}" != "true" ]; then
-	# Add support for Windows VirtIO drivers from Fedora repo
-	wget https://fedorapeople.org/groups/virt/virtio-win/virtio-win.repo -O /etc/yum.repos.d/virtio-win.repo
 	# Add support for Qemu EV version from CentOS Virt SIG repo
 	yum -y install centos-release-qemu-ev
 	# Install packages
