@@ -1703,7 +1703,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122501"
+script_version="2017122601"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1825,6 +1825,9 @@ if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+else
+	# Note: our RHGS rebuild must be enabled anyway to allow access to slightly newer/tweaked (but compatible with community Gluster) versions of other packages
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 fi
 
 # Add upstream repository definitions
