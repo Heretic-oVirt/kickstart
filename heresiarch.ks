@@ -2533,6 +2533,24 @@ hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 
+# HVP Gluster settings
+# TODO: derive proper values for Gluster volume sizes from user settings
+# TODO: dynamically determine arbiter sizes for each Gluster volume
+hvp_enginedomain_size: "100GB"
+hvp_enginedomain_arbitersize: "1GB"
+hvp_vmstoredomain_size: "500GB"
+hvp_vmstoredomain_arbitersize: "1GB"
+hvp_isodomain_size: "30GB"
+hvp_isodomain_arbitersize: "1GB"
+hvp_ctdb_size: "1GB"
+hvp_winshare_size: "1024GB"
+hvp_winshare_arbitersize: "10GB"
+hvp_unixshare_size: "1024GB"
+hvp_unixshare_arbitersize: "10GB"
+hvp_blockshare_size: "1024GB"
+hvp_blockshare_arbitersize: "10GB"
+hvp_thinpool_chunksize: "1024k"
+
 # Engine credentials:
 url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
 username: admin@internal
@@ -2611,7 +2629,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122502"
+script_version="2017122603"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2722,6 +2740,16 @@ yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
 yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
+# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
+if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+else
+	# Note: our RHGS rebuild must be enabled anyway to allow access to slightly newer/tweaked (but compatible with community Gluster) versions of other packages
+	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+fi
 
 # Add upstream repository definitions
 yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
@@ -2734,14 +2762,6 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
-
-# If not explicitly denied, make sure that we prefer our own RHGS/OVN rebuild repos versus oVirt-dependency repos
-if [ "${orthodox_mode}" = "false" ]; then
-	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
-	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
-	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
-fi
 
 # Enable use of delta rpms since we are not using our local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
@@ -3894,7 +3914,7 @@ yes
 
 
 # Setup LVM
-# TODO: dynamically calculate arbiter brick sizes and thinpool metadata sizes (cfr https://gerrit.ovirt.org/#/c/75645/3)
+# TODO: dynamically calculate sizes and metadata sizes for thinpools (cfr https://gerrit.ovirt.org/#/c/75645/3)
 # TODO: allow for SSD-backed (to be autodetected) LVM caches (either only one SSD partitioned to proportionally provide cache to all vgs or one dedicated SSD cache for each vg)
 # TODO: give error for an insufficient number of disks/hosts or insufficient space on disks
 # Note: enginedomain (thick 100 GiB) LVs will host the oVirt Engine Gluster volume bricks
@@ -3902,8 +3922,8 @@ yes
 # Note: isodomain (thin 30 GiB) LVs will host the oVirt ISO images Gluster volume bricks
 # Note: ctdb (thick 1 GiB - no arbiter) LVs will host the CTDB lock Gluster volume bricks
 # Note: winshare (thin 1 TiB) LVs will host the Samba share Gluster volume bricks
-# Note: unixshare (thin 1 TiB) LVs will host the Ganesha-NFS share Gluster volume bricks
-# TODO: add LVs to host the Gluster-block based iSCSI/FCoE service Gluster volume bricks
+# Note: unixshare (thin 1 TiB) LVs will host the Ganesha-NFS (currently Gluster-NFS) share Gluster volume bricks
+# Note: blockshare (thin 1 TiB) LVs will host the Gluster-Block share Gluster volume bricks
 # Note:
 #  every suitable disk used will be made into the single PV of a VG
 #  if we have only three nodes than one node (the last one) is meant to be arbiter-only
@@ -3946,7 +3966,7 @@ vgname=vgdisk1
 lvtype=thick
 lvname=ctdb
 mount=/gluster_bricks/ctdb/brick1
-size=1GB
+size={{ hvp_ctdb_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}2:{{ groups['glusternodes'][node_index] }}]
@@ -3954,9 +3974,9 @@ action=create
 vgname=vgdisk1
 lvtype=thinpool
 poolname=lvthinpool
-poolmetadatasize=10MB
-chunksize=1024k
-size=3072GB
+poolmetadatasize=1GB
+chunksize={{ hvp_thinpool_chunksize }}
+size=4096GB
 ignore_lv_errors=no
 
 [lv{{ node_index }}3:{{ groups['glusternodes'][node_index] }}]
@@ -3965,7 +3985,7 @@ vgname=vgdisk1
 lvtype=thick
 lvname=enginedomain
 mount=/gluster_bricks/enginedomain/brick1
-size=100GB
+size={{ hvp_enginedomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}4:{{ groups['glusternodes'][node_index] }}]
@@ -3975,7 +3995,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=vmstoredomain
 mount=/gluster_bricks/vmstoredomain/brick1
-virtualsize=500GB
+virtualsize={{ hvp_vmstoredomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}5:{{ groups['glusternodes'][node_index] }}]
@@ -3985,7 +4005,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=isodomain
 mount=/gluster_bricks/isodomain/brick1
-virtualsize=30GB
+virtualsize={{ hvp_isodomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}6:{{ groups['glusternodes'][node_index] }}]
@@ -3995,7 +4015,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=winshare
 mount=/gluster_bricks/winshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_winshare_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}7:{{ groups['glusternodes'][node_index] }}]
@@ -4005,7 +4025,17 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=unixshare
 mount=/gluster_bricks/unixshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_unixshare_size }}
+ignore_lv_errors=no
+
+[lv{{ node_index }}8:{{ groups['glusternodes'][node_index] }}]
+action=create
+vgname=vgdisk1
+lvtype=thinlv
+poolname=lvthinpool
+lvname=blockshare
+mount=/gluster_bricks/blockshare/brick1
+virtualsize={{ hvp_blockshare_size }}
 ignore_lv_errors=no
 
 {% endfor %}
@@ -4048,7 +4078,7 @@ vgname=vgdisk2
 lvtype=thick
 lvname=ctdb
 mount=/gluster_bricks/ctdb/brick1
-size=1GB
+size={{ hvp_ctdb_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}2:{{ groups['glusternodes'][node_index] }}]
@@ -4057,7 +4087,7 @@ vgname=vgdisk1
 lvtype=thinpool
 poolname=lvthinpool
 poolmetadatasize=10MB
-chunksize=1024k
+chunksize={{ hvp_thinpool_chunksize }}
 size=1024GB
 ignore_lv_errors=no
 
@@ -4067,7 +4097,7 @@ vgname=vgdisk1
 lvtype=thick
 lvname=enginedomain
 mount=/gluster_bricks/enginedomain/brick1
-size=100GB
+size={{ hvp_enginedomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}4:{{ groups['glusternodes'][node_index] }}]
@@ -4077,7 +4107,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=vmstoredomain
 mount=/gluster_bricks/vmstoredomain/brick1
-virtualsize=500GB
+virtualsize={{ hvp_vmstoredomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}5:{{ groups['glusternodes'][node_index] }}]
@@ -4087,7 +4117,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=isodomain
 mount=/gluster_bricks/isodomain/brick1
-virtualsize=30GB
+virtualsize={{ hvp_isodomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}6:{{ groups['glusternodes'][node_index] }}]
@@ -4095,9 +4125,9 @@ action=create
 vgname=vgdisk2
 lvtype=thinpool
 poolname=lvthinpool
-poolmetadatasize=10MB
-chunksize=1024k
-size=3072GB
+poolmetadatasize=1GB
+chunksize={{ hvp_thinpool_chunksize }}
+size=4096GB
 ignore_lv_errors=no
 
 [lv{{ node_index }}7:{{ groups['glusternodes'][node_index] }}]
@@ -4107,7 +4137,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=winshare
 mount=/gluster_bricks/winshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_winshare_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}8:{{ groups['glusternodes'][node_index] }}]
@@ -4117,7 +4147,17 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=unixshare
 mount=/gluster_bricks/unixshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_unixshare_size }}
+ignore_lv_errors=no
+
+[lv{{ node_index }}9:{{ groups['glusternodes'][node_index] }}]
+action=create
+vgname=vgdisk2
+lvtype=thinlv
+poolname=lvthinpool
+lvname=blockshare
+mount=/gluster_bricks/blockshare/brick1
+virtualsize={{ hvp_blockshare_size }}
 ignore_lv_errors=no
 
 {% endfor %}
@@ -4173,7 +4213,7 @@ vgname=vgdisk2
 lvtype=thick
 lvname=ctdb
 mount=/gluster_bricks/ctdb/brick1
-size=1GB
+size={{ hvp_ctdb_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}2:{{ groups['glusternodes'][node_index] }}]
@@ -4182,7 +4222,7 @@ vgname=vgdisk1
 lvtype=thinpool
 poolname=lvthinpool
 poolmetadatasize=10MB
-chunksize=1024k
+chunksize={{ hvp_thinpool_chunksize }}
 size=250GB
 ignore_lv_errors=no
 
@@ -4192,7 +4232,7 @@ vgname=vgdisk1
 lvtype=thick
 lvname=enginedomain
 mount=/gluster_bricks/enginedomain/brick1
-size=100GB
+size={{ hvp_enginedomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}4:{{ groups['glusternodes'][node_index] }}]
@@ -4201,7 +4241,7 @@ vgname=vgdisk3
 lvtype=thinpool
 poolname=lvthinpool
 poolmetadatasize=10MB
-chunksize=1024k
+chunksize={{ hvp_thinpool_chunksize }}
 size=1024GB
 ignore_lv_errors=no
 
@@ -4212,7 +4252,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=vmstoredomain
 mount=/gluster_bricks/vmstoredomain/brick1
-virtualsize=500GB
+virtualsize={{ hvp_vmstoredomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}6:{{ groups['glusternodes'][node_index] }}]
@@ -4222,7 +4262,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=isodomain
 mount=/gluster_bricks/isodomain/brick1
-virtualsize=30GB
+virtualsize={{ hvp_isodomain_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}7:{{ groups['glusternodes'][node_index] }}]
@@ -4230,9 +4270,9 @@ action=create
 vgname=vgdisk2
 lvtype=thinpool
 poolname=lvthinpool
-poolmetadatasize=10MB
-chunksize=1024k
-size=3072GB
+poolmetadatasize=1GB
+chunksize={{ hvp_thinpool_chunksize }}
+size=4096GB
 ignore_lv_errors=no
 
 [lv{{ node_index }}8:{{ groups['glusternodes'][node_index] }}]
@@ -4242,7 +4282,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=winshare
 mount=/gluster_bricks/winshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_winshare_size }}
 ignore_lv_errors=no
 
 [lv{{ node_index }}9:{{ groups['glusternodes'][node_index] }}]
@@ -4252,7 +4292,17 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=unixshare
 mount=/gluster_bricks/unixshare/brick1
-virtualsize=1024GB
+virtualsize={{ hvp_unixshare_size }}
+ignore_lv_errors=no
+
+[lv{{ node_index }}10:{{ groups['glusternodes'][node_index] }}]
+action=create
+vgname=vgdisk2
+lvtype=thinlv
+poolname=lvthinpool
+lvname=blockshare
+mount=/gluster_bricks/blockshare/brick1
+virtualsize={{ hvp_blockshare_size }}
 ignore_lv_errors=no
 
 {% endfor %}
@@ -4280,7 +4330,7 @@ vgname=vgarbiter
 lvtype=thick
 lvname=ctdb
 mount=/gluster_bricks/ctdb/brick1
-size=1GB
+size={{ hvp_ctdb_size }}
 ignore_lv_errors=no
 
 [lv22:{{ groups['glusternodes'][2] }}]
@@ -4289,7 +4339,7 @@ vgname=vgarbiter
 lvtype=thinpool
 poolname=lvthinpool
 poolmetadatasize=10MB
-chunksize=1024k
+chunksize={{ hvp_thinpool_chunksize }}
 size=50GB
 ignore_lv_errors=no
 
@@ -4300,7 +4350,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=enginedomain
 mount=/gluster_bricks/enginedomain/brick1
-virtualsize=10GB
+virtualsize={{ hvp_enginedomain_arbitersize }}
 ignore_lv_errors=no
 
 [lv24:{{ groups['glusternodes'][2] }}]
@@ -4310,7 +4360,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=vmstoredomain
 mount=/gluster_bricks/vmstoredomain/brick1
-virtualsize=10GB
+virtualsize={{ hvp_vmstoredomain_arbitersize }}
 ignore_lv_errors=no
 
 [lv25:{{ groups['glusternodes'][2] }}]
@@ -4320,7 +4370,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=isodomain
 mount=/gluster_bricks/isodomain/brick1
-virtualsize=10GB
+virtualsize={{ hvp_isodomain_arbitersize }}
 ignore_lv_errors=no
 
 [lv26:{{ groups['glusternodes'][2] }}]
@@ -4330,7 +4380,7 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=winshare
 mount=/gluster_bricks/winshare/brick1
-virtualsize=10GB
+virtualsize={{ hvp_winshare_arbitersize }}
 ignore_lv_errors=no
 
 [lv27:{{ groups['glusternodes'][2] }}]
@@ -4340,7 +4390,17 @@ lvtype=thinlv
 poolname=lvthinpool
 lvname=unixshare
 mount=/gluster_bricks/unixshare/brick1
-virtualsize=10GB
+virtualsize={{ hvp_unixshare_arbitersize }}
+ignore_lv_errors=no
+
+[lv28:{{ groups['glusternodes'][2] }}]
+action=create
+vgname=vgarbiter
+lvtype=thinlv
+poolname=lvthinpool
+lvname=blockshare
+mount=/gluster_bricks/blockshare/brick1
+virtualsize={{ hvp_blockshare_arbitersize }}
 ignore_lv_errors=no
 
 {% else %}
@@ -4450,6 +4510,19 @@ key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-bloc
 value=metadata-cache,0,0,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on,off
 brick_dirs=/gluster_bricks/unixshare/brick1/brick
 ignore_volume_errors=no
+
+[volume7]
+action=create
+volname=blockshare
+transport=tcp
+replica=yes
+replica_count=3
+arbiter_count=1
+force=yes
+key=group,storage.owner-uid,storage.owner-gid,features.shard,features.shard-block-size,performance.low-prio-threads,cluster.data-self-heal-algorithm,cluster.locking-scheme,cluster.shd-wait-qlength,cluster.shd-max-threads,network.ping-timeout,user.cifs,performance.strict-o-direct,network.remote-dio,cluster.granular-entry-heal,cluster.use-compound-fops
+value=metadata-cache,0,0,on,64MB,32,full,granular,10000,8,10,off,on,off,on,on
+brick_dirs=/gluster_bricks/blockshare/brick1/brick
+ignore_volume_errors=no
 EOF
 chmod 644 /usr/local/etc/hvp-ansible/roles/glusternodes/templates/gdeploy.j2
 
@@ -4488,6 +4561,10 @@ volname=winshare
 [volume6]
 action=delete
 volname=unixshare
+
+[volume7]
+action=delete
+volname=blockshare
 
 [peer]
 action=detach
