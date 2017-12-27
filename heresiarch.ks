@@ -2629,7 +2629,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122603"
+script_version="2017122701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3329,7 +3329,7 @@ EOF
 chmod 644 /var/www/html/index.html
 
 # Prepare network installation area
-mkdir -p /var/www/hvp-repos/el7/{centos,node,ks}
+mkdir -p /var/www/hvp-repos/el7/{centos,ks}
 # Mirror web contents here using wget
 for subdir in ks centos node-${ovirt_version}; do
 	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
