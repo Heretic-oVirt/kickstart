@@ -1585,7 +1585,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017122601"
+script_version="2017122801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1704,8 +1704,8 @@ done
 # Modify baseurl definitions to allow effective use of our proxy cache
 sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-*-dependencies.repo
 
-# Install Wget
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget
+# Install Wget and patch
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget patch
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
@@ -1759,6 +1759,52 @@ find /etc -type f -name '*.rpmsave' -exec rm -f '{}' ';'
 
 # Now configure the Node OS
 # TODO: Decide which part to configure here and which part to demand to Ansible
+
+# TODO: apply patch to imgbased from https://gerrit.ovirt.org/#/c/85687/ - remove when integrated upstream (see https://bugzilla.redhat.com/show_bug.cgi?id=1528468 )
+pushd /usr/lib/python2.7/site-packages
+cat << EOF | patch -p2
+--- a/src/imgbased/plugins/rpmpersistence.py
++++ b/src/imgbased/plugins/rpmpersistence.py
+@@ -28,7 +28,7 @@ import glob
+ import subprocess
+ 
+ from .. import utils
+-from ..utils import mounted, SystemRelease, SELinuxDomain
++from ..utils import File, mounted, SystemRelease, SELinuxDomain
+ 
+ 
+ log = logging.getLogger(__package__)
+@@ -65,17 +65,20 @@ def on_os_upgraded(imgbase, previous_lv_name, new_lv_name):
+ def reinstall_rpms(imgbase, new_lv, previous_lv):
+     # FIXME: this should get moved to a generalized plugin. We need to check
+     # it in multiple places
+-    with mounted(new_lv.path) as new_fs:
+-        new_etc = new_fs.path("/etc")
++    if "inst.ks" not in File('/proc/cmdline').contents:
++        with mounted(new_lv.path) as new_fs:
++            new_etc = new_fs.path("/etc")
+ 
+-        new_rel = SystemRelease(new_etc + "/system-release-cpe")
++            new_rel = SystemRelease(new_etc + "/system-release-cpe")
+ 
+-        if not new_rel.is_supported_product():
+-            log.error("Unsupported product: %s" % new_rel)
+-            raise RpmPersistenceError()
++            if not new_rel.is_supported_product():
++                log.error("Unsupported product: %s" % new_rel)
++                raise RpmPersistenceError()
+ 
+-        with utils.bindmounted("/var", target=new_fs.target + "/var"):
+-            install_rpms(new_fs)
++            with utils.bindmounted("/var", target=new_fs.target + "/var"):
++                install_rpms(new_fs)
++
++        log.info("Not reinstalling RPMs during system installation")
+ 
+     imgbase.hooks.emit("rpms-persisted",
+                        previous_lv.lv_name,
+EOF
+popd
 
 # Autodetecting BIOS/UEFI
 # Note: the following identifies the symlink under /etc to abstract from BIOS/UEFI actual file placement
