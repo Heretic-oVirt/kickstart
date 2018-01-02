@@ -10,7 +10,7 @@ heretic-host.ks - the kickstart file for the oVirt Host machines (you will find 
 
 Each kickstart file has a corresponding sample hvp_parameters_&ast;.sh configuration parameters file (consisting of comments and variable definitions in GNU/Bash syntax) to overcome Linux kernel commandline length limitations.
 
-Currently there is a rough organization of automation strategies (Kickstart vs Ansible) and source location (Ansible playbooks/etc are hardcoded inside heresiarch.ks instead of being taken from Github or a proper package).
+Currently there is a rough organization of automation strategies (Kickstart vs Ansible).
 
 Inside kickstart files, important points are in comments beginning with "# Note: " while current bugs/workarounds/missing_features are in comments beginning with "# TODO: "
 
