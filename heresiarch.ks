@@ -49,6 +49,9 @@
 # Note: to force custom datacenter naming add hvp_dcname=mydcname where mydcname is the name of the oVirt DataCenter
 # Note: to force custom cluster naming add hvp_clname=myclname where myclname is the name of the oVirt Cluster
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
+# Note: to force custom node BMC type add hvp_bmcs_type=bmctype where bmctype is the BMC type
+# Note: to force custom node BMC username add hvp_bmcs_username=bmcadmin where bmcadmin is the BMC username
+# Note: to force custom node BMC password add hvp_bmcs_password=bmcsecret where bmcsecret is the BMC username password
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
 # Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan/internal networks
@@ -99,6 +102,9 @@
 # Note: the default datacenter naming uses the name HVPDataCenter for the oVirt DataCenter
 # Note: the default cluster naming uses the name HVPCluster for the oVirt Cluster
 # Note: the default nodes BMC IP offset is 100
+# Note: the default nodes BMC type is ipmilan
+# Note: the default nodes BMC username is hvpbmcadmin
+# Note: the default nodes BMC password is HVP_dem0
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
 # Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
@@ -342,6 +348,9 @@ unset reverse_domain_name
 unset bridge_name
 unset node_name
 unset bmc_ip_offset
+unset bmc_type
+unset bmc_username
+unset bmc_password
 unset node_ip_offset
 unset switch_ip
 unset switch_ip_offset
@@ -406,6 +415,10 @@ switch_ip_offset="200"
 # TODO: verify whether the final addresses (network+offset+index) lie inside the network boundaries
 # Note: the following can be overridden from commandline
 bmc_ip_offset="100"
+
+bmc_type="ipmilan"
+bmc_username="hvpbmcadmin"
+bmc_password="HVP_dem0"
 
 # TODO: verify whether the final addresses (network+offset+index) lie inside the network boundaries
 # Note: the following can be overridden from commandline
@@ -806,6 +819,24 @@ fi
 given_bmcs_offset=$(sed -n -e 's/^.*hvp_bmcs_offset=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_bmcs_offset}" | grep -q '^[[:digit:]]\+$' ; then
 	bmc_ip_offset="${given_bmcs_offset}"
+fi
+
+# Determine node BMC type
+given_bmc_type=$(sed -n -e "s/^.*hvp_bmcs_type=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_bmc_type}" ]; then
+	bmc_type="${given_bmc_type}"
+fi
+
+# Determine node BMC username
+given_bmc_username=$(sed -n -e "s/^.*hvp_bmcs_username=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_bmc_username}" ]; then
+	bmc_username="${given_bmc_username}"
+fi
+
+# Determine node BMC password
+given_bmc_password=$(sed -n -e "s/^.*hvp_bmcs_password=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_bmc_password}" ]; then
+	bmc_password="${given_bmc_password}"
 fi
 
 # Determine node IPs offset base
@@ -2557,17 +2588,24 @@ username: admin@internal
 password: ${root_password}
 ca_file: /etc/pki/ovirt-engine/ca.pem
 
+# Hosts credentials:
+host_password: ${root_password}
+host_bmc_type: ${bmc_type}
+host_bmc_options: []
+host_bmc_user: ${bmc_username}
+host_bmc_password: ${bmc_password}
+
 # Env:
 ## Datacenter:
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
-#dc_name: ${datacenter_name}
+hvp_dc_name: ${datacenter_name}
 dc_name: "Default"
 # TODO: verify whether "master" is a valid compatibility_version - replace otherwise
 compatibility_version: ${ovirt_version}
 
 ## Cluster:
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
-#cluster_name: ${cluster_name}
+hvp_cluster_name: ${cluster_name}
 cluster_name: "Default"
 
 ## Storage
@@ -2629,7 +2667,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017123101"
+script_version="2018010301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
