@@ -28,6 +28,10 @@ my_ip_offset="1"
 
 bmc_ip_offset="100"
 
+bmc_type="ipmilan"
+bmc_username="hvpbmcadmin"
+bmc_password="HVP_dem0"
+
 node_ip_offset="10"
 
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
