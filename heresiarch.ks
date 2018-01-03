@@ -2492,6 +2492,16 @@ cat << EOF >> hosts
 [ovirt_master]
 ${node_name[${master_index}]}.${domain_name[${dhcp_zone}]}
 
+# Our oVirt Nodes BMCs
+[ovirtbmcs]
+EOF
+for ((i=0;i<${node_count};i=i+1)); do
+	cat <<- EOF >> hosts
+	${node_name[${i}]}bmc.${domain_name[${dhcp_zone}]}
+	EOF
+done
+cat << EOF >> hosts
+
 # Our oVirt Engine
 [ovirtengine]
 ${engine_name}.${domain_name[${dhcp_zone}]}
@@ -2667,7 +2677,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018010301"
+script_version="2018010302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
