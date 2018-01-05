@@ -825,18 +825,30 @@ fi
 given_bmc_type=$(sed -n -e "s/^.*hvp_bmcs_type=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_bmc_type}" ]; then
 	bmc_type="${given_bmc_type}"
+	# Correctly detect an empty (disabled) BMC type
+	if [ "${bmc_type}" = '""' -o "${bmc_type}" = "''" ]; then
+		bmc_type=""
+	fi
 fi
 
 # Determine node BMC username
 given_bmc_username=$(sed -n -e "s/^.*hvp_bmcs_username=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_bmc_username}" ]; then
 	bmc_username="${given_bmc_username}"
+	# Correctly detect an empty (disabled) BMC username
+	if [ "${bmc_username}" = '""' -o "${bmc_username}" = "''" ]; then
+		bmc_username=""
+	fi
 fi
 
 # Determine node BMC password
 given_bmc_password=$(sed -n -e "s/^.*hvp_bmcs_password=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_bmc_password}" ]; then
 	bmc_password="${given_bmc_password}"
+	# Correctly detect an empty (disabled) BMC password
+	if [ "${bmc_password}" = '""' -o "${bmc_password}" = "''" ]; then
+		bmc_password=""
+	fi
 fi
 
 # Determine node IPs offset base
@@ -2552,6 +2564,11 @@ done
 # Note: Ansible oVirt variable definitions thanks to Simone Tiraboschi
 unset PREFIX
 eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
+if [ -n "${bmc_type}" -a -n "${bmc_username}" -a -n "${bmc_password}" ]; then
+	bmc_vars_comment=''
+else
+	bmc_vars_comment='#'
+fi
 cat << EOF > hvp.yaml
 # HVP local conventions
 hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
@@ -2599,11 +2616,12 @@ password: ${root_password}
 ca_file: /etc/pki/ovirt-engine/ca.pem
 
 # Hosts credentials:
+# TODO: add support for BMC options
 host_password: ${root_password}
-host_bmc_type: ${bmc_type}
-host_bmc_options: []
-host_bmc_user: ${bmc_username}
-host_bmc_password: ${bmc_password}
+${bmc_vars_comment}host_bmc_type: ${bmc_type}
+${bmc_vars_comment}#host_bmc_options: []
+${bmc_vars_comment}host_bmc_user: ${bmc_username}
+${bmc_vars_comment}host_bmc_password: ${bmc_password}
 
 # Env:
 ## Datacenter:
@@ -2677,7 +2695,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018010302"
+script_version="2018010402"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3715,6 +3733,7 @@ kill ${haveged_pid}
 sed -i -e 's/^#*\s*host_key_checking\s*=.*$/host_key_checking = False/' -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
 # Prepare Ansible roles
 # Note: Ansible group var files created in pre section above and copied in third post section below
+# TODO: create var file vms.yaml for virtual machines creation (parse kickstart files downloaded above)
 # Note: oVirt defaults created in pre section above and copied in third post section below
 # TODO: copy files from installed package - remove when fully using them in place
 mkdir -p /usr/local/etc/hvp-ansible
