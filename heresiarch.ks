@@ -1179,8 +1179,20 @@ else
 fi
 if [ -n "${nics['gluster']}" ]; then
 	gluster_zone="gluster"
+	gluster_network="true"
 else
 	gluster_zone="${dhcp_zone}"
+	gluster_network="false"
+fi
+if [ -n "${nics['lan']}" ]; then
+	lan_network="true"
+else
+	lan_network="false"
+fi
+if [ -n "${nics['internal']}" ]; then
+	internal_network="true"
+else
+	internal_network="false"
 fi
 
 # Determine switch IP
@@ -2570,6 +2582,8 @@ else
 	bmc_vars_comment='#'
 fi
 cat << EOF > hvp.yaml
+# Global variables for HVP Ansible playbooks
+
 # HVP local conventions
 hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
@@ -2607,6 +2621,8 @@ hvp_unixshare_size: "1024GB"
 hvp_unixshare_arbitersize: "10GB"
 hvp_blockshare_size: "1024GB"
 hvp_blockshare_arbitersize: "10GB"
+hvp_backup_size: "1024GB"
+hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1024k"
 
 # Engine credentials:
@@ -2657,10 +2673,18 @@ engine_sd_addr: "{{ glusterfs_addr }}"
 engine_sd_name: engine_domain
 engine_sd_path: /enginedomain
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
+
+## Networking
+got_gluster_network: ${gluster_network}
+got_lan_network: ${lan_network}
+got_internal_network: ${internal_network}
+
 EOF
 
 # Prepare Active Directory defaults
 cat << EOF > ad.yaml
+# AD-related variables for HVP Ansible playbooks
+
 hvp_adjoin_realm: ${realm_name}
 hvp_adjoin_username: ${winadmin_username}
 hvp_adjoin_password: ${winadmin_password}
@@ -2695,7 +2719,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018010402"
+script_version="2018010801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
