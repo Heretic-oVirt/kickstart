@@ -2705,10 +2705,10 @@ popd
 %post --nochroot --log /dev/console
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
-mkdir -p /mnt/sysimage/root/etc/kscfg-pre
+mkdir -p ${ANA_INSTALL_PATH}/root/etc/kscfg-pre
 for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${custom_frag}" ]; then
-		cp "${custom_frag}" /mnt/sysimage/root/etc/kscfg-pre/
+		cp "${custom_frag}" ${ANA_INSTALL_PATH}/root/etc/kscfg-pre/
 	fi
 done
 
@@ -2719,7 +2719,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018010801"
+script_version="2018011101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4123,88 +4123,88 @@ systemctl mask initial-setup
 %post --nochroot
 # Append hosts fragment (generated in pre section above) into installed system
 if [ -s /tmp/hvp-bind-zones/hosts ]; then
-	cat /tmp/hvp-bind-zones/hosts >> /mnt/sysimage/etc/hosts
+	cat /tmp/hvp-bind-zones/hosts >> ${ANA_INSTALL_PATH}/etc/hosts
 fi
 
 # Copy bind configuration (generated in pre section above) into installed system
 # Note: using numeric uids/gids since anaconda image may lack the corresponding passwd/group entries
 if [ -d /tmp/hvp-bind-zones ]; then
 	if [ -d /tmp/hvp-bind-zones/dynamic ]; then
-		cp /tmp/hvp-bind-zones/dynamic/* /mnt/sysimage/var/named/dynamic/
-		chmod 644 /mnt/sysimage/var/named/dynamic/*
-		chown 25:25 /mnt/sysimage/var/named/dynamic/*
+		cp /tmp/hvp-bind-zones/dynamic/* ${ANA_INSTALL_PATH}/var/named/dynamic/
+		chmod 644 ${ANA_INSTALL_PATH}/var/named/dynamic/*
+		chown 25:25 ${ANA_INSTALL_PATH}/var/named/dynamic/*
 	fi
 	if [ -f /tmp/hvp-bind-zones/named.conf ]; then
-		cp /tmp/hvp-bind-zones/named.conf /mnt/sysimage/etc/named.conf
-		chmod 644 /mnt/sysimage/etc/named.conf
-		chgrp 25 /mnt/sysimage/etc/named.conf
+		cp /tmp/hvp-bind-zones/named.conf ${ANA_INSTALL_PATH}/etc/named.conf
+		chmod 644 ${ANA_INSTALL_PATH}/etc/named.conf
+		chgrp 25 ${ANA_INSTALL_PATH}/etc/named.conf
 	fi
 	# Reconfigure networking to use localhost DNS
 	for file in /tmp/hvp-bind-zones/ifcfg-* ; do
 		if [ -f "${file}" ]; then
 			nic_cfg_file=$(basename "${file}")
-			sed -i -e '/^PEERDNS/d' -e '/^DNS[0-9]/d' "/mnt/sysimage/etc/sysconfig/network-scripts/${nic_cfg_file}"
-			cat "${file}" >> "/mnt/sysimage/etc/sysconfig/network-scripts/${nic_cfg_file}"
-			sed -i -e '/^nameserver\s/d' /mnt/sysimage/etc/resolv.conf
-			echo 'nameserver 127.0.0.1' >> /mnt/sysimage/etc/resolv.conf
+			sed -i -e '/^PEERDNS/d' -e '/^DNS[0-9]/d' "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${nic_cfg_file}"
+			cat "${file}" >> "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${nic_cfg_file}"
+			sed -i -e '/^nameserver\s/d' ${ANA_INSTALL_PATH}/etc/resolv.conf
+			echo 'nameserver 127.0.0.1' >> ${ANA_INSTALL_PATH}/etc/resolv.conf
 		fi
 	done
 fi
 
 # Copy dhcpd configuration (generated in pre section above) into installed system
 if [ -f /tmp/hvp-dhcpd-conf/dhcpd.conf ]; then
-	cp /tmp/hvp-dhcpd-conf/dhcpd.conf /mnt/sysimage/etc/dhcp/dhcpd.conf
-	chmod 644 /mnt/sysimage/etc/dhcp/dhcpd.conf
-	chown root:root /mnt/sysimage/etc/dhcp/dhcpd.conf
+	cp /tmp/hvp-dhcpd-conf/dhcpd.conf ${ANA_INSTALL_PATH}/etc/dhcp/dhcpd.conf
+	chmod 644 ${ANA_INSTALL_PATH}/etc/dhcp/dhcpd.conf
+	chown root:root ${ANA_INSTALL_PATH}/etc/dhcp/dhcpd.conf
 fi
 
 # Copy syslinux configuration (generated in pre section above) into installed system
 if [ -f /tmp/hvp-syslinux-conf/common.cfg ]; then
-	cp /tmp/hvp-syslinux-conf/common.cfg /mnt/sysimage/var/lib/tftpboot/common.cfg
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/common.cfg
-	chown root:root /mnt/sysimage/var/lib/tftpboot/common.cfg
+	cp /tmp/hvp-syslinux-conf/common.cfg ${ANA_INSTALL_PATH}/var/lib/tftpboot/common.cfg
+	chmod 644 ${ANA_INSTALL_PATH}/var/lib/tftpboot/common.cfg
+	chown root:root ${ANA_INSTALL_PATH}/var/lib/tftpboot/common.cfg
 fi
 if [ -f /tmp/hvp-syslinux-conf/ngn.cfg ]; then
-	cp /tmp/hvp-syslinux-conf/ngn.cfg /mnt/sysimage/var/lib/tftpboot/ngn.cfg
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/ngn.cfg
-	chown root:root /mnt/sysimage/var/lib/tftpboot/ngn.cfg
+	cp /tmp/hvp-syslinux-conf/ngn.cfg ${ANA_INSTALL_PATH}/var/lib/tftpboot/ngn.cfg
+	chmod 644 ${ANA_INSTALL_PATH}/var/lib/tftpboot/ngn.cfg
+	chown root:root ${ANA_INSTALL_PATH}/var/lib/tftpboot/ngn.cfg
 fi
 if [ -f /tmp/hvp-syslinux-conf/host.cfg ]; then
-	cp /tmp/hvp-syslinux-conf/host.cfg /mnt/sysimage/var/lib/tftpboot/host.cfg
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/host.cfg
-	chown root:root /mnt/sysimage/var/lib/tftpboot/host.cfg
+	cp /tmp/hvp-syslinux-conf/host.cfg ${ANA_INSTALL_PATH}/var/lib/tftpboot/host.cfg
+	chmod 644 ${ANA_INSTALL_PATH}/var/lib/tftpboot/host.cfg
+	chown root:root ${ANA_INSTALL_PATH}/var/lib/tftpboot/host.cfg
 fi
 if [ -f /tmp/hvp-syslinux-conf/vm.cfg ]; then
-	cp /tmp/hvp-syslinux-conf/vm.cfg /mnt/sysimage/var/lib/tftpboot/vm.cfg
-	chmod 644 /mnt/sysimage/var/lib/tftpboot/vm.cfg
-	chown root:root /mnt/sysimage/var/lib/tftpboot/vm.cfg
+	cp /tmp/hvp-syslinux-conf/vm.cfg ${ANA_INSTALL_PATH}/var/lib/tftpboot/vm.cfg
+	chmod 644 ${ANA_INSTALL_PATH}/var/lib/tftpboot/vm.cfg
+	chown root:root ${ANA_INSTALL_PATH}/var/lib/tftpboot/vm.cfg
 fi
 
 # Copy kickstart parameters files (generated in pre section above) into installed system
 # Note: the following will overwrite the generic samples mirrored from the HVP site
 for parameters_file in /tmp/hvp-syslinux-conf/hvp_parameters*.sh ; do
 	if [ -f "${parameters_file}" ]; then
-		cp --backup --suffix .orig "${parameters_file}" /mnt/sysimage/var/www/hvp-repos/el7/ks/
+		cp --backup --suffix .orig "${parameters_file}" ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/ks/
 	fi
 done
-chmod 644 /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
-chown root:root /mnt/sysimage/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
+chmod 644 ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
+chown root:root ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
 
 # Create local installation source tree to support PXE-based installations
 if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
 	# Copy CentOS repo from DVD image when using that as install source
-	cp -r /run/install/repo/{Packages,repodata} /mnt/sysimage/var/www/hvp-repos/el7/centos/
+	cp -r /run/install/repo/{Packages,repodata} ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external repo otherwise
-	wget -P /mnt/sysimage/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/Packages
-	wget -P /mnt/sysimage/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/repodata
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/Packages
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/repodata
 fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
 # Note: it should be inserted before the inclusion of /etc/httpd/conf.d/*.conf fragments
 # Note: ed is not present in the anaconda environment, while ex is (as part of vim)
 if [ -f /tmp/hvp-dhcpd-conf/httpd.conf ]; then
-	ex -s /mnt/sysimage/etc/httpd/conf/httpd.conf <<- EOF
+	ex -s ${ANA_INSTALL_PATH}/etc/httpd/conf/httpd.conf <<- EOF
 	/^# Supplemental configuration/-r /tmp/hvp-dhcpd-conf/httpd.conf
 	w
 	q
@@ -4213,46 +4213,46 @@ fi
 
 # Copy users setup script (generated in pre section above) into installed system
 if [ -f /tmp/hvp-users-conf/rc.users-setup ]; then
-	cp /tmp/hvp-users-conf/rc.users-setup /mnt/sysimage/etc/rc.d/rc.users-setup
+	cp /tmp/hvp-users-conf/rc.users-setup ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
 	# Note: cleartext passwords contained - must restrict access
-	chmod 700 /mnt/sysimage/etc/rc.d/rc.users-setup
-	chown root:root /mnt/sysimage/etc/rc.d/rc.users-setup
+	chmod 700 ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
+	chown root:root ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
 fi
 
 # Copy firewalld setup script (generated in pre section above) into installed system
 if [ -f /tmp/hvp-firewalld-conf/rc.firewalld-setup ]; then
-	cp /tmp/hvp-firewalld-conf/rc.firewalld-setup /mnt/sysimage/etc/rc.d/rc.firewalld-setup
-	chmod 755 /mnt/sysimage/etc/rc.d/rc.firewalld-setup
-	chown root:root /mnt/sysimage/etc/rc.d/rc.firewalld-setup
+	cp /tmp/hvp-firewalld-conf/rc.firewalld-setup ${ANA_INSTALL_PATH}/etc/rc.d/rc.firewalld-setup
+	chmod 755 ${ANA_INSTALL_PATH}/etc/rc.d/rc.firewalld-setup
+	chown root:root ${ANA_INSTALL_PATH}/etc/rc.d/rc.firewalld-setup
 fi
 
 # Copy TCP wrappers configuration (generated in pre section above) into installed system
 if [ -f /tmp/hvp-tcp_wrappers-conf/hosts.allow ]; then
-	cat /tmp/hvp-tcp_wrappers-conf/hosts.allow >> /mnt/sysimage/etc/hosts.allow
+	cat /tmp/hvp-tcp_wrappers-conf/hosts.allow >> ${ANA_INSTALL_PATH}/etc/hosts.allow
 fi
 
 # Copy Ansible configuration (generated in pre section above) into installed system
 if [ -f /tmp/hvp-ansible-files/hosts ]; then
-	cat /tmp/hvp-ansible-files/hosts > /mnt/sysimage/etc/ansible/hosts
+	cat /tmp/hvp-ansible-files/hosts > ${ANA_INSTALL_PATH}/etc/ansible/hosts
 fi
 if [ -f /tmp/hvp-ansible-files/hvp.yaml ]; then
-	cp -f /tmp/hvp-ansible-files/hvp.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
-	chmod 600 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
+	cp -f /tmp/hvp-ansible-files/hvp.yaml ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
+	chmod 600 ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
+	chown root:root ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 fi
 if [ -f /tmp/hvp-ansible-files/ad.yaml ]; then
-	cp -f /tmp/hvp-ansible-files/ad.yaml /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
-	chmod 600 /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
-	chown root:root /mnt/sysimage/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+	cp -f /tmp/hvp-ansible-files/ad.yaml ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+	chmod 600 ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
+	chown root:root ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
 fi
 for file in /tmp/hvp-ansible-files/group_vars/* ; do
 	if [ -f "${file}" ]; then
-		mkdir -p /mnt/sysimage/etc/ansible/group_vars
-		chmod 755 /mnt/sysimage/etc/ansible/group_vars
-		chown root:root /mnt/sysimage/etc/ansible/group_vars
-		cp "${file}" /mnt/sysimage/etc/ansible/group_vars/
-		chmod 600 /mnt/sysimage/etc/ansible/group_vars/*
-		chown root:root /mnt/sysimage/etc/ansible/group_vars/*
+		mkdir -p ${ANA_INSTALL_PATH}/etc/ansible/group_vars
+		chmod 755 ${ANA_INSTALL_PATH}/etc/ansible/group_vars
+		chown root:root ${ANA_INSTALL_PATH}/etc/ansible/group_vars
+		cp "${file}" ${ANA_INSTALL_PATH}/etc/ansible/group_vars/
+		chmod 600 ${ANA_INSTALL_PATH}/etc/ansible/group_vars/*
+		chown root:root ${ANA_INSTALL_PATH}/etc/ansible/group_vars/*
 	fi
 done
 
@@ -4260,25 +4260,25 @@ done
 for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
 	if [ -f "${file}" ]; then
 		cfg_file_name=$(basename "${file}")
-		sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' "/mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}"
-		cat "${file}" >> "/mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}"
+		sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}"
+		cat "${file}" >> "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}"
 	fi
 done
 
 # Save exact pre-stage environment
 if [ -f /tmp/pre.out ]; then
-	cp /tmp/pre.out /mnt/sysimage/root/log/pre.out
+	cp /tmp/pre.out ${ANA_INSTALL_PATH}/root/log/pre.out
 fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
-cp /run/install/ks.cfg /mnt/sysimage/root/etc
+cp /run/install/ks.cfg ${ANA_INSTALL_PATH}/root/etc
 for full_frag in /tmp/full-* ; do
 	if [ -f "${full_frag}" ]; then
-		cp "${full_frag}" /mnt/sysimage/root/etc
+		cp "${full_frag}" ${ANA_INSTALL_PATH}/root/etc
 	fi
 done
-cp /tmp/kickstart_pre.log /mnt/sysimage/root/log
-mv /mnt/sysimage/root/kickstart_post.log /mnt/sysimage/root/log
+cp /tmp/kickstart_pre.log ${ANA_INSTALL_PATH}/root/log
+mv ${ANA_INSTALL_PATH}/root/kickstart_post.log ${ANA_INSTALL_PATH}/root/log
 %end
 
 # Post-installation script (run with bash from chroot after the third post section)

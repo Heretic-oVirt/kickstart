@@ -1571,10 +1571,10 @@ popd
 %post --nochroot
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
-mkdir -p /mnt/sysimage/root/etc/kscfg-pre
+mkdir -p ${ANA_INSTALL_PATH}/root/etc/kscfg-pre
 for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	if [ -f "${custom_frag}" ]; then
-		cp "${custom_frag}" /mnt/sysimage/root/etc/kscfg-pre/
+		cp "${custom_frag}" ${ANA_INSTALL_PATH}/root/etc/kscfg-pre/
 	fi
 done
 
@@ -1585,7 +1585,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2017123001"
+script_version="2018011101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2494,29 +2494,29 @@ systemctl enable ks1stboot.service
 %post --nochroot
 # Copy CTDB configuration (generated in pre section above) into installed system
 if [ -s /tmp/hvp-ctdb-files/nodes ]; then
-	cat /tmp/hvp-ctdb-files/nodes >> /mnt/sysimage/etc/ctdb/nodes
-	chmod 644 /mnt/sysimage/etc/ctdb/nodes
+	cat /tmp/hvp-ctdb-files/nodes >> ${ANA_INSTALL_PATH}/etc/ctdb/nodes
+	chmod 644 ${ANA_INSTALL_PATH}/etc/ctdb/nodes
 fi
 if [ -s /tmp/hvp-ctdb-files/public_addresses ]; then
-	cat /tmp/hvp-ctdb-files/public_addresses >> /mnt/sysimage/etc/ctdb/public_addresses
-	chmod 644 /mnt/sysimage/etc/ctdb/public_addresses
+	cat /tmp/hvp-ctdb-files/public_addresses >> ${ANA_INSTALL_PATH}/etc/ctdb/public_addresses
+	chmod 644 ${ANA_INSTALL_PATH}/etc/ctdb/public_addresses
 fi
 if [ -s /tmp/hvp-ctdb-files/gluster-lock.mount ]; then
-	cp /tmp/hvp-ctdb-files/gluster-lock.mount /mnt/sysimage/etc/systemd/system/gluster-lock.mount
-	chmod 644 /mnt/sysimage/etc/systemd/system/gluster-lock.mount
-	chown root:root /mnt/sysimage/etc/systemd/system/gluster-lock.mount
+	cp /tmp/hvp-ctdb-files/gluster-lock.mount ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
+	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
+	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
 fi
 
 # Copy Samba configuration (generated in pre section above) into installed system
 if [ -s /tmp/hvp-samba-files/smb.conf ]; then
-	cp /tmp/hvp-samba-files/smb.conf /mnt/sysimage/etc/samba/smb.conf
-	chmod 644 /mnt/sysimage/etc/samba/smb.conf
-	chown root:root /mnt/sysimage/etc/samba/smb.conf
+	cp /tmp/hvp-samba-files/smb.conf ${ANA_INSTALL_PATH}/etc/samba/smb.conf
+	chmod 644 ${ANA_INSTALL_PATH}/etc/samba/smb.conf
+	chown root:root ${ANA_INSTALL_PATH}/etc/samba/smb.conf
 fi
 
 # Append hosts fragment (generated in pre section above) into installed system
 if [ -s /tmp/hvp-bind-zones/hosts ]; then
-	cat /tmp/hvp-bind-zones/hosts >> /mnt/sysimage/etc/hosts
+	cat /tmp/hvp-bind-zones/hosts >> ${ANA_INSTALL_PATH}/etc/hosts
 fi
 
 # Copy bind configuration (generated in pre section above) into installed system
@@ -2524,46 +2524,46 @@ fi
 if [ -d /tmp/hvp-bind-zones ]; then
 	# Note: the following will be present on node 0 only
 	if [ -d /tmp/hvp-bind-zones/dynamic ]; then
-		cp /tmp/hvp-bind-zones/dynamic/* /mnt/sysimage/var/named/dynamic/
-		chmod 644 /mnt/sysimage/var/named/dynamic/*
-		chown 25:25 /mnt/sysimage/var/named/dynamic/*
+		cp /tmp/hvp-bind-zones/dynamic/* ${ANA_INSTALL_PATH}/var/named/dynamic/
+		chmod 644 ${ANA_INSTALL_PATH}/var/named/dynamic/*
+		chown 25:25 ${ANA_INSTALL_PATH}/var/named/dynamic/*
 	fi
 	# Note: the following will be present on all nodes
 	if [ -f /tmp/hvp-bind-zones/named.conf ]; then
-		cp /tmp/hvp-bind-zones/named.conf /mnt/sysimage/etc/named.conf
-		chmod 644 /mnt/sysimage/etc/named.conf
-		chgrp 25 /mnt/sysimage/etc/named.conf
+		cp /tmp/hvp-bind-zones/named.conf ${ANA_INSTALL_PATH}/etc/named.conf
+		chmod 644 ${ANA_INSTALL_PATH}/etc/named.conf
+		chgrp 25 ${ANA_INSTALL_PATH}/etc/named.conf
 	fi
 fi
 
 # Copy users setup script (generated in pre section above) into installed system
 if [ -f /tmp/hvp-users-conf/rc.users-setup ]; then
-	cp /tmp/hvp-users-conf/rc.users-setup /mnt/sysimage/etc/rc.d/rc.users-setup
-	chmod 755 /mnt/sysimage/etc/rc.d/rc.users-setup
-	chown root:root /mnt/sysimage/etc/rc.d/rc.users-setup
+	cp /tmp/hvp-users-conf/rc.users-setup ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
+	chmod 755 ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
+	chown root:root ${ANA_INSTALL_PATH}/etc/rc.d/rc.users-setup
 fi
 
 # TODO: perform NetworkManager workaround configuration on interfaces as detected in pre section above - remove when fixed upstream
 for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
 	cfg_file_name=$(basename ${file})
-	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
-	cat ${file} >> /mnt/sysimage/etc/sysconfig/network-scripts/${cfg_file_name}
+	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' ${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}
+	cat ${file} >> ${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}
 done
 
 # Save exact pre-stage environment
 if [ -f /tmp/pre.out ]; then
-	cp /tmp/pre.out /mnt/sysimage/root/log/pre.out
+	cp /tmp/pre.out ${ANA_INSTALL_PATH}/root/log/pre.out
 fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
-cp /run/install/ks.cfg /mnt/sysimage/root/etc
+cp /run/install/ks.cfg ${ANA_INSTALL_PATH}/root/etc
 for full_frag in /tmp/full-* ; do
 	if [ -f "${full_frag}" ]; then
-		cp "${full_frag}" /mnt/sysimage/root/etc
+		cp "${full_frag}" ${ANA_INSTALL_PATH}/root/etc
 	fi
 done
-cp /tmp/kickstart_pre.log /mnt/sysimage/root/log
-mv /mnt/sysimage/root/kickstart_post.log /mnt/sysimage/root/log
+cp /tmp/kickstart_pre.log ${ANA_INSTALL_PATH}/root/log
+mv ${ANA_INSTALL_PATH}/root/kickstart_post.log ${ANA_INSTALL_PATH}/root/log
 %end
 
 # Post-installation script (run with bash from chroot after the third post section)
