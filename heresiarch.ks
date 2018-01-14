@@ -2719,7 +2719,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018011101"
+script_version="2018011401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2740,6 +2740,26 @@ hostname ${HOSTNAME}
 
 # Set the homedir for apps that need it
 export HOME="/root"
+
+# Discover exact post-stage environment
+echo "POST env" >> /tmp/post.out
+env >> /tmp/post.out
+echo "POST devs" >> /tmp/post.out
+ls -l /dev/* >> /tmp/post.out
+echo "POST block" >> /tmp/post.out
+ls -l /sys/block/* >> /tmp/post.out
+echo "POST mounts" >> /tmp/post.out
+df -h >> /tmp/post.out
+echo "POST progs" >> /tmp/post.out
+for pathdir in $(echo "${PATH}" | sed -e 's/:/ /'); do
+	if [ -d "${pathdir}" ]; then
+		ls "${pathdir}"/* >> /tmp/post.out
+	fi
+done
+echo "POST resolv.conf" >> /tmp/post.out
+cat /etc/resolv.conf >> /tmp/post.out
+echo "POST hosts" >> /tmp/post.out
+cat /etc/hosts >> /tmp/post.out
 
 # Define associative arrays
 declare -A node_name
@@ -4268,6 +4288,10 @@ done
 # Save exact pre-stage environment
 if [ -f /tmp/pre.out ]; then
 	cp /tmp/pre.out ${ANA_INSTALL_PATH}/root/log/pre.out
+fi
+# Save exact post-stage environment
+if [ -f ${ANA_INSTALL_PATH}/tmp/post.out ]; then
+	cp ${ANA_INSTALL_PATH}/tmp/post.out ${ANA_INSTALL_PATH}/root/log/post.out
 fi
 # Save installation instructions/logs
 # Note: installation logs are now saved under /var/log/anaconda/ by default
