@@ -1585,7 +1585,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018011101"
+script_version="2018011501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1677,7 +1677,7 @@ yum --enablerepo '*' clean all
 yum -y --enablerepo extras install yum-plugin-priorities
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-2.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own RHGS/OVN rebuild repos versus oVirt-dependency repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
