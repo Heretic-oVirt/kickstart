@@ -2719,7 +2719,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018011401"
+script_version="2018011501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2849,7 +2849,7 @@ yum -y install yum-plugin-priorities
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-1.noarch.rpm
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-2.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own RHGS/OVN rebuild repos versus oVirt-dependency repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
@@ -3445,7 +3445,7 @@ chmod 644 /var/www/html/index.html
 mkdir -p /var/www/hvp-repos/el7/{centos,ks}
 # Mirror web contents here using wget
 for subdir in ks centos node-${ovirt_version}; do
-	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
+	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
 done
 # Note: providing link for compatibility purposes
 ln -s node-${ovirt_version} /var/www/hvp-repos/el7/node
@@ -4216,8 +4216,8 @@ if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
 	cp -r /run/install/repo/{Packages,repodata} ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external repo otherwise
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/Packages
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --reject "index.html*" http://mirror.centos.org/7/os/repodata
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/7/os/Packages
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/7/os/repodata
 fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
