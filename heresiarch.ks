@@ -1431,10 +1431,8 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 		#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
 		EOF
 	else
-		# Note: since we detected use of NetInstall media (no local repo) we use network install source deduced from kickstart location
-		# Note: a subdir tree equal to HVP site is assumed
-		given_stage2=$(sed -n -e 's/^.*inst\.ks=\(\S*\).*$/\1/p' /proc/cmdline | sed -e 's>/[^/]*/[^/]*$>/centos>')
-		# TODO: we assume a HTTP/FTP area - add support for NFS
+		# Note: since we detected use of NetInstall media (no local repo) we use network install source from CentOS mirrors
+		given_stage2="http://mirror.centos.org/centos/7/os/x86_64"
 		cat <<- EOF > /tmp/full-installsource
 		# Specify a NFS network share as in:
 		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
@@ -2719,7 +2717,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018011901"
+script_version="2018012001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
