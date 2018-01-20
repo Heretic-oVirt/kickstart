@@ -2623,7 +2623,7 @@ hvp_blockshare_size: "1024GB"
 hvp_blockshare_arbitersize: "10GB"
 hvp_backup_size: "1024GB"
 hvp_backup_arbitersize: "10GB"
-hvp_thinpool_chunksize: "1024k"
+hvp_thinpool_chunksize: "1536k"
 
 # Engine credentials:
 url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
@@ -2719,7 +2719,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018011501"
+script_version="2018011901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
