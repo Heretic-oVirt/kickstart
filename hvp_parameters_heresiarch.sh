@@ -28,6 +28,9 @@ my_ip_offset="1"
 
 bmc_ip_offset="100"
 
+# Note: uncomment the following to signify that you have reviewed and confirmed the BMC settings further below as valid
+#bmc_confirmed="true"
+
 bmc_type="ipmilan"
 bmc_username="hvpbmcadmin"
 bmc_password="HVP_dem0"
