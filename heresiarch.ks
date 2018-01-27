@@ -348,6 +348,7 @@ unset reverse_domain_name
 unset bridge_name
 unset node_name
 unset bmc_ip_offset
+unset bmc_confirmed
 unset bmc_type
 unset bmc_username
 unset bmc_password
@@ -416,6 +417,7 @@ switch_ip_offset="200"
 # Note: the following can be overridden from commandline
 bmc_ip_offset="100"
 
+bmc_confirmed="false"
 bmc_type="ipmilan"
 bmc_username="hvpbmcadmin"
 bmc_password="HVP_dem0"
@@ -828,6 +830,8 @@ if [ -n "${given_bmc_type}" ]; then
 	# Correctly detect an empty (disabled) BMC type
 	if [ "${bmc_type}" = '""' -o "${bmc_type}" = "''" ]; then
 		bmc_type=""
+	else
+		bmc_confirmed="true"
 	fi
 fi
 
@@ -835,6 +839,7 @@ fi
 given_bmc_username=$(sed -n -e "s/^.*hvp_bmcs_username=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_bmc_username}" ]; then
 	bmc_username="${given_bmc_username}"
+	bmc_confirmed="true"
 	# Correctly detect an empty (disabled) BMC username
 	if [ "${bmc_username}" = '""' -o "${bmc_username}" = "''" ]; then
 		bmc_username=""
@@ -845,6 +850,7 @@ fi
 given_bmc_password=$(sed -n -e "s/^.*hvp_bmcs_password=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_bmc_password}" ]; then
 	bmc_password="${given_bmc_password}"
+	bmc_confirmed="true"
 	# Correctly detect an empty (disabled) BMC password
 	if [ "${bmc_password}" = '""' -o "${bmc_password}" = "''" ]; then
 		bmc_password=""
@@ -2574,7 +2580,7 @@ done
 # Note: Ansible oVirt variable definitions thanks to Simone Tiraboschi
 unset PREFIX
 eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
-if [ -n "${bmc_type}" -a -n "${bmc_username}" -a -n "${bmc_password}" ]; then
+if [ -n "${bmc_type}" -a "${bmc_confirmed}" = "true" ]; then
 	bmc_vars_comment=''
 else
 	bmc_vars_comment='#'
@@ -2717,7 +2723,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018012002"
+script_version="2018012701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3116,7 +3122,9 @@ if [ "${nicmacfix}" = "true" ] ; then
 		nic_mac=$(cat "/sys/class/net/${nic_name}/address" 2>/dev/null)
 		# Detect bonding slaves (real MAC address must be specially extracted)
 		if [ -L "/sys/class/net/${nic_name}/master" ]; then
-			nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*-> \`.*/net/\\([^']*\\)'.*\$%\\1%")
+			# Note: the following regex does not catch all stat-printf output characters
+			#nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*-> \`.*/net/\\([^']*\\)'.*\$%\\1%")
+			nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*->.*/net/\\([[:alnum:]]*\\).*\$%\\1%")
 			# Note: all bonding slaves take the apparent MAC address from the bonding master device (which usually takes it from the first slave) - extract the real one
 			nic_mac=$(cat /proc/net/bonding/${nic_master} | awk 'BEGIN {IGNORECASE=1; found="false"}; /^Slave Interface:[[:space:]]*'${nic_name}'[[:space:]]*/ {found="true"}; /^Permanent HW addr:[[:space:]]*/ {if (found == "true") {print $4; exit}}')
 		fi
