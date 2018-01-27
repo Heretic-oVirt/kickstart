@@ -1701,7 +1701,7 @@ done
 
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018012001"
+script_version="2018012101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2576,7 +2576,9 @@ if [ "${nicmacfix}" = "true" ] ; then
 		nic_mac=$(cat "/sys/class/net/${nic_name}/address" 2>/dev/null)
 		# Detect bonding slaves (real MAC address must be specially extracted)
 		if [ -L "/sys/class/net/${nic_name}/master" ]; then
-			nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*-> \`.*/net/\\([^']*\\)'.*\$%\\1%")
+			# Note: the following regex does not catch all stat-printf output characters
+			#nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*-> \`.*/net/\\([^']*\\)'.*\$%\\1%")
+			nic_master=$(stat --printf="%N" "/sys/class/net/${nic_name}/master" | sed -e "s%^.*->.*/net/\\([[:alnum:]]*\\).*\$%\\1%")
 			# Note: all bonding slaves take the apparent MAC address from the bonding master device (which usually takes it from the first slave) - extract the real one
 			nic_mac=$(cat /proc/net/bonding/${nic_master} | awk 'BEGIN {IGNORECASE=1; found="false"}; /^Slave Interface:[[:space:]]*'${nic_name}'[[:space:]]*/ {found="true"}; /^Permanent HW addr:[[:space:]]*/ {if (found == "true") {print $4; exit}}')
 		fi
