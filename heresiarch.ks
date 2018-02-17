@@ -2707,6 +2707,7 @@ popd
 # Post-installation script (run with bash from installation image at the end of installation)
 # Note: console logging to support commandline virt-install invocation
 %post --nochroot --log /dev/console
+( # Run the entire post section as a subshell for logging purposes.
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
 mkdir -p ${ANA_INSTALL_PATH}/root/etc/kscfg-pre
@@ -2716,6 +2717,7 @@ for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	fi
 done
 
+) 2>&1 | tee /tmp/kickstart_post_0.log
 %end
 
 # Post-installation script (run with bash from chroot after the first post section)
@@ -2723,7 +2725,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018012701"
+script_version="2018021701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3914,7 +3916,7 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	chmod 644 /etc/polkit-1/rules.d/60-nousershutdown.rules
 fi
 
-# Note: filemanager under GNOME3 doesn't use spatial mode by default
+# Note: filemanager under GNOME3 does not use spatial mode by default
 
 # Apply all GNOME3 settings specified above
 rm -f /etc/dconf/db/local
@@ -4136,17 +4138,19 @@ EOF
 chmod 644 /etc/systemd/system/ks1stboot.service
 systemctl enable ks1stboot.service
 
-# TODO: forcibly disable execution of graphical firstboot tool - kickstart directive on top seems to be ignored and moving away anaconda-ks.cfg isn't enough - remove when fixed upstream - see https://bugzilla.redhat.com/show_bug.cgi?id=1213114
+# TODO: forcibly disable execution of graphical firstboot tool - kickstart directive on top seems to be ignored and moving away anaconda-ks.cfg is not enough - remove when fixed upstream - see https://bugzilla.redhat.com/show_bug.cgi?id=1213114
 systemctl mask firstboot-graphical
 systemctl mask initial-setup-graphical
 systemctl mask initial-setup-text
 systemctl mask initial-setup
 
-) 2>&1 | tee /root/kickstart_post.log
+) 2>&1 | tee /root/kickstart_post_1.log
 %end
 
 # Post-installation script (run with bash from installation image after the second post section)
 %post --nochroot
+( # Run the entire post section as a subshell for logging purposes.
+
 # Append hosts fragment (generated in pre section above) into installed system
 if [ -s /tmp/hvp-bind-zones/hosts ]; then
 	cat /tmp/hvp-bind-zones/hosts >> ${ANA_INSTALL_PATH}/etc/hosts
@@ -4308,14 +4312,20 @@ for full_frag in /tmp/full-* ; do
 	fi
 done
 cp /tmp/kickstart_pre.log ${ANA_INSTALL_PATH}/root/log
-mv ${ANA_INSTALL_PATH}/root/kickstart_post.log ${ANA_INSTALL_PATH}/root/log
+mv ${ANA_INSTALL_PATH}/root/kickstart_post*.log ${ANA_INSTALL_PATH}/root/log
+
+) 2>&1 | tee ${ANA_INSTALL_PATH}/root/log/kickstart_post_2.log
 %end
 
 # Post-installation script (run with bash from chroot after the third post section)
 %post
+( # Run the entire post section as a subshell for logging purposes.
+
 # Relabel filesystem
-# This has to be the last post action to catch any files we've created/modified
+# This has to be the last post action to catch any files we have created/modified
 # TODO: verify whether the following is actually needed (latest Anaconda seems to perform a final relabel anyway)
 setfiles -F -e /proc -e /sys -e /dev -e /selinux /etc/selinux/targeted/contexts/files/file_contexts /
 setfiles -F /etc/selinux/targeted/contexts/files/file_contexts.homedirs /home/ /root/
+
+) 2>&1 | tee /root/log/kickstart_post_3.log
 %end
