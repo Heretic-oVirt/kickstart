@@ -2725,7 +2725,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018021702"
+script_version="2018021902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3958,8 +3958,13 @@ if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Par
 	systemctl enable mcelog
 fi
 
-# Configure root home dir (with utility script for basic configuration backup)
+# Configure root home dir (with utility scripts for basic configuration/log backup)
 mkdir -p /root/{etc,bin,log,tmp,backup}
+cat << EOF > /root/bin/backup-log
+#!/bin/bash
+tar -czf /root/backup/\$(hostname)-\$(date '+%Y-%m-%d')-log.tar.gz /root/etc /root/log \$(find /var/log/ -type f ! -iname '*z' -print)
+EOF
+chmod 755 /root/bin/backup-log
 cat << EOF > /root/bin/backup-conf
 #!/bin/bash
 tar -czf /root/backup/\$(hostname)-\$(date '+%Y-%m-%d')-conf.tar.gz \$(cat /root/etc/backup.list)
@@ -3993,14 +3998,11 @@ cat << EOF > /etc/rc.d/rc.ks1stboot
 # TODO: find a way to ignore partial IPMI implementations (e.g. those needing a [missing] add-on card)
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	if dmidecode --type 38 | grep -q 'IPMI' ; then
-		systemctl enable ipmi
-		systemctl enable ipmievd
-		systemctl start ipmi
-		systemctl start ipmievd
+		systemctl --now enable ipmi
+		systemctl --now enable ipmievd
 	else
-		systemctl enable lm_sensors
-		yes yes | sensors-detect
-		systemctl start lm_sensors
+		sensors-detect --auto
+		systemctl --now enable lm_sensors
 	fi
 fi
 
@@ -4011,8 +4013,7 @@ pushd /tmp
 need_reboot="no"
 if dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
 	# TODO: configure Hyper-V integration agents
-	systemctl enable hypervkvpd hypervvssd hypervfcopyd
-	systemctl start hypervkvpd hypervvssd hypervfcopyd
+	systemctl --now enable hypervkvpd hypervvssd hypervfcopyd
 elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	# Enable ARP notifications for vm migrations
 	cat <<- EOM > /etc/sysctl.d/99-xen-guest.conf
@@ -4057,12 +4058,10 @@ elif dmidecode -s system-manufacturer | grep -q "Parallels" ; then
 	need_reboot="yes"
 elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
 	# TODO: configure Qemu agent
-	systemctl enable qemu-guest-agent
-	systemctl start qemu-guest-agent
+	systemctl --now enable qemu-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
 	# TODO: configure oVirt agent
-	systemctl enable qemu-guest-agent ovirt-guest-agent
-	systemctl start qemu-guest-agent ovirt-guest-agent
+	systemctl --now enable qemu-guest-agent ovirt-guest-agent
 fi
 popd
 # Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
