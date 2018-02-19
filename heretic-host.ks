@@ -1572,7 +1572,7 @@ for zone in "${!network[@]}" ; do
 done
 
 # Create mount systemd unit to add mountpoint for shared CTDB area
-# Note: systemd doesn't recognize the directives Restart, RestartSec and TimeoutStartSec in Mount units
+# Note: systemd does not recognize the directives Restart, RestartSec and TimeoutStartSec in Mount units
 # Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
 # TODO: verify whether the selinux option is actually supported - https://bugzilla.redhat.com/show_bug.cgi?id=1272868
 cat << EOF > gluster-lock.mount
@@ -1662,8 +1662,8 @@ cat << EOF > smb.conf
 
 #====================== Local Share Definitions ==============================
 
-[Test]
-   comment = Test share
+[Shares]
+   comment = Network shares
    path = /
    browseable = yes
    writable = yes
@@ -1673,7 +1673,7 @@ cat << EOF > smb.conf
    recycle:keeptree = no
    recycle:versions = yes
    #glusterfs:loglevel = 7
-   glusterfs:logfile = /var/log/samba/glusterfs-test.log
+   glusterfs:logfile = /var/log/samba/glusterfs-shares.log
    glusterfs:volume = winshare
 
 EOF
@@ -1685,6 +1685,7 @@ popd
 
 # Post-installation script (run with bash from installation image at the end of installation)
 %post --nochroot
+( # Run the entire post section as a subshell for logging purposes.
 
 # Copy configuration parameters files (generated in pre section above) into installed system (to be loaded during chrooted post section below)
 mkdir -p ${ANA_INSTALL_PATH}/root/etc/kscfg-pre
@@ -1694,14 +1695,15 @@ for custom_frag in /tmp/kscfg-pre/*.sh ; do
 	fi
 done
 
+) 2>&1 | tee /tmp/kickstart_post_0.log
 %end
 
 # Post-installation script (run with bash from chroot after the first post section)
-%post
-
+# Note: console logging to support commandline virt-install invocation
+%post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018012101"
+script_version="2018021902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2997,8 +2999,13 @@ if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Par
 	systemctl enable mcelog
 fi
 
-# Configure root home dir (with utility script for basic configuration backup)
+# Configure root home dir (with utility scripts for basic configuration/log backup)
 mkdir -p /root/{etc,bin,log,tmp,backup}
+cat << EOF > /root/bin/backup-log
+#!/bin/bash
+tar -czf /root/backup/\$(hostname)-\$(date '+%Y-%m-%d')-log.tar.gz /root/etc /root/log \$(find /var/log/ -type f ! -iname '*z' -print)
+EOF
+chmod 755 /root/bin/backup-log
 cat << EOF > /root/bin/backup-conf
 #!/bin/bash
 tar -czf /root/backup/\$(hostname)-\$(date '+%Y-%m-%d')-conf.tar.gz \$(cat /root/etc/backup.list)
@@ -3032,14 +3039,11 @@ cat << EOF > /etc/rc.d/rc.ks1stboot
 # TODO: find a way to ignore partial IPMI implementations (e.g. those needing a [missing] add-on card)
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	if dmidecode --type 38 | grep -q 'IPMI' ; then
-		systemctl enable ipmi
-		systemctl enable ipmievd
-		systemctl start ipmi
-		systemctl start ipmievd
+		systemctl --now enable ipmi
+		systemctl --now enable ipmievd
 	else
-		systemctl enable lm_sensors
-		yes yes | sensors-detect
-		systemctl start lm_sensors
+		sensors-detect --auto
+		systemctl --now enable lm_sensors
 	fi
 fi
 
@@ -3050,8 +3054,7 @@ pushd /tmp
 need_reboot="no"
 if dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
 	# TODO: configure Hyper-V integration agents
-	systemctl enable hypervkvpd hypervvssd hypervfcopyd
-	systemctl start hypervkvpd hypervvssd hypervfcopyd
+	systemctl --now enable hypervkvpd hypervvssd hypervfcopyd
 elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	# Enable ARP notifications for vm migrations
 	cat <<- EOM > /etc/sysctl.d/99-xen-guest.conf
@@ -3096,12 +3099,10 @@ elif dmidecode -s system-manufacturer | grep -q "Parallels" ; then
 	need_reboot="yes"
 elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
 	# TODO: configure Qemu agent
-	systemctl enable qemu-guest-agent
-	systemctl start qemu-guest-agent
+	systemctl --now enable qemu-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
 	# TODO: configure oVirt agent
-	systemctl enable qemu-guest-agent ovirt-guest-agent
-	systemctl start qemu-guest-agent ovirt-guest-agent
+	systemctl --now enable qemu-guest-agent ovirt-guest-agent
 fi
 popd
 # Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
@@ -3168,17 +3169,19 @@ EOF
 chmod 644 /etc/systemd/system/ks1stboot.service
 systemctl enable ks1stboot.service
 
-# TODO: forcibly disable execution of graphical firstboot tool - kickstart directive on top seems to be ignored and moving away anaconda-ks.cfg isn't enough - remove when fixed upstream - see https://bugzilla.redhat.com/show_bug.cgi?id=1213114
+# TODO: forcibly disable execution of graphical firstboot tool - kickstart directive on top seems to be ignored and moving away anaconda-ks.cfg is not enough - remove when fixed upstream - see https://bugzilla.redhat.com/show_bug.cgi?id=1213114
 systemctl mask firstboot-graphical
 systemctl mask initial-setup-graphical
 systemctl mask initial-setup-text
 systemctl mask initial-setup
 
-) 2>&1 | tee /root/kickstart_post.log
+) 2>&1 | tee /root/kickstart_post_1.log
 %end
 
 # Post-installation script (run with bash from installation image after the second post section)
 %post --nochroot
+( # Run the entire post section as a subshell for logging purposes.
+
 # Copy CTDB configuration (generated in pre section above) into installed system
 if [ -s /tmp/hvp-ctdb-files/nodes ]; then
 	cat /tmp/hvp-ctdb-files/nodes >> ${ANA_INSTALL_PATH}/etc/ctdb/nodes
@@ -3253,15 +3256,21 @@ for full_frag in /tmp/full-* ; do
 		cp "${full_frag}" ${ANA_INSTALL_PATH}/root/etc
 	fi
 done
-cp /tmp/kickstart_pre.log ${ANA_INSTALL_PATH}/root/log
-mv ${ANA_INSTALL_PATH}/root/kickstart_post.log ${ANA_INSTALL_PATH}/root/log
+cp /tmp/kickstart_*.log ${ANA_INSTALL_PATH}/root/log
+mv ${ANA_INSTALL_PATH}/root/kickstart_post*.log ${ANA_INSTALL_PATH}/root/log
+
+) 2>&1 | tee ${ANA_INSTALL_PATH}/root/log/kickstart_post_2.log
 %end
 
 # Post-installation script (run with bash from chroot after the third post section)
 %post
+( # Run the entire post section as a subshell for logging purposes.
+
 # Relabel filesystem
-# This has to be the last post action to catch any files we've created/modified
+# This has to be the last post action to catch any files we have created/modified
 # TODO: verify whether the following is actually needed (latest Anaconda seems to perform a final relabel anyway)
 setfiles -F -e /proc -e /sys -e /dev -e /selinux /etc/selinux/targeted/contexts/files/file_contexts /
 setfiles -F /etc/selinux/targeted/contexts/files/file_contexts.homedirs /home/ /root/
+
+) 2>&1 | tee /root/log/kickstart_post_3.log
 %end
