@@ -2725,7 +2725,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018021902"
+script_version="2018021903"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4225,8 +4225,8 @@ if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
 	cp -r /run/install/repo/{Packages,repodata} ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external repo otherwise
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/Packages
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/repodata
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/Packages
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/repodata
 fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
