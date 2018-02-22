@@ -1703,7 +1703,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018021902"
+script_version="2018022201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1862,7 +1862,7 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
 # Note: adding to already present package restrictions on EPEL repo
-sed -i -e '/^include.*=epel-release,/s/\s*$/,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
+sed -i -e 's/epel-release,/epel-release,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer,/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
