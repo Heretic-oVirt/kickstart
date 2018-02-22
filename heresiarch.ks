@@ -2589,6 +2589,7 @@ cat << EOF > hvp.yaml
 # Global variables for HVP Ansible playbooks
 
 # HVP local conventions
+hvp_orthodox_mode:  $(echo "${orthodox_mode}" | sed -e 's/\b./\u\0/g')
 hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
@@ -2725,7 +2726,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022201"
+script_version="2018022202"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
