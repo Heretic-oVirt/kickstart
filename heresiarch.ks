@@ -2733,7 +2733,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022301"
+script_version="2018022303"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2935,7 +2935,8 @@ yum -y install memtest86+
 yum -y install squid
 
 # Install X2Go
-yum -y install x2goserver x2goserver-xsession
+yum -y install x2goserver x2goserver-xsession x2godesktopsharing
+yum -y install x2goclient pyhoca-{cli,gui}
 
 # Install PDSH
 yum -y install pdsh pdsh-rcmd-ssh
