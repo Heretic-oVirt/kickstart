@@ -1703,7 +1703,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022201"
+script_version="2018022202"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2840,16 +2840,16 @@ root = administrator admin
 EOF
 chmod 644 /etc/samba/smbusers
 
-# TODO: Rise user limits to avoid (benign) warning by testparm on max files
+# Rise user limits to avoid (benign) warning by testparm on max files
 # TODO: the following causes Cockpit login to fail with SELinux denial while trying to raise limits - find a workaround (maybe custom SELinux policy)
-#cat << EOF > /etc/security/limits.d/10-smb.conf
-## Make sure that Samba/testparm does not complain about max files
-#*                -       nofile          16405
-#
-#EOF
-#chmod 644 /etc/security/limits.d/10-smb.conf
+cat << EOF > /etc/security/limits.d/10-smb.conf
+# Make sure that Samba/testparm does not complain about max files
+*                -       nofile          16405
 
-# Add SELinux support for Samba access to FUSE-mounte GlusterFS-based shared lock area
+EOF
+chmod 644 /etc/security/limits.d/10-smb.conf
+
+# Add SELinux support for Samba access to FUSE-mounted GlusterFS-based shared lock area
 # TODO: remove when included upstream
 setsebool samba_share_fusefs on
 mkdir -p /etc/selinux/local
@@ -2886,6 +2886,7 @@ firewall-offline-cmd --add-service=samba
 # TODO: configure Ganesha-NFS
 
 # TODO: configure Gluster-block
+# TODO: Lower Gluster-block log level
 
 # TODO: Lower VDSM log level
 # Note: putting it on WARNING level as already per libvirt default
