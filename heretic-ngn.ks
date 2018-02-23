@@ -1587,7 +1587,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022201"
+script_version="2018022202"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2288,7 +2288,7 @@ chmod 644 /etc/samba/smbusers
 #EOF
 #chmod 644 /etc/security/limits.d/10-smb.conf
 
-# Add SELinux support for Samba access to FUSE-mounte GlusterFS-based shared lock area
+# Add SELinux support for Samba access to FUSE-mounted GlusterFS-based shared lock area
 # TODO: remove when included upstream
 setsebool samba_share_fusefs on
 mkdir -p /etc/selinux/local
@@ -2325,6 +2325,7 @@ firewall-offline-cmd --add-service=samba
 # TODO: configure Ganesha-NFS
 
 # TODO: configure Gluster-block
+# TODO: Lower Gluster-block log level
 
 # TODO: Lower VDSM log level
 # Note: putting it on WARNING level as already per libvirt default
