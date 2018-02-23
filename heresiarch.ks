@@ -2630,6 +2630,13 @@ hvp_backup_size: "1024GB"
 hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1536k"
 
+# HVP Gluster-block settings
+# TODO: derive proper values for Gluster-block LUN sizes from user settings
+hvp_lun_sizes:
+  - 200GiB
+  - 300GiB
+  - 450GiB
+
 # Engine credentials:
 url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
 username: admin@internal
@@ -2726,7 +2733,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022202"
+script_version="2018022301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
