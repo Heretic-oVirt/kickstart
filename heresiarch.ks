@@ -2609,6 +2609,7 @@ hvp_firewall_manager: "firewalld"
 hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
+hvp_admin_username: ${admin_username}
 
 # HVP Gluster settings
 # TODO: derive proper values for Gluster volume sizes from user settings
@@ -2733,7 +2734,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022303"
+script_version="2018022401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
