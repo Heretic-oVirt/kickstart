@@ -1587,7 +1587,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022202"
+script_version="2018030401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1747,6 +1747,10 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
 yum -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
 
 # Install GlusterFS
+if [ "${orthodox_mode}" = "false" ]; then
+	# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
+	yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
+fi
 # Note: the following packages should already be present on a Node image
 # Note: rpm post scriptlet for glusterfs-server fails - errors can be safely ignored
 yum -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
@@ -2179,7 +2183,7 @@ systemctl mask nfs-lock
 # Disable kernel-based NFS server
 systemctl mask nfs.target
 
-# Note: a mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
+# Note: mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
 
 # Note: adding a glusterd-wait-online service to avoid random failures on global cluster reboot
