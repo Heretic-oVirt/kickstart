@@ -1141,18 +1141,30 @@ ignoredisk --only-use=${device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
 # Note: the following uses only the first disk as PV and leaves other disks unused if the first one is sufficiently big, otherwise starts using other disks too
-part pv.01 --size=50000 --grow
+part pv.01 --size=64000 --grow
 # Create a VG
 volgroup HostVG pv.01
 # Define swap space
 logvol swap --vgname=HostVG --name=swap --fstype=swap --recommended
 logvol / --vgname=HostVG --name=root --size=6000
 logvol /var --vgname=HostVG --name=var --size=20000 --grow
+logvol /var/crash --vgname=HostVG --name=var_crash --size=12000
 logvol /var/log --vgname=HostVG --name=var_log --size=10000
 logvol /var/log/audit --vgname=HostVG --name=var_log_audit --size=2000
 logvol /home --vgname=HostVG --name=home --size=1000
 logvol /tmp --vgname=HostVG --name=tmp --size=2000
 EOF
+# Clean up disks from any previous LVM setup
+# Note: it seems that simply zeroing out below is not enough
+vgscan -v
+for vg_name in $(vgs --noheadings -o vg_name); do
+	vgremove -v -y "${vg_name}"
+	udevadm settle --timeout=5
+done
+for pv_name in $(pvs --noheadings -o pv_name); do
+	pvremove -v -ff -y "${pv_name}"
+	udevadm settle --timeout=5
+done
 # Clean up disks from any previous software-RAID (Linux or BIOS based)
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
 # Note: skipping this on a virtual machine to avoid inflating a thin-provisioned virtual disk
@@ -1163,6 +1175,8 @@ if cat /sys/class/dmi/id/sys_vendor | egrep -q -v "(Microsoft|VMware|innotek|Par
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10 seek=$(($(blockdev --getsize64 /dev/${current_device}) / (1024 * 1024) - 10))
 	done
+	partprobe
+	udevadm settle --timeout=5
 fi
 
 # Create bind zone files if running on master node
@@ -1581,6 +1595,7 @@ Description=CTDB shared area
 After=glusterd.service
 Requires=glusterd.service
 Before=ctdb.service multi-user.target
+Conflicts=umount.target
 
 [Mount]
 What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:ctdb
@@ -1703,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018022202"
+script_version="2018030701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2973,6 +2988,10 @@ Slice=storage.slice
 
 EOF
 chmod 644 /etc/systemd/system/nfs-ganesha.service.d/custom-slice.conf
+
+# Disable oVirt/libvirt related services
+# Note: will be automatically enabled again when adding node to the oVirt cluster
+systemctl disable libvirtd vdsmd supervdsmd mom-vdsm vdsm-network-init vdsm-network
 
 # Enable OVN
 # Note: OVN to be configured later on together with Engine-based part
