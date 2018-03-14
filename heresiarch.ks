@@ -1420,7 +1420,7 @@ for pv_name in $(pvs --noheadings -o pv_name); do
 	pvremove -v -ff -y "${pv_name}"
 	udevadm settle --timeout=5
 done
-# Clean up disks from any previous software-RAID (Linux or BIOS based)
+# Clean up disks from any previous software-RAID (Linux or BIOS based) setup
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
 # Note: skipping this on a virtual machine to avoid inflating a thin-provisioned virtual disk
 # Note: dmidecode command may no longer be available in pre environment
@@ -2475,8 +2475,13 @@ subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
         }
 }
 
+#
+# --- Reservations
+include "/etc/dhcp/dhcpd-static-leases.conf";
+
 EOF
-# Prepare Apache VirtualHost configuration fragment too
+
+# Prepare Apache VirtualHost configuration fragment
 cat << EOF > httpd.conf
 
 <VirtualHost *:80>
@@ -2747,7 +2752,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018030701"
+script_version="2018031301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3121,7 +3126,7 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	vm.dirty_expire_centisecs = 500
 	vm.dirty_writeback_centisecs = 100
 	vm.swappiness = 30
-	kernel.sched_migration_cost = 5000000
+	kernel.sched_migration_cost_ns = 5000000
 	EOF
 	chmod 644 /etc/sysctl.d/virtualguest.conf
 fi
@@ -3728,6 +3733,13 @@ cat << EOF > /etc/dhcp/dhcpd-broken-pxe.conf
 
 EOF
 chmod 644 /etc/dhcp/dhcpd-broken-pxe.conf
+
+# Create separate file for reservations
+cat << EOF > /etc/dhcp/dhcpd-static-leases.conf
+## Add static address leases here
+
+EOF
+chmod 644 /etc/dhcp/dhcpd-static-leases.conf
 
 # Enable DHCPd
 # TODO: check actual need (and configuration) for proxy service
