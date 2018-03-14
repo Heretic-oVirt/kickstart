@@ -1,4 +1,4 @@
-# Kickstart file for Heretic oVirt Project complete (CentOS-based) physical host (called node anyway below)
+# Kickstart file for Heretic oVirt Project complete (plain-CentOS-based) host (called node anyway below)
 # Note: minimum amount of RAM successfully tested for installation: 1536 MiB (test failed with 1024 MiB)
 
 # Install from PXE with commandline (see below for comments):
@@ -1165,12 +1165,12 @@ for pv_name in $(pvs --noheadings -o pv_name); do
 	pvremove -v -ff -y "${pv_name}"
 	udevadm settle --timeout=5
 done
-# Clean up disks from any previous software-RAID (Linux or BIOS based)
+# Clean up disks from any previous software-RAID (Linux or BIOS based) setup
 # TODO: this does not work on CentOS7 (it would need some sort of late disk-status refresh induced inside anaconda) - workaround by manually zeroing-out the first 10 MiBs from a rescue boot before starting the install process (or simply restarting when installation stops/hangs at storage setup)
 # Note: skipping this on a virtual machine to avoid inflating a thin-provisioned virtual disk
 # Note: dmidecode command may no longer be available in pre environment
 if cat /sys/class/dmi/id/sys_vendor | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
-	# Note: resetting all disk devices since leftover LVM configurations may interfer with installation and/or setup later on
+	# Note: resetting all disk devices since leftover configurations may interfer with installation and/or setup later on
 	for current_device in ${all_devices}; do
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10 seek=$(($(blockdev --getsize64 /dev/${current_device}) / (1024 * 1024) - 10))
@@ -1718,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018030701"
+script_version="2018031301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2568,7 +2568,7 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	vm.dirty_expire_centisecs = 500
 	vm.dirty_writeback_centisecs = 100
 	vm.swappiness = 30
-	kernel.sched_migration_cost = 5000000
+	kernel.sched_migration_cost_ns = 5000000
 	EOF
 	chmod 644 /etc/sysctl.d/virtualguest.conf
 fi
