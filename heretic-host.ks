@@ -1718,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031301"
+script_version="2018031401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2945,6 +2945,17 @@ Slice=storage.slice
 
 EOF
 chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
+
+# Put Gluster-block services under proper cgroup control (configured above)
+# TODO: verify whether the following autmatically applies also to all LIO services
+mkdir -p /etc/systemd/system/gluster-blockd.service.d
+cat << EOF > /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
 
 # Put CTDB controlled services under proper cgroup control (the GlusterFS slice configured above)
 # TODO: verify whether the following applies to both ctdb and smbd/nmbd/winbindd/nfs-ganesha and remove specific smbd/nmbd/winbindd/nfs-ganesha fragments if not needed
