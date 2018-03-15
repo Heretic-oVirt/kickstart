@@ -2706,9 +2706,14 @@ engine_sd_path: /enginedomain
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 
 ## Networking
-got_gluster_network: ${gluster_network}
-got_lan_network: ${lan_network}
-got_internal_network: ${internal_network}
+got_gluster_network: $(echo "${gluster_network}" | sed -e 's/\b./\u\0/g')
+$(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" , fi)
+
+got_lan_network: $(echo "${lan_network}" | sed -e 's/\b./\u\0/g')
+$(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" , fi)
+
+got_internal_network: $(echo "${internal_network}" | sed -e 's/\b./\u\0/g')
+$(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" , fi)
 
 EOF
 
@@ -2752,7 +2757,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031301"
+script_version="2018031401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
