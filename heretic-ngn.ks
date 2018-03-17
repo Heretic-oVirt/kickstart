@@ -1602,7 +1602,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031401"
+script_version="2018031701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1726,8 +1726,14 @@ else
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 fi
 
+# Add upstream repository definitions
+yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
+# Note: restricting packages from 3rd party repo
+yum-config-manager --save --setopt='psychotic.include=unrar*' > /dev/null
+yum-config-manager --enable psychotic > /dev/null
+
 # Note: adding to already present package restrictions on EPEL repo
-sed -i -e 's/epel-release,/epel-release,haveged,/' /etc/yum.repos.d/ovirt-*-dependencies.repo
+sed -i -e 's/epel-release,/epel-release,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,/' /etc/yum.repos.d/ovirt-*-dependencies.repo
 
 # TODO: disable spurious includepkgs lines - open a Bugzilla ticket - remove when fixed upstream
 sed -i -e '/^includepkgs=.*ovirt-node-ng/s/^/#/g' /etc/yum.repos.d/ovirt-*-dependencies.repo
@@ -1744,19 +1750,52 @@ done
 # Modify baseurl definitions to allow effective use of our proxy cache
 sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-*-dependencies.repo
 
-# Install Wget and patch
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget patch
+# Install Wget, patch and ntpdate
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget patch ntpdate
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Install Memtest86+
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install memtest86+
+# Install Gdisk, PWGen, HPing, 7Zip, UnRAR and ARJ
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} unrar arj pwgen
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install gdisk
 
-# Install MCE logging/management service
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
+# Install Nmon and Dstat
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install nmon dstat
 
+# Install PDSH
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install pdsh pdsh-rcmd-ssh
+
+# Install virtualization tools support packages
+if dmidecode -s system-manufacturer | egrep -q "(innotek|Parallels)" ; then
+	# Install dkms for virtualization tools support
+	# TODO: configure virtualization tools under dkms
+	# TODO: disabled since required development packages cannot be installed
+	#yum -y --enablerepo base --enablerepo updates --enablerepo cr install dkms
+	echo "DKMS unsupported"
+elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install qemu-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install ovirt-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install hyperv-daemons
+elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
+	# Note: VMware basic support installed here (since it is included in base distro now)
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools open-vm-tools-desktop fuse
+fi
+
+# Tune package list to underlying platform
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	# Exclude CPU microcode updates to avoid errors on virtualized platform
+	systemctl mask microcode
+else
+	# Install Memtest86+
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install memtest86+
+
+	# Install MCE logging/management service
+	yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
+fi
 # Install oVirt Host
 # Note: the following packages should already be present on a Node image
 # Note: tuned and qemu-kvm-tools are needed to add host to datacenter
@@ -1868,9 +1907,11 @@ fi
 # Note: the following uses the generic symlink under /etc to abstract from BIOS/UEFI actual file placement
 #grub2-mkconfig -o "${grub2_cfg_file}"
 
-# Add memory test entry to boot loader
-memtest-setup
-grub2-mkconfig -o "${grub2_cfg_file}"
+# Conditionally add memory test entry to boot loader
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	memtest-setup
+	grub2-mkconfig -o "${grub2_cfg_file}"
+fi
 
 # Configure kernel I/O scheduler policy
 sed -i -e '/^GRUB_CMDLINE_LINUX/s/\selevator=[^[:space:]"]*//' -e '/^GRUB_CMDLINE_LINUX/s/"$/ elevator=deadline"/' /etc/default/grub
@@ -1878,7 +1919,9 @@ grub2-mkconfig -o "${grub2_cfg_file}"
 
 # Configuration of session/system management (ignore power actions initiated by keyboard etc.)
 # Note: interactive startup is disabled by default (enable with systemd.confirm_spawn=true on kernel commandline) and single user mode uses sulogin by default
-sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
+fi
 
 # Configure kernel behaviour
 
@@ -1896,6 +1939,43 @@ cat << EOF > /etc/sysctl.d/panic.conf
 kernel.panic = 5
 EOF
 chmod 644 /etc/sysctl.d/panic.conf
+
+# System clock configuration
+# Note: systemd sets clock to UTC by default
+#echo 'UTC' >> /etc/adjtime
+
+# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given server)
+sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
+echo "0.centos.pool.ntp.org" > /etc/ntp/step-tickers
+
+# Allow NTPdate hardware clock sync through SELinux
+# Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myntpdate
+# TODO: remove when SELinux policy fixed upstream
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myntpdate.te
+
+module myntpdate 8.0;
+
+require {
+        type ntpd_t;
+        type hwclock_exec_t;
+        type adjtime_t;
+        class file { open read write execute execute_no_trans getattr };
+        class netlink_audit_socket create;
+}
+
+#============= ntpd_t ==============
+allow ntpd_t hwclock_exec_t:file { open read execute execute_no_trans getattr };
+allow ntpd_t self:netlink_audit_socket create;
+allow ntpd_t adjtime_t:file { open read getattr write };
+EOF
+chmod 644 /etc/selinux/local/myntpdate.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myntpdate.mod myntpdate.te
+semodule_package -o myntpdate.pp -m myntpdate.mod
+semodule -i myntpdate.pp
+popd
 
 # Configure Chronyd to always serve NTP to all networks
 sed -i -e 's/^#allow.*$/allow/' -e 's/^#local/local/' /etc/chrony.conf
@@ -1918,6 +1998,17 @@ chgrp ssh_keys /etc/ssh/ssh_host_{rsa,dsa,ecdsa}_key
 chmod 640 /etc/ssh/ssh_host_{rsa,dsa,ecdsa}_key
 # Stopping haveged started above
 kill ${haveged_pid}
+
+# Configure use of at/cron facilities (allow only listed users)
+rm -f /etc/{at,cron}.deny
+cat << EOF > /etc/at.allow
+root
+EOF
+chmod 600 /etc/at.allow
+cat << EOF > /etc/cron.allow
+root
+EOF
+chmod 600 /etc/cron.allow
 
 # TODO: nodectl profile fragments have uncommon permissions - remove when fixed upstream
 chmod 644 /etc/profile.d/nodectl-*
@@ -1963,6 +2054,11 @@ Continued use of this computer implies acceptance of the above conditions.
 
 EOF
 chmod 644 /etc/{issue*,motd}
+
+# Disable SMARTd on a virtual machine
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	systemctl disable smartd
+fi
 
 # Configure Bind
 # Note: base configuration files generated in pre section above - actual file copying happens in non-chroot post section below
@@ -2018,6 +2114,46 @@ firewall-offline-cmd --add-service=dns
 sed -i -e "/^DNS1=/s/\"[^\"]*\"/\"127.0.0.1\"/" $(grep -l '^DNS1=' /etc/sysconfig/network-scripts/ifcfg-* | head -1)
 sed -i -e '/^nameserver\s/d' /etc/resolv.conf
 echo 'nameserver 127.0.0.1' >> /etc/resolv.conf
+
+# Conditionally add virtual guest optimizations
+# TODO: verify wether we can skip this and delegate to tuned
+if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	# Configure block devices for a virtual guest
+	
+	# Configure timeout for Qemu devices
+	# Note: VirtIO devices do not need this (neither do they expose any timeout parameter)
+	cat <<- EOF > /etc/udev/rules.d/99-qemu-block-timeout.rules
+	#
+	# Qemu block devices timeout settings
+	#
+	ACTION=="add|change", SUBSYSTEMS=="block", ATTRS{model}=="QEMU_HARDDISK", RUN+="/bin/sh -c 'echo 180 >/sys\$DEVPATH/timeout'"
+	EOF
+	chmod 644 /etc/udev/rules.d/99-qemu-block-timeout.rules
+	
+	# Configure readahead and requests for VirtIO devices
+	cat <<- EOF > /etc/udev/rules.d/99-virtio-block.rules
+	#
+	# VirtIO block devices settings
+	#
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{queue/nr_requests}="8"
+	ACTION=="add|change", KERNEL=="vd*[!0-9]", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{bdi/read_ahead_kb}="4096"
+	EOF
+	chmod 644 /etc/udev/rules.d/99-virtio-block.rules
+
+	# Configure scheduler and memory for a virtual guest
+	cat <<- EOF > /etc/sysctl.d/virtualguest.conf
+	# Tune for a KVM virtualization guest
+	kernel.sched_min_granularity_ns = 10000000
+	kernel.sched_wakeup_granularity_ns = 15000000
+	vm.dirty_background_ratio = 10
+	vm.dirty_ratio = 40
+	vm.dirty_expire_centisecs = 500
+	vm.dirty_writeback_centisecs = 100
+	vm.swappiness = 30
+	kernel.sched_migration_cost_ns = 5000000
+	EOF
+	chmod 644 /etc/sysctl.d/virtualguest.conf
+fi
 
 # Configure log rotation (keep 6 years of logs, compressed)
 sed -i -e 's/^rotate.*$/rotate 312/' -e 's/^#\s*compress.*$/compress/' /etc/logrotate.conf
@@ -2346,8 +2482,27 @@ firewall-offline-cmd --add-service=samba
 
 # TODO: configure Ganesha-NFS
 
-# TODO: configure Gluster-block
+# Configure Gluster-block
 # TODO: Lower Gluster-block log level
+
+# Add firewalld configuration for Gluster-block
+cat << EOF > /etc/firewalld/services/gluster-block.xml
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>gluster-block</short>
+  <description>Gluster-block provides Gluster backed block storage.</description>
+  <port protocol="tcp" port="24006"/>
+  <port protocol="tcp" port="24010"/>
+</service>
+EOF
+chmod 644 /etc/firewalld/services/webmin.xml
+
+# Enable Gluster-block
+# Note: Gluster-block needs the iSCSI target too
+firewall-offline-cmd --add-service=gluster-block
+firewall-offline-cmd --add-service=iscsi-target
+# TODO: enable after initializing GlusterFS
+systemctl disable gluster-blockd
 
 # TODO: Lower VDSM log level
 # Note: putting it on WARNING level as already per libvirt default
@@ -2472,6 +2627,11 @@ sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cf
 systemctl disable bareos-fd
 systemctl disable bareos-sd
 
+# Conditionally enable MCE logging/management service
+if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
+	systemctl enable mcelog
+fi
+
 # Configure root home dir (with utility scripts for basic configuration/log backup)
 mkdir -p /root/{etc,bin,log,tmp,backup}
 cat << EOF > /root/bin/backup-log
@@ -2512,6 +2672,66 @@ if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Par
 		systemctl --now enable lm_sensors
 	fi
 fi
+
+# Setup virtualization tools (Hyper-V/KVM/VMware/VirtualBox/Parallels supported)
+# TODO: Verify that VirtIO drivers get used for Xen/KVM, warn otherwise
+# TODO: disable kernel updating or configure dkms (if not already done above or by tools installation)
+pushd /tmp
+need_reboot="no"
+if dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
+	# TODO: configure Hyper-V integration agents
+	systemctl --now enable hypervkvpd hypervvssd hypervfcopyd
+elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
+	# Enable ARP notifications for vm migrations
+	cat <<- EOM > /etc/sysctl.d/99-xen-guest.conf
+	net.ipv4.conf.all.arp_notify=1
+	EOM
+	chmod 644 /etc/sysctl.d/99-xen-guest.conf
+	sysctl -p
+	wget https://dangerous.ovirt.life/support/Xen/xe-guest-utilities*.rpm
+	yum -y --nogpgcheck install ./xe-guest-utilities*.rpm
+	rm -f xe-guest-utilities*.rpm
+elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
+	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# Note: using vmware-hgfsclient (already part of open-vm-tools) for shared folders support
+	shared_folders="\$(vmware-hgfsclient)"
+	if [ -z "\${shared_folders}" ]; then
+		cat <<- EOM >> /etc/fstab
+		# Template line to activate boot-mounted shared folders
+		#.host:/Test	/mnt/hgfs/Test	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+		EOM
+	else
+		for shared_folder in \${shared_folders} ; do
+			mkdir -p "/mnt/hgfs/\${shared_folder}"
+			cat <<- EOM >> /etc/fstab
+			.host:/\${shared_folder}	/mnt/hgfs/\${shared_folder}	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
+			EOM
+		done
+	fi
+	need_reboot="no"
+elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
+	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
+	chmod a+rx VBoxLinuxAdditions.run
+	./VBoxLinuxAdditions.run --nox11
+	usermod -a -G vboxsf mwtouser
+	rm -f VBoxLinuxAdditions.run
+	need_reboot="yes"
+elif dmidecode -s system-manufacturer | grep -q "Parallels" ; then
+	wget https://dangerous.ovirt.life/support/Parallels/ParallelsTools.tar.gz | tar xzf -
+	pushd parallels-tools-distrib
+	./install --install-unattended-with-deps
+	popd
+	rm -rf parallels-tools-distrib
+	need_reboot="yes"
+elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
+	# TODO: configure Qemu agent
+	systemctl --now enable qemu-guest-agent
+elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
+	# TODO: configure oVirt agent
+	systemctl --now enable qemu-guest-agent ovirt-guest-agent
+fi
+popd
+# Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
 
 # Run dynamically determined users configuration actions
 if [ -x /etc/rc.d/rc.users-setup ]; then
