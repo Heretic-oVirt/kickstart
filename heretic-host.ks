@@ -1718,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031401"
+script_version="2018031701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2755,7 +2755,7 @@ systemctl mask nfs-lock
 # Disable kernel-based NFS server
 systemctl mask nfs.target
 
-# Note: a mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
+# Note: mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
 
 # Note: adding a glusterd-wait-online service to avoid random failures on global cluster reboot
@@ -2900,8 +2900,27 @@ firewall-offline-cmd --add-service=samba
 
 # TODO: configure Ganesha-NFS
 
-# TODO: configure Gluster-block
+# Configure Gluster-block
 # TODO: Lower Gluster-block log level
+
+# Add firewalld configuration for Gluster-block
+cat << EOF > /etc/firewalld/services/gluster-block.xml
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>gluster-block</short>
+  <description>Gluster-block provides Gluster backed block storage.</description>
+  <port protocol="tcp" port="24006"/>
+  <port protocol="tcp" port="24010"/>
+</service>
+EOF
+chmod 644 /etc/firewalld/services/webmin.xml
+
+# Enable Gluster-block
+# Note: Gluster-block needs the iSCSI target too
+firewall-offline-cmd --add-service=gluster-block
+firewall-offline-cmd --add-service=iscsi-target
+# TODO: enable after initializing GlusterFS
+systemctl disable gluster-blockd
 
 # TODO: Lower VDSM log level
 # Note: putting it on WARNING level as already per libvirt default
