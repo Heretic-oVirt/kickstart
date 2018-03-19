@@ -1718,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031701"
+script_version="2018031801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2607,6 +2607,38 @@ if [ "${nicmacfix}" = "true" ] ; then
 	done
 fi
 
+# Create a separate systemd slice to limit GlusterFS/Samba/Ganesha resource usage by means of cgroup
+# TODO: verify whether to use CPUQuota=400% instead of CPUShares
+cat << EOF > /etc/systemd/system/storage.slice
+[Unit]
+Description=Storage services Slice
+Documentation=man:systemd.special(7)
+DefaultDependencies=no
+Before=slices.target
+Wants=-.slice
+After=-.slice
+
+[Slice]
+CPUAccounting=on
+CPUShares=4096
+EOF
+chmod 644 /etc/systemd/system/storage.slice
+
+# Configure GlusterFS
+# TODO: Lower GlusterFS log level
+#sed -i -e 's/^#*\s*LOG_LEVEL=.*$/LOG_LEVEL=WARNING/' /etc/sysconfig/glusterd
+
+# Put GlusterFS services under proper cgroup control (configured above)
+# Note: the following applies to both glusterd and glusterfsd (the latter being started on demand by the former)
+mkdir -p /etc/systemd/system/glusterd.service.d
+cat << EOF > /etc/systemd/system/glusterd.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
+
 # Configure CTDB
 # Note: CTDB is needed for HA NFS/CIFS storage domain
 # Note: /gluster/lock gets created/mounted by Gluster hook scripts - we disable those but keep using the standard path
@@ -2623,6 +2655,9 @@ CTDB_SET_TraverseTimeout=60
 # Set CTDB socket location
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
+
+# TODO: enable after initializing GlusterFS
+systemctl disable gluster-lock.mount
 
 # Note: hosts and addresses configuration files created in pre section above and copied in third post section below
 
@@ -2866,7 +2901,7 @@ chmod 644 /etc/security/limits.d/10-smb.conf
 
 # Add SELinux support for Samba access to FUSE-mounted GlusterFS-based shared lock area
 # TODO: remove when included upstream
-setsebool samba_share_fusefs on
+setsebool -P -N samba_share_fusefs on
 mkdir -p /etc/selinux/local
 cat << EOF > /etc/selinux/local/myglustersmb.te
 
@@ -2902,6 +2937,42 @@ firewall-offline-cmd --add-service=samba
 
 # Configure Gluster-block
 # TODO: Lower Gluster-block log level
+#sed -i -e 's/^#*\s*GB_LOG_LEVEL=.*$/GB_LOG_LEVEL=WARNING/' /etc/sysconfig/gluster-blockd
+
+# Put Gluster-block service under proper cgroup control (configured above)
+# TODO: verify whether the following automatically applies also to all LIO services and remove specific target/gluster-block-target/tcmu-runner fragments if not needed
+mkdir -p /etc/systemd/system/gluster-blockd.service.d
+cat << EOF > /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
+mkdir -p /etc/systemd/system/gluster-block-target.service.d
+cat << EOF > /etc/systemd/system/gluster-block-target.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/gluster-block-target.service.d/custom-slice.conf
+mkdir -p /etc/systemd/system/target.service.d
+cat << EOF > /etc/systemd/system/target.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/target.service.d/custom-slice.conf
+mkdir -p /etc/systemd/system/tcmu-runner.service.d
+cat << EOF > /etc/systemd/system/tcmu-runner.service.d/custom-slice.conf
+
+[Service]
+Slice=storage.slice
+
+EOF
+chmod 644 /etc/systemd/system/tcmu-runner.service.d/custom-slice.conf
 
 # Add firewalld configuration for Gluster-block
 cat << EOF > /etc/firewalld/services/gluster-block.xml
@@ -2914,6 +2985,10 @@ cat << EOF > /etc/firewalld/services/gluster-block.xml
 </service>
 EOF
 chmod 644 /etc/firewalld/services/webmin.xml
+
+# Disable automatic creation of default portal upon target creation
+# Note: global settings are user specific and saved under ~/.targetcli/prefs.bin
+targetcli set global auto_add_default_portal=false
 
 # Enable Gluster-block
 # Note: Gluster-block needs the iSCSI target too
@@ -2929,52 +3004,6 @@ systemctl disable gluster-blockd
 # TODO: Lower oVirt HE HA agent/broker log level
 #sed -i -r -e 's/(DEBUG|INFO)/WARNING/' /etc/ovirt-hosted-engine-ha/agent-log.conf
 #sed -i -r -e 's/(DEBUG|INFO)/WARNING/' /etc/ovirt-hosted-engine-ha/broker-log.conf
-
-# TODO: Lower GlusterFS log level
-#sed -i -e 's/^#*\s*LOG_LEVEL=.*$/LOG_LEVEL=WARNING/' /etc/sysconfig/glusterd
-
-# TODO: Lower Gluster-block log level
-#sed -i -e 's/^#*\s*GB_LOG_LEVEL=.*$/GB_LOG_LEVEL=WARNING/' /etc/sysconfig/gluster-blockd
-
-# Limit GlusterFS/Samba/Ganesha resource usage by means of cgroup using systemd slices
-# Note: the following applies to both glusterd and glusterfsd (the latter being started on demand by the former) by means of the settings below
-# TODO: verify whether to use CPUQuota=400% instead of CPUShares
-cat << EOF > /etc/systemd/system/storage.slice
-[Unit]
-Description=Storage services Slice
-Documentation=man:systemd.special(7)
-DefaultDependencies=no
-Before=slices.target
-Wants=-.slice
-After=-.slice
-
-[Slice]
-CPUAccounting=on
-CPUShares=4096
-EOF
-chmod 644 /etc/systemd/system/storage.slice
-
-# Put GlusterFS services under proper cgroup control (configured above)
-# Note: the following applies to both glusterd and glusterfsd (the latter being started on demand by the former)
-mkdir -p /etc/systemd/system/glusterd.service.d
-cat << EOF > /etc/systemd/system/glusterd.service.d/custom-slice.conf
-
-[Service]
-Slice=storage.slice
-
-EOF
-chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
-
-# Put Gluster-block services under proper cgroup control (configured above)
-# TODO: verify whether the following autmatically applies also to all LIO services
-mkdir -p /etc/systemd/system/gluster-blockd.service.d
-cat << EOF > /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
-
-[Service]
-Slice=storage.slice
-
-EOF
-chmod 644 /etc/systemd/system/gluster-blockd.service.d/custom-slice.conf
 
 # Put CTDB controlled services under proper cgroup control (the GlusterFS slice configured above)
 # TODO: verify whether the following applies to both ctdb and smbd/nmbd/winbindd/nfs-ganesha and remove specific smbd/nmbd/winbindd/nfs-ganesha fragments if not needed
@@ -3189,9 +3218,6 @@ cat << EOF >> /etc/rc.d/rc.ks1stboot
 if [ -x /etc/rc.d/rc.users-setup ]; then
 	/etc/rc.d/rc.users-setup
 fi
-
-# TODO: enable after initializing GlusterFS
-systemctl disable gluster-lock.mount
 
 # Disable further executions of this script from systemd
 systemctl disable ks1stboot.service
