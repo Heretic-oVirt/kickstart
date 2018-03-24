@@ -1718,7 +1718,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031801"
+script_version="2018032301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1982,7 +1982,7 @@ yum -y install bind
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-psycopg2 ovirt-ansible-roles NetworkManager-glib
 
 # Install Webmin for generic web management
 # TODO: adapt Cockpit from NGN installation and switch to using that instead
@@ -2985,10 +2985,6 @@ cat << EOF > /etc/firewalld/services/gluster-block.xml
 </service>
 EOF
 chmod 644 /etc/firewalld/services/webmin.xml
-
-# Disable automatic creation of default portal upon target creation
-# Note: global settings are user specific and saved under ~/.targetcli/prefs.bin
-targetcli set global auto_add_default_portal=false
 
 # Enable Gluster-block
 # Note: Gluster-block needs the iSCSI target too
