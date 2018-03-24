@@ -1602,7 +1602,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031801"
+script_version="2018032301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1756,8 +1756,8 @@ sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.
 # Note: a Node image should be upgraded as a whole and not package-by-package
 # TODO: verify how to upgrade additional packages when upgrading the Node image
 
-# Install Wget, patch and ntpdate
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install wget patch ntpdate
+# Install Rsync, Wget, patch and ntpdate
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
@@ -1837,7 +1837,7 @@ yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bar
 
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-psycopg2 ovirt-ansible-roles NetworkManager-glib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -2573,10 +2573,6 @@ cat << EOF > /etc/firewalld/services/gluster-block.xml
 </service>
 EOF
 chmod 644 /etc/firewalld/services/webmin.xml
-
-# Disable automatic creation of default portal upon target creation
-# Note: global settings are user specific and saved under ~/.targetcli/prefs.bin
-targetcli set global auto_add_default_portal=false
 
 # Enable Gluster-block
 # Note: Gluster-block needs the iSCSI target too
