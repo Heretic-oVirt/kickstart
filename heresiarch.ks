@@ -2610,7 +2610,7 @@ cat << EOF > hvp.yaml
 hvp_management_domainname: ${domain_name[${dhcp_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_orthodox_mode:  $(echo "${orthodox_mode}" | sed -e 's/\b./\u\0/g')
-hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
+hvp_master_node: "{{ groups['ovirt_master'][0] }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
 hvp_engine_cpus: 2
@@ -2618,8 +2618,10 @@ hvp_engine_imgsize: 80
 hvp_engine_setup_timeout: 3600
 hvp_engine_name: ${engine_name}
 hvp_engine_domainname: "{{ hvp_management_domainname }}"
+# TODO: derive the following by Ansible lookup on name
 hvp_engine_ip: ${engine_ip}
 hvp_engine_netprefix: ${PREFIX}
+# TODO: derive the following by Ansible lookup on names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 hvp_switch_ip: ${switch_ip}
 hvp_gateway_ip: ${dhcp_gateway}
@@ -2766,7 +2768,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032301"
+script_version="2018032401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
