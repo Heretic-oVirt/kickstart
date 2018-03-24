@@ -2607,6 +2607,8 @@ cat << EOF > hvp.yaml
 # Global variables for HVP Ansible playbooks
 
 # HVP local conventions
+hvp_management_domainname: ${domain_name[${dhcp_zone}]}
+hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_orthodox_mode:  $(echo "${orthodox_mode}" | sed -e 's/\b./\u\0/g')
 hvp_master_node: "{{ groups['ovirtnodes'][${master_index}] }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
@@ -2615,7 +2617,7 @@ hvp_engine_cpus: 2
 hvp_engine_imgsize: 80
 hvp_engine_setup_timeout: 3600
 hvp_engine_name: ${engine_name}
-hvp_engine_domainname: ${domain_name[${dhcp_zone}]}
+hvp_engine_domainname: "{{ hvp_management_domainname }}"
 hvp_engine_ip: ${engine_ip}
 hvp_engine_netprefix: ${PREFIX}
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
@@ -2632,19 +2634,27 @@ hvp_admin_username: ${admin_username}
 # HVP Gluster settings
 # TODO: derive proper values for Gluster volume sizes from user settings
 # TODO: dynamically determine arbiter sizes for each Gluster volume
+hvp_enginedomain_volume_name: enginedomain
 hvp_enginedomain_size: "100GB"
 hvp_enginedomain_arbitersize: "1GB"
+hvp_vmstoredomain_volume_name: vmstoredomain
 hvp_vmstoredomain_size: "500GB"
 hvp_vmstoredomain_arbitersize: "1GB"
+hvp_isodomain_volume_name: isodomain
 hvp_isodomain_size: "30GB"
 hvp_isodomain_arbitersize: "1GB"
+hvp_ctdb_volume_name: ctdb
 hvp_ctdb_size: "1GB"
+hvp_winshare_volume_name: winshare
 hvp_winshare_size: "1024GB"
 hvp_winshare_arbitersize: "10GB"
+hvp_unixshare_volume_name: unixshare
 hvp_unixshare_size: "1024GB"
 hvp_unixshare_arbitersize: "10GB"
+hvp_blockshare_volume_name: blockshare
 hvp_blockshare_size: "1024GB"
 hvp_blockshare_arbitersize: "10GB"
+hvp_backup_volume_name: backup
 hvp_backup_size: "1024GB"
 hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1536k"
@@ -2657,7 +2667,7 @@ hvp_lun_sizes:
   - 450GiB
 
 # Engine credentials:
-url: https://${engine_name}.${domain_name[${dhcp_zone}]}/ovirt-engine/api
+url: "https://{{ hvp_engine_name }}.{{ hvp_engine_domainname }}/ovirt-engine/api"
 username: admin@internal
 password: ${root_password}
 ca_file: /etc/pki/ovirt-engine/ca.pem
@@ -2686,23 +2696,22 @@ cluster_name: "Default"
 ## Storage
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
-# TODO: use NFS-Ganesha as soon as a proper CTDB-based configuration has been devised - using internal Gluster-NFS meanwhile
 glusterfs_addr: "{{ groups['gluster_master'] | first }}"
 glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
 iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
 iso_sd_name: iso_domain
-iso_sd_path: /isodomain
+iso_sd_path: "/{{ hvp_isodomain_volume_name }}"
 iso_sd_mountopts: 
 vmstore_sd_type: glusterfs
 vmstore_sd_addr: "{{ glusterfs_addr }}"
 vmstore_sd_name: vmstore_domain
-vmstore_sd_path: /vmstoredomain
+vmstore_sd_path: "/{{ hvp_vmstoredomain_volume_name }}"
 vmstore_sd_mountopts: "{{ glusterfs_mountopts }}"
 engine_sd_type: glusterfs
 engine_sd_addr: "{{ glusterfs_addr }}"
 engine_sd_name: engine_domain
-engine_sd_path: /enginedomain
+engine_sd_path: "/{{ hvp_enginedomain_volume_name }}"
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 
 ## Networking
@@ -2757,7 +2766,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018031401"
+script_version="2018032301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2947,7 +2956,7 @@ yum -y install webalizer mrtg net-snmp net-snmp-utils
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath ovirt-ansible-roles NetworkManager-glib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-psycopg2 ovirt-ansible-roles NetworkManager-glib
 
 # Install HVP Ansible support files
 yum -y install hvp-ansible
