@@ -1466,6 +1466,9 @@ for zone in "${!network[@]}" ; do
 				EOF
 			done
 		fi
+	else
+		# Note: create an empty public_addresses file on passive storage nodes otherwise CTDB will error out on start
+		touch public_addresses
 	fi
 done
 
@@ -1602,7 +1605,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032301"
+script_version="2018032501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1837,7 +1840,7 @@ yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bar
 
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-psycopg2 ovirt-ansible-roles NetworkManager-glib
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 ovirt-ansible-roles NetworkManager-glib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
