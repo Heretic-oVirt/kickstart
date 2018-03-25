@@ -3262,7 +3262,7 @@ if [ -s /tmp/hvp-ctdb-files/nodes ]; then
 	cat /tmp/hvp-ctdb-files/nodes >> ${ANA_INSTALL_PATH}/etc/ctdb/nodes
 	chmod 644 ${ANA_INSTALL_PATH}/etc/ctdb/nodes
 fi
-if [ -s /tmp/hvp-ctdb-files/public_addresses ]; then
+if [ -f /tmp/hvp-ctdb-files/public_addresses ]; then
 	cat /tmp/hvp-ctdb-files/public_addresses >> ${ANA_INSTALL_PATH}/etc/ctdb/public_addresses
 	chmod 644 ${ANA_INSTALL_PATH}/etc/ctdb/public_addresses
 fi
