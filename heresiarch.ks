@@ -2609,21 +2609,24 @@ cat << EOF > hvp.yaml
 # HVP local conventions
 hvp_management_domainname: ${domain_name[${dhcp_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
+hvp_storage_name: ${storage_name}
 hvp_orthodox_mode:  $(echo "${orthodox_mode}" | sed -e 's/\b./\u\0/g')
 hvp_master_node: "{{ groups['ovirt_master'][0] }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
 hvp_engine_cpus: 2
 hvp_engine_imgsize: 80
-hvp_engine_setup_timeout: 3600
+hvp_engine_setup_timeout: 7200
 hvp_engine_name: ${engine_name}
 hvp_engine_domainname: "{{ hvp_management_domainname }}"
-# TODO: derive the following by Ansible lookup on name
-hvp_engine_ip: ${engine_ip}
+hvp_engine_ip: "{{ lookup('dig', hvp_engine_name + '.' + hvp_engine_domainname + '.') }}"
 hvp_engine_netprefix: ${PREFIX}
-# TODO: derive the following by Ansible lookup on names
+# TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
-hvp_switch_ip: ${switch_ip}
+# Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
+# Note: we do not expect a virtualized setup to have an independent pingable IP apart from the default gateway
+hvp_switch_ip: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %} ${dhcp_gateway} {% else %} ${switch_ip} {% endif %}"
+# Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
 hvp_gateway_ip: ${dhcp_gateway}
 hvp_timezone: ${local_timezone}
 hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
@@ -2634,10 +2637,10 @@ hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 hvp_admin_username: ${admin_username}
 
 # HVP Gluster settings
-# TODO: derive proper values for Gluster volume sizes from user settings
+# TODO: derive proper values for Gluster volume sizes from user settings and/or available space
 # TODO: dynamically determine arbiter sizes for each Gluster volume
 hvp_enginedomain_volume_name: enginedomain
-hvp_enginedomain_size: "100GB"
+hvp_enginedomain_size: "{{ (hvp_engine_imgsize * 1.2) | int | abs }}GB"
 hvp_enginedomain_arbitersize: "1GB"
 hvp_vmstoredomain_volume_name: vmstoredomain
 hvp_vmstoredomain_size: "500GB"
@@ -2662,7 +2665,7 @@ hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1536k"
 
 # HVP Gluster-block settings
-# TODO: derive proper values for Gluster-block LUN sizes from user settings
+# TODO: derive proper values for Gluster-block LUN sizes from user settings and/or available space
 hvp_lun_sizes:
   - 200GiB
   - 300GiB
@@ -2697,11 +2700,11 @@ cluster_name: "Default"
 
 ## Storage
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
-# Note: Engine vm has no access to Gluster network, so we must resort to NFS for ISO (Engine must access it for image upload)
+# Note: Engine vm has no access to Gluster network, so for ISO domain we must resort to NFS on management network (Engine must access it for image upload)
 glusterfs_addr: "{{ groups['gluster_master'] | first }}"
 glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
-iso_sd_addr: ${storage_name}.${domain_name[${dhcp_zone}]}
+iso_sd_addr: "{{ hvp_storage_name }}.{{ hvp_management_domainname }}"
 iso_sd_name: iso_domain
 iso_sd_path: "/{{ hvp_isodomain_volume_name }}"
 iso_sd_mountopts: 
@@ -2768,7 +2771,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032401"
+script_version="2018032501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2958,7 +2961,7 @@ yum -y install webalizer mrtg net-snmp net-snmp-utils
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-psycopg2 ovirt-ansible-roles NetworkManager-glib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 ovirt-ansible-roles NetworkManager-glib
 
 # Install HVP Ansible support files
 yum -y install hvp-ansible
