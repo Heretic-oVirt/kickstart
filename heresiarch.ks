@@ -27,7 +27,8 @@
 # Note: to force custom sysvol replication password add hvp_sysvolpassword=mysysvolsecret where mysysvolsecret is the sysvol replication password
 # Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
 # Note: to force custom AD DC naming add hvp_dcname=mydcname where mydcname is the unqualified (ie without domain name part) hostname of the AD DC
-# Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird or sqlserver)
+# Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird, mongodb or sqlserver)
+# Note: to force custom database version add hvp_dbversion=a.b where a.b is the database version number
 # Note: to force custom desktop type add hvp_detype=eeee where eeee is the desktop type (either gnome, kde, xfce or lxde)
 # Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the AD network
 # Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
@@ -81,6 +82,7 @@
 # Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
 # Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
 # Note: the default database type is postgresql
+# Note: the default database version is 9.6 (postgresql), 5.7 (mysql), 2.5 (firebird), 3.6 (mongodb) and 2017.CU (sqlserver)
 # Note: the default desktop type is gnome
 # Note: the default DB server IP on the AD network is assumed to be the AD network address plus 230
 # Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
@@ -337,6 +339,7 @@ unset db_ip
 unset db_ip_offset
 unset db_name
 unset dbtype
+unset dbversion
 unset detype
 unset pr_ip
 unset pr_ip_offset
@@ -506,6 +509,7 @@ db_ip_offset="230"
 db_name="bigmcintosh"
 
 dbtype="postgresql"
+dbversion="9.6"
 
 detype="gnome"
 
@@ -914,10 +918,35 @@ fi
 # Determine database type
 given_dbtype=$(sed -n -e 's/^.*hvp_dbtype=\(\S*\).*$/\1/p' /proc/cmdline)
 case "${given_dbtype}" in
-	postgresql|mysql|firebird|sqlserver)
+	postgresql|mysql|firebird|mongodb|sqlserver)
 		dbtype="${given_dbtype}"
 		;;
 esac
+
+# Determine database version
+given_dbversion=$(sed -n -e 's/^.*hvp_dbversion=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_dbversion}" ]; then
+	dbversion="${given_dbversion}"
+fi
+if [ -z "${dbversion}" -o "${dbtype}" != "postgresql" -a "${dbversion}" = "9.6" ]; then
+	case "${dbtype}" in
+		postgresql)
+			dbversion="9.6"
+			;;
+		mysql)
+			dbversion="5.7"
+			;;
+		firebird)
+			dbversion="2.5"
+			;;
+		mongodb)
+			dbversion="3.6"
+			;;
+		sqlserver)
+			dbversion="2017.CU"
+			;;
+	esac
+fi
 
 # Determine desktop type
 given_detype=$(sed -n -e 's/^.*hvp_detype=\(\S*\).*$/\1/p' /proc/cmdline)
@@ -1693,19 +1722,19 @@ LABEL installdc
 LABEL installdb
         MENU LABEL Install Database Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
 
-# Start kickstart-based HVP Printserver installation
+# Start kickstart-based HVP Print server installation
 LABEL installpr
         MENU LABEL Install Print Server
         kernel linux/centos/vmlinuz
         # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
-# Start kickstart-based HVP Desktop installation
+# Start kickstart-based HVP Remote Desktop server installation
 LABEL installvd
-        MENU LABEL Install Virtual Desktop
+        MENU LABEL Install Remote Desktop Server
         kernel linux/centos/vmlinuz
         # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_detype=${detype} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
@@ -1875,6 +1904,7 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_db.sh
 my_ip_offset="${db_ip_offset}"
 
 dbtype="${dbtype}"
+dbversion="${dbversion}"
 
 my_name="${db_name}"
 
@@ -2771,7 +2801,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032501"
+script_version="2018032802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
