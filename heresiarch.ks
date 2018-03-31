@@ -2640,8 +2640,8 @@ cat << EOF > hvp.yaml
 hvp_management_domainname: ${domain_name[${dhcp_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_storage_name: ${storage_name}
-hvp_orthodox_mode:  $(echo "${orthodox_mode}" | sed -e 's/\b./\u\0/g')
-hvp_master_node: "{{ groups['ovirt_master'][0] }}"
+hvp_orthodox_mode: ${orthodox_mode}
+hvp_master_node: "{{ groups['ovirt_master'] | first }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
 hvp_engine_cpus: 2
@@ -2665,17 +2665,24 @@ hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 hvp_admin_username: ${admin_username}
+hvp_email_sender: root@localhost
+hvp_email_receiver: monitoring@localhost
+
+## HVP OVN settings
+hvp_ovn_private_network_names:
+  - dmz0
+  - dmz1
 
 # HVP Gluster settings
 # TODO: derive proper values for Gluster volume sizes from user settings and/or available space
 # TODO: dynamically determine arbiter sizes for each Gluster volume
-hvp_enginedomain_volume_name: enginedomain
+hvp_enginedomain_volume_name: engine
 hvp_enginedomain_size: "{{ (hvp_engine_imgsize * 1.2) | int | abs }}GB"
 hvp_enginedomain_arbitersize: "1GB"
-hvp_vmstoredomain_volume_name: vmstoredomain
+hvp_vmstoredomain_volume_name: vmstore
 hvp_vmstoredomain_size: "500GB"
 hvp_vmstoredomain_arbitersize: "1GB"
-hvp_isodomain_volume_name: isodomain
+hvp_isodomain_volume_name: iso
 hvp_isodomain_size: "30GB"
 hvp_isodomain_arbitersize: "1GB"
 hvp_ctdb_volume_name: ctdb
@@ -2735,36 +2742,36 @@ glusterfs_addr: "{{ groups['gluster_master'] | first }}"
 glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
 iso_sd_addr: "{{ hvp_storage_name }}.{{ hvp_management_domainname }}"
-iso_sd_name: iso_domain
+iso_sd_name: "{{ hvp_isodomain_volume_name + '_domain' }}"
 iso_sd_path: "/{{ hvp_isodomain_volume_name }}"
 iso_sd_mountopts: 
 vmstore_sd_type: glusterfs
 vmstore_sd_addr: "{{ glusterfs_addr }}"
-vmstore_sd_name: vmstore_domain
+vmstore_sd_name: "{{ hvp_vmstoredomain_volume_name + '_domain' }}"
 vmstore_sd_path: "/{{ hvp_vmstoredomain_volume_name }}"
 vmstore_sd_mountopts: "{{ glusterfs_mountopts }}"
 engine_sd_type: glusterfs
 engine_sd_addr: "{{ glusterfs_addr }}"
-engine_sd_name: engine_domain
+engine_sd_name: "{{ hvp_enginedomain_volume_name + '_domain' }}"
 engine_sd_path: "/{{ hvp_enginedomain_volume_name }}"
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 
 ## Networking
-got_gluster_network: $(echo "${gluster_network}" | sed -e 's/\b./\u\0/g')
-$(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" , fi)
+got_gluster_network: "${gluster_network}"
+$(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" ; fi)
 
-got_lan_network: $(echo "${lan_network}" | sed -e 's/\b./\u\0/g')
-$(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" , fi)
+got_lan_network: "${lan_network}"
+$(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" ; echo "hvp_lan_bridge_name: lan" ; fi)
 
-got_internal_network: $(echo "${internal_network}" | sed -e 's/\b./\u\0/g')
-$(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" , fi)
+got_internal_network: "${internal_network}"
+$(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" ; echo "hvp_internal_bridge_name: internal" ; fi)
 
 EOF
 
 # Prepare Active Directory defaults
 cat << EOF > ad.yaml
 # AD-related variables for HVP Ansible playbooks
-
+hvp_adjoin_domain: ${ad_subdomain_prefix}.${domain_name[${ad_zone}]}
 hvp_adjoin_realm: ${realm_name}
 hvp_adjoin_username: ${winadmin_username}
 hvp_adjoin_password: ${winadmin_password}
@@ -2801,7 +2808,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032802"
+script_version="2018032901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
