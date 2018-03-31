@@ -1605,7 +1605,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032501"
+script_version="2018032901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1759,8 +1759,8 @@ sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.
 # Note: a Node image should be upgraded as a whole and not package-by-package
 # TODO: verify how to upgrade additional packages when upgrading the Node image
 
-# Install Rsync, Wget, patch and ntpdate
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate
+# Install Rsync, Wget, patch, ntpdate and LSB support
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate redhat-lsb
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
