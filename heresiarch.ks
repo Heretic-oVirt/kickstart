@@ -21,7 +21,8 @@
 # Note: to force custom network MTU add hvp_{external,mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
 # Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
-# Note: to force custom network bridge naming add hvp_{mgmt,gluster,lan,internal}_bridge=bridgename where bridgename is the bridge name
+# Note: to force custom network bridge naming add hvp_{mgmt,lan,internal}_bridge=bridgename where bridgename is the bridge name
+# Note: to force custom OVN private network naming add hvp_ovn_networks=myovn1,myovn2 where myovn1 and myovn2 are the OVN private network names
 # Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
 # Note: to force custom NetBIOS domain naming add hvp_netbiosdomain=MYDOM where MYDOM is the NetBIOS domain name
 # Note: to force custom sysvol replication password add hvp_sysvolpassword=mysysvolsecret where mysysvolsecret is the sysvol replication password
@@ -49,6 +50,9 @@
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
 # Note: to force custom datacenter naming add hvp_dcname=mydcname where mydcname is the name of the oVirt DataCenter
 # Note: to force custom cluster naming add hvp_clname=myclname where myclname is the name of the oVirt Cluster
+# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumename=myvolumename where myvolumename is the volume name
+# Note: to force custom Gluster volume size add hvp_{vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumesize=S where S is the volume size in GB
+# Note: to force custom Gluster-block LUN sizes add hvp_block_luns=A,B where A and B are the Gluster-block LUN sizes in GiB
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
 # Note: to force custom node BMC type add hvp_bmcs_type=bmctype where bmctype is the BMC type
 # Note: to force custom node BMC username add hvp_bmcs_username=bmcadmin where bmcadmin is the BMC username
@@ -61,6 +65,7 @@
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
 # Note: to force custom AD further admin username add hvp_winadminname=mywinadmin where mywinadmin is the further AD admin username
 # Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
+# Note: to force custom email addresses for notification sender and receiver add hvp_{sender,receiver}_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
@@ -75,7 +80,8 @@
 # Note: the default switch IP is assumed to be the 200th IP available (network address + 200) on the mgmt network
 # Note: the default machine IPs are assumed to be the first IPs available (network address + 1) on each connected network
 # Note: the default domain names are assumed to be {external,mgmt,gluster,lan,internal}.private
-# Note: the default bridge names are assumed to be {ovirtmgmt,,lan,internal}
+# Note: the default bridge names are assumed to be {ovirtmgmt,lan,internal}
+# Note: the default OVN private network names are assumed to be dmz0 and dmz1
 # Note: the default AD subdomain name is assumed to be ad
 # Note: the default NetBIOS domain name is equal to the first part of the AD DNS subdomain name (on the lan network, or mgmt if there is only one network) in uppercase
 # Note: the default sysvol replication password is HVP_dem0
@@ -103,6 +109,9 @@
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
 # Note: the default datacenter naming uses the name HVPDataCenter for the oVirt DataCenter
 # Note: the default cluster naming uses the name HVPCluster for the oVirt Cluster
+# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
+# Note: the default Gluster volume sizing uses the sizes {500,30,1,1024,1024,1024,1024} GB for volumes {vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
+# Note: the default Gluster-block LUN sizes are assumed to be 200 GiB, 300 Gib and 450 Gib
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes BMC type is ipmilan
 # Note: the default nodes BMC username is hvpbmcadmin
@@ -115,6 +124,7 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default AD further admin username is the same as the admin username with the string "ad" prefixed
 # Note: the default AD further admin user password is HVP_dem0
+# Note: the default notification email address for sender is root@localhost and for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
 # Note: the default oVirt version is 4.1
@@ -349,6 +359,7 @@ unset vd_ip_offset
 unset vd_name
 unset reverse_domain_name
 unset bridge_name
+unset ovn_network
 unset node_name
 unset bmc_ip_offset
 unset bmc_confirmed
@@ -363,6 +374,9 @@ unset engine_name
 unset storage_name
 unset datacenter_name
 unset cluster_name
+unset gluster_vol_name
+unset gluster_vol_size
+unset gluster_block_size
 unset engine_ip
 unset engine_ip_offset
 unset storage_ip_offset
@@ -376,6 +390,8 @@ unset admin_username
 unset admin_password
 unset winadmin_username
 unset winadmin_password
+unset notification_sender
+unset notification_receiver
 unset keyboard_layout
 unset local_timezone
 unset ovirt_version
@@ -407,6 +423,27 @@ storage_name="discord"
 datacenter_name="HVPDataCenter"
 
 cluster_name="HVPCluster"
+
+declare -A gluster_vol_name gluster_vol_size
+gluster_vol_name['engine']="engine"
+gluster_vol_name['vmstore']="vmstore"
+gluster_vol_size['vmstore']="500"
+gluster_vol_name['iso']="iso"
+gluster_vol_size['iso']="30"
+gluster_vol_name['ctdb']="ctdb"
+gluster_vol_size['ctdb']="1"
+gluster_vol_name['unixshare']="unixshare"
+gluster_vol_size['unixshare']="1024"
+gluster_vol_name['winshare']="winshare"
+gluster_vol_size['winshare']="1024"
+gluster_vol_name['blockshare']="blockshare"
+gluster_vol_size['blockshare']="1024"
+gluster_vol_name['backup']="backup"
+gluster_vol_size['backup']="1024"
+
+gluster_block_size[0]="200"
+gluster_block_size[1]="300"
+gluster_block_size[2]="450"
 
 # Note: IP offsets below get used to automatically derive IP addresses
 # Note: no need to allow offset overriding from commandline if the IP address itself can be specified
@@ -492,9 +529,11 @@ reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
 declare -A bridge_name
 bridge_name['mgmt']="ovirtmgmt"
-bridge_name['gluster']=""
 bridge_name['lan']="lan"
 bridge_name['internal']="internal"
+
+ovn_network[0]="dmz0"
+ovn_network[1]="dmz1"
 
 ad_subdomain_prefix="ad"
 
@@ -535,6 +574,9 @@ admin_password="hvpdemo"
 winadmin_password="HVP_dem0"
 keyboard_layout="us"
 local_timezone="UTC"
+
+notification_sender="root@localhost"
+notification_receiver="monitoring@localhost"
 
 ovirt_version="4.1"
 
@@ -821,6 +863,18 @@ if [ -n "${given_ovirt_version}" ]; then
 	ovirt_version="${given_ovirt_version}"
 fi
 
+# Determine notification sender email address
+given_sender_email=$(sed -n -e "s/^.*hvp_sender_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_sender_email}" ]; then
+	notification_sender="${given_sender_email}"
+fi
+
+# Determine notification receiver email address
+given_receiver_email=$(sed -n -e "s/^.*hvp_receiver_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_receiver_email}" ]; then
+	notification_receiver="${given_receiver_email}"
+fi
+
 # Determine node BMC IPs offset base
 given_bmcs_offset=$(sed -n -e 's/^.*hvp_bmcs_offset=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_bmcs_offset}" | grep -q '^[[:digit:]]\+$' ; then
@@ -956,6 +1010,36 @@ case "${given_detype}" in
 		;;
 esac
 
+# Determine Gluster volume names and sizes
+for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
+	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_volume_name}" ]; then
+		gluster_vol_name["${volume}"]="${given_volume_name}"
+	fi
+	# Note: engine volume size is determined dynamically
+	if [ "${volume}" = "engine" ]; then
+		continue
+	fi
+	given_volume_size=$(sed -n -e "s/^.*hvp_${volume}_volumesize=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_volume_size}" ]; then
+		gluster_vol_size["${volume}"]="${given_volume_size}"
+	fi
+done
+
+# Determine Gluster-block LUN sizes
+given_block_sizes=$(sed -n -e "s/^.*hvp_block_luns=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_block_sizes}" ]; then
+	unset gluster_block_size
+	if [ "${given_block_sizes}" = '""' -o "${given_block_sizes}" = "''" ]; then
+		declare -A gluster_block_size
+	else
+		i=0
+		for lun_size in $(echo "${given_block_sizes}" | sed -e 's/,/ /g'); do
+			gluster_block_size[${i}]="${lun_size}"
+		done
+	fi
+fi
+
 # Determine nameserver address
 given_nameserver=$(sed -n -e "s/^.*hvp_nameserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_nameserver}" ]; then
@@ -994,12 +1078,24 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
 	fi
-	given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_network_bridge_name}" ]; then
-		bridge_name["${zone}"]="${given_network_bridge_name}"
-		# Correctly detect an empty (disabled) bridge name
-		if [ "${bridge_name[${zone}]}" = '""' -o "${bridge_name[${zone}]}" = "''" ]; then
-			bridge_name["${zone}"]=""
+	# Note: no bridge (vm accessibility) for Gluster network
+	if [ "${zone}" != "gluster" ]; then
+		given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+		# Note: a bridge can be renamed but cannot be disabled if the physical network is present
+		if [ -n "${given_network_bridge_name}" ]; then
+			bridge_name["${zone}"]="${given_network_bridge_name}"
+		fi
+	fi
+	given_ovn_networks=$(sed -n -e "s/^.*hvp_ovn_networks=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_ovn_networks}" ]; then
+		unset ovn_network
+		if [ "${given_ovn_networks}" = '""' -o "${given_ovn_networks}" = "''" ]; then
+			declare -A ovn_network
+		else
+			i=0
+			for ovn_net in $(echo "${given_ovn_networks}" | sed -e 's/,/ /g'); do
+				ovn_network[${i}]="${ovn_net}"
+			done
 		fi
 	fi
 	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
@@ -1561,15 +1657,15 @@ for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" ]; then
 		unset PREFIX
 		eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
-		# Correctly insert an empty bridge name
-		if [ -z "${bridge_name[${zone}]}" ]; then
-			zone_bridge_name="''"
-		else
-			zone_bridge_name="${bridge_name[${zone}]}"
-		fi
 		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]} hvp_${zone}_bridge=${zone_bridge_name}"
 		vm_network_params="${vm_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
 	fi
+done
+
+# Define common storage parameters to be added on PXE menu as kernel commandline parameters during installation
+common_storage_params=""
+for volume in "${!gluster_vol_name[@]}" ; do
+	common_storage_params="${common_storage_params} hvp_${volume}_volumename=${gluster_vol_name[${volume}]}"
 done
 
 # Create simple standard menu
@@ -1644,6 +1740,10 @@ LABEL rootmenu
 
 EOF
 # Note: we will automatically extend to further installations the parameters passed during our own installation
+if [ -n "${notification_receiver}" ] ; then
+	common_network_params="${common_network_params} hvp_receiver_email=${notification_receiver}"
+	vm_network_params="${vm_network_params}  hvp_receiver_email=${notification_receiver}"
+fi
 if [ "${orthodox_mode}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_orthodox"
 else
@@ -1687,7 +1787,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -1695,7 +1795,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -1827,6 +1927,8 @@ admin_username="${admin_username}"
 admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
+
+notification_receiver="${given_receiver_email}"
 EOF
 # Create kickstart-specific configuration parameters fragments
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
@@ -1843,6 +1945,14 @@ EOF
 for ((i=0;i<${node_count};i=i+1)); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 	node_name[${i}]="${node_name[${i}]}"
+	EOF
+done
+cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+
+EOF
+for volume in "${!gluster_vol_name[@]}" ; do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
+	gluster_vol_name['${volume}']="${gluster_vol_name[${volume}]}"
 	EOF
 done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
@@ -2665,48 +2775,63 @@ hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 hvp_admin_username: ${admin_username}
-hvp_email_sender: root@localhost
-hvp_email_receiver: monitoring@localhost
+hvp_email_sender: ${notification_sender}
+hvp_email_receiver: ${notification_receiver}
 
 ## HVP OVN settings
-hvp_ovn_private_network_names:
-  - dmz0
-  - dmz1
+EOF
+if [ "${#ovn_network[@]}" -eq 0 ]; then
+	cat <<- EOF >> hvp.yaml
+	hvp_ovn_private_network_names: []
+	EOF
+else
+	cat <<- EOF >> hvp.yaml
+	hvp_ovn_private_network_names:
+	$(for ((i=0;i<${#ovn_network[@]};i=i+1)); do echo "  - ${ovn_network[${i}]}"; done)
+	EOF
+fi
+cat << EOF >> hvp.yaml
 
 # HVP Gluster settings
-# TODO: derive proper values for Gluster volume sizes from user settings and/or available space
 # TODO: dynamically determine arbiter sizes for each Gluster volume
-hvp_enginedomain_volume_name: engine
+hvp_enginedomain_volume_name: ${gluster_vol_name['engine']}
 hvp_enginedomain_size: "{{ (hvp_engine_imgsize * 1.2) | int | abs }}GB"
 hvp_enginedomain_arbitersize: "1GB"
-hvp_vmstoredomain_volume_name: vmstore
-hvp_vmstoredomain_size: "500GB"
+hvp_vmstoredomain_volume_name: ${gluster_vol_name['vmstore']}
+hvp_vmstoredomain_size: "${gluster_vol_size['vmstore']}GB"
 hvp_vmstoredomain_arbitersize: "1GB"
-hvp_isodomain_volume_name: iso
-hvp_isodomain_size: "30GB"
+hvp_isodomain_volume_name: ${gluster_vol_name['iso']}
+hvp_isodomain_size: "${gluster_vol_size['iso']}GB"
 hvp_isodomain_arbitersize: "1GB"
-hvp_ctdb_volume_name: ctdb
-hvp_ctdb_size: "1GB"
-hvp_winshare_volume_name: winshare
-hvp_winshare_size: "1024GB"
+hvp_ctdb_volume_name: ${gluster_vol_name['ctdb']}
+hvp_ctdb_size: "${gluster_vol_size['ctdb']}GB"
+hvp_winshare_volume_name: ${gluster_vol_name['winshare']}
+hvp_winshare_size: "${gluster_vol_size['winshare']}GB"
 hvp_winshare_arbitersize: "10GB"
-hvp_unixshare_volume_name: unixshare
-hvp_unixshare_size: "1024GB"
+hvp_unixshare_volume_name: ${gluster_vol_name['unixshare']}
+hvp_unixshare_size: "${gluster_vol_size['unixshare']}GB"
 hvp_unixshare_arbitersize: "10GB"
-hvp_blockshare_volume_name: blockshare
-hvp_blockshare_size: "1024GB"
+hvp_blockshare_volume_name: ${gluster_vol_name['blockshare']}
+hvp_blockshare_size: "${gluster_vol_size['blockshare']}GB"
 hvp_blockshare_arbitersize: "10GB"
-hvp_backup_volume_name: backup
-hvp_backup_size: "1024GB"
+hvp_backup_volume_name: ${gluster_vol_name['backup']}
+hvp_backup_size: "${gluster_vol_size['backup']}GB"
 hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1536k"
 
 # HVP Gluster-block settings
-# TODO: derive proper values for Gluster-block LUN sizes from user settings and/or available space
-hvp_lun_sizes:
-  - 200GiB
-  - 300GiB
-  - 450GiB
+EOF
+if [ "${#gluster_block_size[@]}" -eq 0 ]; then
+	cat <<- EOF >> hvp.yaml
+	hvp_lun_sizes: []
+	EOF
+else
+	cat <<- EOF >> hvp.yaml
+	hvp_lun_sizes:
+	$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "  - ${gluster_block_size[${i}]}GiB"; done)
+	EOF
+fi
+cat << EOF >> hvp.yaml
 
 # Engine credentials:
 url: "https://{{ hvp_engine_name }}.{{ hvp_engine_domainname }}/ovirt-engine/api"
@@ -2761,10 +2886,10 @@ got_gluster_network: "${gluster_network}"
 $(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" ; fi)
 
 got_lan_network: "${lan_network}"
-$(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" ; echo "hvp_lan_bridge_name: lan" ; fi)
+$(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" ; echo "hvp_lan_bridge_name: ${bridge_name['lan']}" ; fi)
 
 got_internal_network: "${internal_network}"
-$(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" ; echo "hvp_internal_bridge_name: internal" ; fi)
+$(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" ; echo "hvp_internal_bridge_name: ${bridge_name['internal']}" ; fi)
 
 EOF
 
@@ -2808,7 +2933,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032901"
+script_version="2018040101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
