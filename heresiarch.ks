@@ -1657,8 +1657,13 @@ for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" ]; then
 		unset PREFIX
 		eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
-		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]} hvp_${zone}_bridge=${zone_bridge_name}"
+		common_network_params="${common_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_bondmode=${bondmode[${zone}]} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
 		vm_network_params="${vm_network_params} hvp_${zone}=${network[${zone}]}/${PREFIX} hvp_${zone}_mtu=${mtu[${zone}]} hvp_${zone}_test_ip=${my_ip[${zone}]} hvp_${zone}_domainname=${domain_name[${zone}]}"
+	fi
+done
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" != "external" -a "${zone}" != "gluster" ]; then
+		common_network_params="${common_network_params} hvp_${zone}_bridge=${zone_bridge_name}"
 	fi
 done
 
@@ -1901,11 +1906,10 @@ for zone in "${!network[@]}" ; do
 done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
-# TODO: verify bridge names for OVN networks
 # TODO: verify bridge name different from "ovirtmgmt" for oVirt management
 EOF
 for zone in "${!network[@]}" ; do
-	if [ "${zone}" = "external" ]; then
+	if [ "${zone}" = "external" -o "${zone}" = "gluster" ]; then
 		continue
 	fi
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
@@ -2933,7 +2937,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040101"
+script_version="2018040102"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
