@@ -33,6 +33,7 @@
 # Note: to force custom switch naming add hvp_switchname=myswitchname where myswitchname is the unqualified (ie without domain name part) hostname of the switch management interface
 # Note: to force custom engine naming add hvp_enginename=myenginename where myenginename is the unqualified (ie without domain name part) hostname of the Engine
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
+# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumename=myvolumename where myvolumename is the volume name
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
@@ -40,6 +41,7 @@
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
+# Note: to force custom email address for notification receiver add hvp_receiver_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
@@ -65,6 +67,7 @@
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
+# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
@@ -72,6 +75,7 @@
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
+# Note: the default notification email address for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
@@ -208,6 +212,7 @@ unset installer_name
 unset switch_name
 unset engine_name
 unset storage_name
+unset gluster_vol_name
 unset engine_ip
 unset engine_ip_offset
 unset storage_ip_offset
@@ -220,6 +225,7 @@ unset my_gateway
 unset root_password
 unset admin_username
 unset admin_password
+unset notification_receiver
 unset keyboard_layout
 unset local_timezone
 
@@ -248,6 +254,16 @@ switch_name="scootaloo"
 engine_name="celestia"
 
 storage_name="discord"
+
+declare -A gluster_vol_name
+gluster_vol_name['engine']="engine"
+gluster_vol_name['vmstore']="vmstore"
+gluster_vol_name['iso']="iso"
+gluster_vol_name['ctdb']="ctdb"
+gluster_vol_name['unixshare']="unixshare"
+gluster_vol_name['winshare']="winshare"
+gluster_vol_name['blockshare']="blockshare"
+gluster_vol_name['backup']="backup"
 
 # Note: IP offsets below get used to automatically derive IP addresses
 # Note: no need to allow offset overriding from commandline if the IP address itself can be specified
@@ -333,6 +349,8 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
+
+notification_receiver="monitoring@localhost"
 
 # Detect any configuration fragments and load them into the pre environment
 # Note: BIOS based devices, file and DHCP methods are unsupported
@@ -627,6 +645,12 @@ if [ -n "${given_local_timezone}" ]; then
 	local_timezone="${given_local_timezone}"
 fi
 
+# Determine notification receiver email address
+given_receiver_email=$(sed -n -e "s/^.*hvp_receiver_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_receiver_email}" ]; then
+	notification_receiver="${given_receiver_email}"
+fi
+
 # Determine node BMC IPs offset base
 given_bmcs_offset=$(sed -n -e 's/^.*hvp_bmcs_offset=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_bmcs_offset}" | grep -q '^[[:digit:]]\+$' ; then
@@ -668,6 +692,14 @@ given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1
 if [ -n "${given_ad_subdomainname}" ]; then
 	ad_subdomain_prefix="${given_ad_subdomainname}"
 fi
+
+# Determine Gluster volume names
+for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
+	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_volume_name}" ]; then
+		gluster_vol_name["${volume}"]="${given_volume_name}"
+	fi
+done
 
 # Determine network segments parameters
 fixed_mgmt_bondmode="false"
@@ -976,15 +1008,20 @@ EOF
 mkdir -p /tmp/hvp-users-conf
 cat << EOF > /tmp/hvp-users-conf/rc.users-setup
 #!/bin/bash
-# Configure email aliases (divert root email to administrative account)
+# Configure email aliases
+# Divert root email to administrative account
 sed -i -e "s/^#\\\\s*root.*\\\$/root:\\\\t\\\\t${admin_username}/" /etc/aliases
-cat << EOM >> /etc/aliases
-
-# Email alias for server monitoring
-monitoring:	${admin_username}
-
-EOM
-newaliases
+# Divert local notification emails to administrative account
+if echo "${notification_receiver}" | grep -q '@localhost\$' ; then
+	alias=\$(echo "${notification_receiver}" | sed -e 's/@localhost\$//')
+	cat <<- EOM >> /etc/aliases
+	
+	# Email alias for server monitoring
+	\${alias}:	${admin_username}
+	
+	EOM
+	newaliases
+fi
 EOF
 
 # Create localization setup fragment
@@ -1485,7 +1522,7 @@ Before=ctdb.service multi-user.target
 Conflicts=umount.target
 
 [Mount]
-What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:ctdb
+What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:${gluster_vol_name['ctdb']}
 Where=/gluster/lock
 Type=glusterfs
 Options=acl,selinux,_netdev,xlator-option=*client*.ping-timeout=10
@@ -1495,14 +1532,32 @@ TimeoutSec=50s
 WantedBy=ctdb.service multi-user.target
 EOF
 
+# Create glusterd-wait-online service to avoid random failures on global cluster reboot
+# Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
+cat << EOF > gluster-ctdb-wait-online.service
+[Unit]
+Description=Gluster CTDB Volume Wait Online
+Requires=glusterd.service
+After=glusterd.service
+Before=gluster-lock.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gluster-volume-wait ${gluster_vol_name['ctdb']}
+TimeoutStartSec=50s
+
+[Install]
+WantedBy=gluster-lock.mount
+EOF
+
 popd
 
 # Prepare CTDB files to be copied later on below
 mkdir -p /tmp/hvp-samba-files
 pushd /tmp/hvp-samba-files
 
-# Create sample Samba configuration
-# Note: a proper configuration (AD domain member etc.) will be pushed and activated by means of Ansible once the whole infrastructure is up and running
+# Create workgroup-based Samba configuration
+# Note: a domain-based configuration will be pushed and activated by means of Ansible once the whole infrastructure is up and running
 # TODO: lower log level to 0 general and vfs-glusterfs too
 cat << EOF > smb.conf
 [global]
@@ -1564,19 +1619,73 @@ cat << EOF > smb.conf
 
 #====================== Local Share Definitions ==============================
 
-[Shares]
-   comment = Network shares
-   path = /
-   browseable = yes
+[Homes]
+   comment = User personal folder
+   path = /homes
+   browseable = no
    writable = yes
    available = yes
-   guest ok = yes
+   guest ok = no
+   valid users = %S
+   create mask = 0600
+   directory mask = 0700
+   force create mode = 00
+   force directory mode = 00
    vfs objects = glusterfs recycle
    recycle:keeptree = no
    recycle:versions = yes
    #glusterfs:loglevel = 7
-   glusterfs:logfile = /var/log/samba/glusterfs-shares.log
-   glusterfs:volume = winshare
+   glusterfs:logfile = /var/log/samba/glusterfs-homes.log
+   glusterfs:volume = ${gluster_vol_name['winshare']}
+
+[Profiles]
+   comment = User profile folder
+   path = /profiles
+   browseable = no
+   writable = yes
+   available = yes
+   guest ok = no
+   profile acls = yes
+   csc policy = disable
+   create mask = 0600
+   directory mask = 0700
+   force create mode = 00
+   force directory mode = 00
+   hide files = /desktop.ini/outlook*.lnk/*Briefcase*/\$RECYCLE.BIN/
+   vfs objects = glusterfs recycle
+   recycle:keeptree = no
+   recycle:versions = yes
+   #glusterfs:loglevel = 7
+   glusterfs:logfile = /var/log/samba/glusterfs-profiles.log
+   glusterfs:volume = ${gluster_vol_name['winshare']}
+
+[Groups]
+   comment = Group folders
+   path = /groups
+   browseable = yes
+   writable = yes
+   available = yes
+   guest ok = no
+   vfs objects = glusterfs recycle
+   recycle:keeptree = no
+   recycle:versions = yes
+   #glusterfs:loglevel = 7
+   glusterfs:logfile = /var/log/samba/glusterfs-groups.log
+   glusterfs:volume = ${gluster_vol_name['winshare']}
+
+[Software]
+   comment = Software repository
+   path = /software
+   browseable = yes
+   writable = yes
+   available = yes
+   guest ok = no
+   vfs objects = glusterfs recycle
+   recycle:keeptree = no
+   recycle:versions = yes
+   #glusterfs:loglevel = 7
+   glusterfs:logfile = /var/log/samba/glusterfs-software.log
+   glusterfs:volume = ${gluster_vol_name['winshare']}
 
 EOF
 
@@ -1605,7 +1714,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018032901"
+script_version="2018040101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2247,9 +2356,6 @@ CTDB_SET_TraverseTimeout=60
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
 
-# TODO: enable after initializing GlusterFS
-systemctl disable gluster-lock.mount
-
 # Note: hosts and addresses configuration files created in pre section above and copied in third post section below
 
 # Add monitoring script for GlusterFS-based NFS
@@ -2384,24 +2490,8 @@ systemctl mask nfs.target
 # Note: mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
 
-# Note: adding a glusterd-wait-online service to avoid random failures on global cluster reboot
-# Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
-cat << EOF > /etc/systemd/system/gluster-ctdb-wait-online.service
-[Unit]
-Description=Gluster CTDB Volume Wait Online
-Requires=glusterd.service
-After=glusterd.service
-Before=gluster-lock.mount
+# Note: systemd unit to wait for CTDB lock volume availability created in pre section above and copied in third post section below
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/gluster-volume-wait ctdb
-TimeoutStartSec=50s
-
-[Install]
-WantedBy=gluster-lock.mount
-EOF
-chmod 644 /etc/systemd/system/gluster-ctdb-wait-online.service
 cat << EOF > /usr/local/sbin/gluster-volume-wait
 #!/bin/bash
 result="255"
@@ -2414,9 +2504,6 @@ done
 exit \${result}
 EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
-
-# TODO: enable after initializing GlusterFS
-systemctl disable gluster-ctdb-wait-online.service
 
 # Modify CTDB service to force dependency on shared locking area and realtime bandwidth availability
 # TODO: verify restart-mode reconfiguration
@@ -2822,6 +2909,11 @@ if [ -s /tmp/hvp-ctdb-files/gluster-lock.mount ]; then
 	cp /tmp/hvp-ctdb-files/gluster-lock.mount ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
 	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
 	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
+fi
+if [ -s /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ]; then
+	cp /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
+	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
+	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
 fi
 
 # Copy Samba configuration (generated in pre section above) into installed system
