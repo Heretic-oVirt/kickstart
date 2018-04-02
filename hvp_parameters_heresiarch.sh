@@ -24,6 +24,26 @@ datacenter_name="HVPDataCenter"
 
 cluster_name="HVPCluster"
 
+gluster_vol_name['engine']="engine"
+gluster_vol_name['vmstore']="vmstore"
+gluster_vol_size['vmstore']="500"
+gluster_vol_name['iso']="iso"
+gluster_vol_size['iso']="30"
+gluster_vol_name['ctdb']="ctdb"
+gluster_vol_size['ctdb']="1"
+gluster_vol_name['unixshare']="unixshare"
+gluster_vol_size['unixshare']="1024"
+gluster_vol_name['winshare']="winshare"
+gluster_vol_size['winshare']="1024"
+gluster_vol_name['blockshare']="blockshare"
+gluster_vol_size['blockshare']="1024"
+gluster_vol_name['backup']="backup"
+gluster_vol_size['backup']="1024"
+
+gluster_block_size[0]="200"
+gluster_block_size[1]="300"
+gluster_block_size[2]="450"
+
 my_ip_offset="1"
 
 bmc_ip_offset="100"
@@ -76,6 +96,13 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+bridge_name['mgmt']="ovirtmgmt"
+bridge_name['lan']="lan"
+bridge_name['internal']="internal"
+
+ovn_network[0]="dmz0"
+ovn_network[1]="dmz1"
+
 ad_subdomain_prefix="ad"
 
 ad_dc_ip_offset="220"
@@ -112,3 +139,8 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
+
+notification_sender="root@localhost"
+notification_receiver="monitoring@localhost"
+
+ovirt_version="4.1"
