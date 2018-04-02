@@ -41,7 +41,7 @@
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
-# Note: to force custom email addresses for notification receiver add hvp_receiver_email=name@domain where name@domain is the email address
+# Note: to force custom email address for notification receiver add hvp_receiver_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
@@ -1638,7 +1638,7 @@ Before=ctdb.service multi-user.target
 Conflicts=umount.target
 
 [Mount]
-What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:ctdb
+What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:${gluster_vol_name['ctdb']}
 Where=/gluster/lock
 Type=glusterfs
 Options=acl,selinux,_netdev,xlator-option=*client*.ping-timeout=10
@@ -1646,6 +1646,24 @@ TimeoutSec=50s
 
 [Install]
 WantedBy=ctdb.service multi-user.target
+EOF
+
+# Create glusterd-wait-online service to avoid random failures on global cluster reboot
+# Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
+cat << EOF > gluster-ctdb-wait-online.service
+[Unit]
+Description=Gluster CTDB Volume Wait Online
+Requires=glusterd.service
+After=glusterd.service
+Before=gluster-lock.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gluster-volume-wait ${gluster_vol_name['ctdb']}
+TimeoutStartSec=50s
+
+[Install]
+WantedBy=gluster-lock.mount
 EOF
 
 popd
@@ -1784,6 +1802,7 @@ cat << EOF > smb.conf
    #glusterfs:loglevel = 7
    glusterfs:logfile = /var/log/samba/glusterfs-software.log
    glusterfs:volume = ${gluster_vol_name['winshare']}
+
 EOF
 
 popd
@@ -1811,7 +1830,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040101"
+script_version="2018040102"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2886,24 +2905,8 @@ systemctl mask nfs.target
 # Note: mount systemd unit for CTDB shared lock area created in pre section above and copied in third post section below
 mkdir -p /gluster/lock
 
-# Note: adding a glusterd-wait-online service to avoid random failures on global cluster reboot
-# Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
-cat << EOF > /etc/systemd/system/gluster-ctdb-wait-online.service
-[Unit]
-Description=Gluster CTDB Volume Wait Online
-Requires=glusterd.service
-After=glusterd.service
-Before=gluster-lock.mount
+# Note: systemd unit to wait for CTDB lock volume availability created in pre section above and copied in third post section below
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/gluster-volume-wait ctdb
-TimeoutStartSec=50s
-
-[Install]
-WantedBy=gluster-lock.mount
-EOF
-chmod 644 /etc/systemd/system/gluster-ctdb-wait-online.service
 cat << EOF > /usr/local/sbin/gluster-volume-wait
 #!/bin/bash
 result="255"
@@ -3360,6 +3363,11 @@ if [ -s /tmp/hvp-ctdb-files/gluster-lock.mount ]; then
 	cp /tmp/hvp-ctdb-files/gluster-lock.mount ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
 	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
 	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-lock.mount
+fi
+if [ -s /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ]; then
+	cp /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
+	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
+	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
 fi
 
 # Copy Samba configuration (generated in pre section above) into installed system
