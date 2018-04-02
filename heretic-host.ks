@@ -1830,7 +1830,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040102"
+script_version="2018040103"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2768,9 +2768,6 @@ CTDB_SET_TraverseTimeout=60
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
 
-# TODO: enable after initializing GlusterFS
-systemctl disable gluster-lock.mount
-
 # Note: hosts and addresses configuration files created in pre section above and copied in third post section below
 
 # Add monitoring script for GlusterFS-based NFS
@@ -2919,9 +2916,6 @@ done
 exit \${result}
 EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
-
-# TODO: enable after initializing GlusterFS
-systemctl disable gluster-ctdb-wait-online.service
 
 # Modify CTDB service to force dependency on shared locking area and realtime bandwidth availability
 # TODO: verify restart-mode reconfiguration
