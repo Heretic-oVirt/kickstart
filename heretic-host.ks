@@ -444,7 +444,6 @@ reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
 declare -A bridge_name
 bridge_name['mgmt']="ovirtmgmt"
-bridge_name['gluster']=""
 bridge_name['lan']="lan"
 bridge_name['internal']="internal"
 
@@ -833,12 +832,12 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_network_domain_name}" ]; then
 		domain_name["${zone}"]="${given_network_domain_name}"
 	fi
-	given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_network_bridge_name}" ]; then
-		bridge_name["${zone}"]="${given_network_bridge_name}"
-		# Correctly detect an empty (disabled) bridge name
-		if [ "${bridge_name[${zone}]}" = '""' -o "${bridge_name[${zone}]}" = "''" ]; then
-			bridge_name["${zone}"]=""
+	# Note: no bridge (vm accessibility) for Gluster network
+	if [ "${zone}" != "gluster" ]; then
+		given_network_bridge_name=$(sed -n -e "s/^.*hvp_${zone}_bridge=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+		# Note: a bridge can be renamed but cannot be disabled if the physical network is present
+		if [ -n "${given_network_bridge_name}" ]; then
+			bridge_name["${zone}"]="${given_network_bridge_name}"
 		fi
 	fi
 	given_network_mtu=$(sed -n -e "s/^.*hvp_${zone}_mtu=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
@@ -1830,7 +1829,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040103"
+script_version="2018040104"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
