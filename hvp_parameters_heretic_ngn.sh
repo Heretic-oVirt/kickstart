@@ -20,6 +20,15 @@ engine_name="celestia"
 
 storage_name="discord"
 
+gluster_vol_name['engine']="engine"
+gluster_vol_name['vmstore']="vmstore"
+gluster_vol_name['iso']="iso"
+gluster_vol_name['ctdb']="ctdb"
+gluster_vol_name['unixshare']="unixshare"
+gluster_vol_name['winshare']="winshare"
+gluster_vol_name['blockshare']="blockshare"
+gluster_vol_name['backup']="backup"
+
 # Note: for the following values, either the IPs or the offset is enough, but we will list here both as an example
 test_ip_offset="1"
 test_ip['mgmt']="172.20.10.1"
@@ -66,7 +75,6 @@ domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
 bridge_name['mgmt']="ovirtmgmt"
-bridge_name['gluster']=""
 bridge_name['lan']="lan"
 bridge_name['internal']="internal"
 
@@ -83,3 +91,5 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
 local_timezone="UTC"
+
+notification_receiver="monitoring@localhost"
