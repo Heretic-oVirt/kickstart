@@ -23,20 +23,24 @@
 # Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
 # Note: to force custom network bridge naming add hvp_{mgmt,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom OVN private network naming add hvp_ovn_networks=myovn1,myovn2 where myovn1 and myovn2 are the OVN private network names
+# Note: to force custom multi-instance limit for each vm type (kickstart) add hvp_maxinstances=A where A is the maximum number of instances
 # Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
 # Note: to force custom NetBIOS domain naming add hvp_netbiosdomain=MYDOM where MYDOM is the NetBIOS domain name
 # Note: to force custom sysvol replication password add hvp_sysvolpassword=mysysvolsecret where mysysvolsecret is the sysvol replication password
-# Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
+# Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the vm main network
 # Note: to force custom AD DC naming add hvp_dcname=mydcname where mydcname is the unqualified (ie without domain name part) hostname of the AD DC
 # Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird, mongodb or sqlserver)
 # Note: to force custom database version add hvp_dbversion=a.b where a.b is the database version number
 # Note: to force custom desktop type add hvp_detype=eeee where eeee is the desktop type (either gnome, kde, xfce or lxde)
-# Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the AD network
+# Note: to force custom desktop DB type add hvp_dedbtype=uuuu where uuuu is the desktop DB type (either sqlite or postgresql)
+# Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the vm main network
 # Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
-# Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the AD network
+# Note: to force custom Web server IP add hvp_web=w.w.w.w where w.w.w.w is the Web server IP on the vm main network
+# Note: to force custom Web server naming add hvp_webname=mywebname where mywebname is the unqualified (ie without domain name part) hostname of the Web server
+# Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the vm main network
 # Note: to force custom print server naming add hvp_prname=myprname where myprname is the unqualified (ie without domain name part) hostname of the print server
-# Note: to force custom virtual desktop IP add hvp_vd=e.e.e.e where e.e.e.e is the virtual desktop IP on the AD network
-# Note: to force custom print server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the virtual desktop
+# Note: to force custom remote desktop server IP add hvp_vd=e.e.e.e where e.e.e.e is the remote desktop server IP on the vm main network
+# Note: to force custom remote desktop server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the remote desktop server
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
@@ -47,6 +51,7 @@
 # Note: to force custom node naming add hvp_nodename=nodename0,nodename1,nodename2,nodename3 where nodenameN are the unqualified (ie without domain name part) hostnames
 # Note: to force custom switch naming add hvp_switchname=myswitchname where myswitchname is the unqualified (ie without domain name part) hostname of the switch management interface
 # Note: to force custom engine naming add hvp_enginename=myenginename where myenginename is the unqualified (ie without domain name part) hostname of the Engine
+# Note: to force custom metrics server naming add hvp_metricsname=mymetricsname where mymetricsname is the unqualified (ie without domain name part) hostname of the metrics server
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
 # Note: to force custom datacenter naming add hvp_dcname=mydcname where mydcname is the name of the oVirt DataCenter
 # Note: to force custom cluster naming add hvp_clname=myclname where myclname is the name of the oVirt Cluster
@@ -59,6 +64,7 @@
 # Note: to force custom node BMC password add hvp_bmcs_password=bmcsecret where bmcsecret is the BMC username password
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
+# Note: to force custom metrics server IP add hvp_metrics=n.n.n.n where n.n.n.n is the metrics server IP on the mgmt network
 # Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan/internal networks
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
@@ -82,20 +88,24 @@
 # Note: the default domain names are assumed to be {external,mgmt,gluster,lan,internal}.private
 # Note: the default bridge names are assumed to be {ovirtmgmt,lan,internal}
 # Note: the default OVN private network names are assumed to be dmz0 and dmz1
+# Note: the default multi-instance limit is assumed to be 9
 # Note: the default AD subdomain name is assumed to be ad
 # Note: the default NetBIOS domain name is equal to the first part of the AD DNS subdomain name (on the lan network, or mgmt if there is only one network) in uppercase
 # Note: the default sysvol replication password is HVP_dem0
-# Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
+# Note: the default AD DC IP on the vm main network is assumed to be the vm main network address plus 220
 # Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
 # Note: the default database type is postgresql
 # Note: the default database version is 9.6 (postgresql), 5.7 (mysql), 2.5 (firebird), 3.6 (mongodb) and 2017.CU (sqlserver)
 # Note: the default desktop type is gnome
-# Note: the default DB server IP on the AD network is assumed to be the AD network address plus 230
+# Note: the default desktop DB type is sqlite
+# Note: the default DB server IP on the vm main network is assumed to be the vm main network address plus 230
 # Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
-# Note: the default print server IP on the AD network is assumed to be the AD network address plus 250
+# Note: the default Web server IP on the vm main network is assumed to be the vm main network address plus 210
+# Note: the default Web server naming uses the "My Little Pony" character name cheerilee for the Web server
+# Note: the default print server IP on the vm main network is assumed to be the vm main network address plus 190
 # Note: the default print server naming uses the "My Little Pony" character name rainbowdash for the print server
-# Note: the default virtual desktop IP on the AD network is assumed to be the AD network address plus 240
-# Note: the default virtual desktop naming uses the "My Little Pony" character name grannysmith for the print server
+# Note: the default remote desktop server IP on the vm main network is assumed to be the vm main network address plus 240
+# Note: the default remote desktop server naming uses the "My Little Pony" character name grannysmith for the remote desktop server
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default gateway is assumed to be the DHCP-provided router address on the external network
@@ -106,6 +116,7 @@
 # Note: the default node naming uses "My Little Pony" character names {pinkiepie,applejack,rarity,fluttershy} for node ids {0,1,2,3} and nodeN for further ones
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
+# Note: the default metrics server naming uses the "My Little Pony" character name luna for the metrics server
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
 # Note: the default datacenter naming uses the name HVPDataCenter for the oVirt DataCenter
 # Note: the default cluster naming uses the name HVPCluster for the oVirt Cluster
@@ -118,6 +129,7 @@
 # Note: the default nodes BMC password is HVP_dem0
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
+# Note: the default metrics server IP on the mgmt network is assumed to be the mgmt network address plus 6
 # Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
@@ -339,6 +351,7 @@ unset bondmode
 unset bondopts
 unset mtu
 unset domain_name
+unset multi_instance_max
 unset ad_subdomain_prefix
 unset netbios_domain_name
 unset sysvolrepl_password
@@ -350,7 +363,9 @@ unset db_ip_offset
 unset db_name
 unset dbtype
 unset dbversion
+unset web_name
 unset detype
+unset dedbtype
 unset pr_ip
 unset pr_ip_offset
 unset pr_name
@@ -371,6 +386,7 @@ unset switch_ip
 unset switch_ip_offset
 unset switch_name
 unset engine_name
+unset metrics_name
 unset storage_name
 unset datacenter_name
 unset cluster_name
@@ -379,6 +395,8 @@ unset gluster_vol_size
 unset gluster_block_size
 unset engine_ip
 unset engine_ip_offset
+unset metrics_ip
+unset metrics_ip_offset
 unset storage_ip_offset
 unset my_ip_offset
 unset my_name
@@ -417,6 +435,8 @@ node_name[3]="fluttershy"
 switch_name="scootaloo"
 
 engine_name="celestia"
+
+metrics_name="luna"
 
 storage_name="discord"
 
@@ -469,6 +489,9 @@ node_ip_offset="10"
 # TODO: verify whether the address (network+offset) lies inside the network boundaries
 engine_ip_offset="5"
 
+# TODO: verify whether the address (network+offset) lies inside the network boundaries
+metrics_ip_offset="6"
+
 # TODO: verify whether the final addresses (network+offset+index) lie inside the network boundaries
 # TODO: verify whether the final addresses (network+offset+index) overlap with base node addresses
 # Note: the following can be overridden from commandline
@@ -485,6 +508,8 @@ network_priority[1]="mgmt"
 network_priority[2]="gluster"
 network_priority[3]="lan"
 network_priority[4]="internal"
+
+multi_instance_max="9"
 
 declare -A network netmask network_base bondmode bondopts mtu
 network['external']="dhcp"
@@ -550,9 +575,12 @@ db_name="bigmcintosh"
 dbtype="postgresql"
 dbversion="9.6"
 
-detype="gnome"
+web_name="cheerilee"
 
-pr_ip_offset="250"
+detype="gnome"
+dedbtype="sqlite"
+
+pr_ip_offset="190"
 
 pr_name="rainbowdash"
 
@@ -794,6 +822,12 @@ if echo "${given_engine_name}" | grep -q '^[-[:alnum:]]\+$' ; then
 	engine_name="${given_engine_name}"
 fi
 
+# Determine metrics server name
+given_metrics_name=$(sed -n -e 's/^.*hvp_metricsname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_metrics_name}" | grep -q '^[-[:alnum:]]\+$' ; then
+	metrics_name="${given_metrics_name}"
+fi
+
 # Determine storage name
 given_storage_name=$(sed -n -e 's/^.*hvp_storagename=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_storage_name}" | grep -q '^[-[:alnum:]]\+$' ; then
@@ -933,6 +967,12 @@ if echo "${given_hostname}" | grep -q '^[[:alnum:]]\+$' ; then
 	my_name="${given_hostname}"
 fi
 
+# Determine multi-instance limit
+given_multi_instance_max=$(sed -n -e 's/^.*hvp_maxinstances=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_multi_instance_max}" | grep -q '^[[:digit:]]\+$' ; then
+	multi_instance_max="${given_multi_instance_max}"
+fi
+
 # Determine AD subdomain name
 given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_ad_subdomainname}" ]; then
@@ -957,13 +997,19 @@ if echo "${given_dbname}" | grep -q '^[[:alnum:]]\+$' ; then
 	db_name="${given_dbname}"
 fi
 
+# Determine Web server name
+given_webname=$(sed -n -e 's/^.*hvp_webname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_webname}" | grep -q '^[[:alnum:]]\+$' ; then
+	web_name="${given_webname}"
+fi
+
 # Determine print server name
 given_prname=$(sed -n -e 's/^.*hvp_prname=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_prname}" | grep -q '^[[:alnum:]]\+$' ; then
 	pr_name="${given_prname}"
 fi
 
-# Determine virtual desktop name
+# Determine remote desktop server name
 given_vdname=$(sed -n -e 's/^.*hvp_vdname=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_vdname}" | grep -q '^[[:alnum:]]\+$' ; then
 	vd_name="${given_vdname}"
@@ -1007,6 +1053,14 @@ given_detype=$(sed -n -e 's/^.*hvp_detype=\(\S*\).*$/\1/p' /proc/cmdline)
 case "${given_detype}" in
 	gnome|kde|xfce|lxde)
 		detype="${given_detype}"
+		;;
+esac
+
+# Determine desktop DB type
+given_dedbtype=$(sed -n -e 's/^.*hvp_dedbtype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_dedbtype}" in
+	sqlite|postgresql)
+		dedbtype="${given_dedbtype}"
 		;;
 esac
 
@@ -1174,13 +1228,15 @@ done
 # Disable any interface configured by NetworkManager
 # Note: NetworkManager may interfer with interface assignment autodetection logic below
 # Note: interfaces will be explicitly activated again by our dynamically created network configuration fragment
-for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
-	if nmcli device show "${nic_name}" | grep -q '^GENERAL.STATE:.*(connected)' ; then
-		nmcli device disconnect "${nic_name}"
-		nmcli connection delete "${nic_name}"
-		ip addr flush dev "${nic_name}"
-		ip link set mtu 1500 dev "${nic_name}"
+for device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
+	if nmcli -t device show "${device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
+		nmcli device disconnect "${device_name}"
+		ip addr flush dev "${device_name}"
+		ip link set mtu 1500 dev "${device_name}"
 	fi
+done
+for connection_name in $(nmcli -t connection show | awk -F: '{print $1}' | sort); do
+	nmcli connection delete "${connection_name}"
 done
 
 # Determine network interface assignment
@@ -1233,9 +1289,11 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			ip link set mtu 1500 dev "${nic_name}"
 		done
 		if [ "${nic_assigned}" = "false" ]; then
+			# Disable unassignable nics
 			nics['unused']="${nics['unused']} ${nic_name}"
 		fi
 	else
+		# Disable unconnected nics
 		nics['unused']="${nics['unused']} ${nic_name}"
 	fi
 done
@@ -1264,7 +1322,7 @@ done
 
 # TODO: Adapt bonding mode to network setup
 # TODO: disabled for maximum compatibility (LACP needs switch support)
-# Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
+# TODO: previously: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
 #if [ -z "${bondopts['mgmt']}" ]; then
 #	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
 #		bondopts['mgmt']="mode=active-backup;miimon=100"
@@ -1344,12 +1402,21 @@ if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
 fi
 
+# Determine metrics server IP
+given_metrics=$(sed -n -e 's/^.*hvp_metrics=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_metrics}" ]; then
+	metrics_ip="${given_metrics}"
+fi
+if [ -z "${metrics_ip}" ]; then
+	metrics_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${metrics_ip_offset} +)
+fi
+
 # Determine AD DC IP
 given_dc=$(sed -n -e 's/^.*hvp_ad_dc=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_dc}" ]; then
 	ad_dc_ip="${given_dc}"
 fi
-if [ -n "${nics['lan']}" ]; then
+if [ "${lan_network}" = "true" ]; then
 	ad_zone="lan"
 else
 	ad_zone="${dhcp_zone}"
@@ -1376,7 +1443,7 @@ if [ -z "${pr_ip}" ]; then
 	pr_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${pr_ip_offset} +)
 fi
 
-# Determine virtual desktop IP
+# Determine remote desktop server IP
 given_vd=$(sed -n -e 's/^.*hvp_vd=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_vd}" ]; then
 	vd_ip="${given_vd}"
@@ -1612,7 +1679,7 @@ if [ -n "${nics['mgmt']}" ]; then
 	for zone in "${!network[@]}" ; do
 		if [ "${zone}" != "external" ]; then
 			cat <<- EOF >> /tmp/hvp-firewalld-conf/rc.firewalld-setup
-			nmcli con mod ${nics[${zone}]} connection.zone internal
+			nmcli connection modify ${nics[${zone}]} connection.zone internal
 			# Note: we need to except local port 80 from transparent proxying
 			firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -p tcp -m tcp -d ${my_ip[${zone}]}/32 --dport 80 -j ACCEPT
 			EOF
@@ -1627,9 +1694,9 @@ if [ -n "${nics['mgmt']}" ]; then
 	cat <<- EOF >> /tmp/hvp-firewalld-conf/rc.firewalld-setup
 	firewall-cmd --zone=internal --permanent --add-forward-port=port=80:proto=tcp:toport=8080:toaddr=${my_ip['mgmt']}
 	firewall-cmd --zone=internal --permanent --add-service=tproxy
-	nmcli con mod ${nics['external']} connection.zone external
+	nmcli connection modify ${nics['external']} connection.zone external
 	firewall-cmd --zone=external --add-masquerade --permanent
-	nmcli con reload
+	nmcli connection reload
 	firewall-cmd --reload
 	EOF
 else
@@ -1746,8 +1813,11 @@ LABEL rootmenu
 EOF
 # Note: we will automatically extend to further installations the parameters passed during our own installation
 if [ -n "${notification_receiver}" ] ; then
+	vm_network_params="${vm_network_params} hvp_maxinstances=${multi_instance_max}"
+fi
+if [ -n "${notification_receiver}" ] ; then
 	common_network_params="${common_network_params} hvp_receiver_email=${notification_receiver}"
-	vm_network_params="${vm_network_params}  hvp_receiver_email=${notification_receiver}"
+	vm_network_params="${vm_network_params} hvp_receiver_email=${notification_receiver}"
 fi
 if [ "${orthodox_mode}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_orthodox"
@@ -1792,7 +1862,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -1800,7 +1870,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -1820,7 +1890,7 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
@@ -1841,7 +1911,7 @@ LABEL installpr
 LABEL installvd
         MENU LABEL Install Remote Desktop Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_detype=${detype} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
 
 EOF
@@ -1861,15 +1931,21 @@ switch_name="${switch_name}"
 
 engine_name="${engine_name}"
 
+metrics_name="${metrics_name}"
+
 storage_name="${storage_name}"
 
 storage_ip_offset="${storage_ip_offset}"
+
+multi_instance_max="${multi_instance_max}"
 
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
 switch_ip="${switch_ip}"
 switch_ip_offset="$(ipdiff ${switch_ip} ${network[${dhcp_zone}]})"
 engine_ip="${engine_ip}"
 engine_ip_offset="$(ipdiff ${engine_ip} ${network[${dhcp_zone}]})"
+metrics_ip="${metrics_ip}"
+metrics_ip_offset="$(ipdiff ${metrics_ip} ${network[${dhcp_zone}]})"
 
 test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
 EOF
@@ -1989,7 +2065,6 @@ ovirt_version="${ovirt_version}"
 
 EOF
 
-# TODO: add a custom logic to automatically check and shift offset and name for further DCs
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_dc.sh
 # Custom defaults for AD DC installation
 
@@ -2006,9 +2081,9 @@ domain_join="false"
 
 if [ "\${domain_join}" = "true" ]; then
 	my_nameserver="${ad_dc_ip}"
-	my_ip_offset=$((${ad_dc_ip_offset} + 1))
-	my_name="${ad_dc_name}bis"
 fi
+
+gluster_vol_name['unixshare']="${gluster_vol_name['unixshare']}"
 
 EOF
 
@@ -2046,11 +2121,18 @@ fi
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_vd.sh
-# Custom defaults for virtual desktop installation
+# Custom defaults for remote desktop server installation
 
 my_ip_offset="${vd_ip_offset}"
 
+db_name="${db_name}"
+
+web_name="${web_name}"
+
 detype="${detype}"
+dedbtype="${dedbtype}"
+
+ad_dc_name="${ad_dc_name}"
 
 my_name="${vd_name}"
 
@@ -2092,6 +2174,7 @@ done
 cat << EOF >> ${domain_name[${zone}]}.db
 ${switch_name}		A	${switch_ip}
 ${engine_name}		A	${engine_ip}
+${metrics_name}		A	${metrics_ip}
 
 EOF
 for ((i=0;i<${node_count};i=i+1)); do
@@ -2131,6 +2214,7 @@ cat << EOF >> ${reverse_domain_name[${zone}]}.db
 
 $(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
 $(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
+$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
 
 EOF
 for ((i=0;i<${node_count};i=i+1)); do
@@ -2567,11 +2651,9 @@ class "pxeclients" {
         min-lease-time 300;
         default-lease-time 1800;
         max-lease-time 1800;
-        next-server ${dhcp_gateway};
         # Note: option 60 switches PXE to use port 4011 - avoiding here
         option dhcp-parameter-request-list 66,43;
         option vendor-class-identifier "PXEClient";
-        option tftp-server-name "${dhcp_gateway}";
         vendor-option-space pxelinux;
 	if option arch = 00:00 {
 		filename "pxelinux.0";
@@ -2591,7 +2673,7 @@ class "pxeclients" {
         include "/etc/dhcp/dhcpd-broken-pxe.conf";
 }
 
-# A subnet declaration for our LAN
+# A subnet declaration for our main network
 subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
         authoritative;
         interface ${nics[${dhcp_zone}]};
@@ -2607,6 +2689,8 @@ subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
         option time-offset		3600;	# Central European Time
 
         option ip-forwarding		off;
+        next-server			${dhcp_gateway};
+        option tftp-server-name		"${dhcp_gateway}";
 
 # --- Settings for our internal clients
         default-lease-time 50400;
@@ -2619,6 +2703,45 @@ subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
         }
 }
 
+EOF
+for further_zone in lan internal; do
+	eval got_further_zone='${'${further_zone}_network'}'
+	if [ "${got_further_zone}" = "true" ]; then
+		cat <<- EOF >> dhcpd.conf
+		# A subnet declaration for our ${further_zone} network
+		subnet ${network[${further_zone}]} netmask ${netmask[${further_zone}]} {
+		        authoritative;
+		        interface ${nics[${further_zone}]};
+		        allow unknown-clients;
+		
+		# --- default gateway
+		        option routers			${my_ip[${further_zone}]};
+		        option subnet-mask		${netmask[${further_zone}]};
+		
+		        option domain-name		"${domain_name[${further_zone}]}";
+		        option domain-name-servers	${my_ip[${further_zone}]};
+		        option ntp-servers		${my_ip[${further_zone}]};
+		        option time-offset		3600;	# Central European Time
+		
+		        option ip-forwarding		off;
+		        next-server			${my_ip[${further_zone}]};
+		        option tftp-server-name		"${my_ip[${further_zone}]}";
+		
+		# --- Settings for our internal clients
+		        default-lease-time 50400;
+		        max-lease-time 50400;
+		#       use-host-decl-names on;
+		#       get-lease-hostnames true;
+	
+		        pool {
+		                range dynamic-bootp $(ipmat ${network[${further_zone}]} ${dhcp_offset} +) $(ipmat $(ipmat $(ipmat ${network[${further_zone}]} ${dhcp_offset} +) ${dhcp_count} +) 1 -);
+		        }
+		}
+		
+		EOF
+	fi
+done
+cat << EOF >> dhcpd.conf
 #
 # --- Reservations
 include "/etc/dhcp/dhcpd-static-leases.conf";
@@ -2639,7 +2762,6 @@ EOF
 popd
 
 # Prepare Ansible variable definition files to be copied later on below
-# Note: the actual zone to access nodes/engine will be the one offering our DHCP
 # Note: the host listed last in glusternodes group will become the arbiter one in 3 node setups
 # Note: defining all host(s) combinations as groups here since only external variables are available in playbook headers
 mkdir -p /tmp/hvp-ansible-files
@@ -2750,7 +2872,7 @@ fi
 cat << EOF > hvp.yaml
 # Global variables for HVP Ansible playbooks
 
-# HVP local conventions
+## HVP local conventions
 hvp_management_domainname: ${domain_name[${dhcp_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_storage_name: ${storage_name}
@@ -2772,8 +2894,9 @@ hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [
 hvp_switch_ip: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %} ${dhcp_gateway} {% else %} ${switch_ip} {% endif %}"
 # Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
 hvp_gateway_ip: ${dhcp_gateway}
+hvp_metrics_name: ${metrics_name}
+hvp_metrics_domainname: "{{ hvp_management_domainname }}"
 hvp_timezone: ${local_timezone}
-hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
 hvp_firewall_manager: "firewalld"
 hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
@@ -2796,7 +2919,7 @@ else
 fi
 cat << EOF >> hvp.yaml
 
-# HVP Gluster settings
+## HVP Gluster settings
 # TODO: dynamically determine arbiter sizes for each Gluster volume
 hvp_enginedomain_volume_name: ${gluster_vol_name['engine']}
 hvp_enginedomain_size: "{{ (hvp_engine_imgsize * 1.2) | int | abs }}GB"
@@ -2823,7 +2946,7 @@ hvp_backup_size: "${gluster_vol_size['backup']}GB"
 hvp_backup_arbitersize: "10GB"
 hvp_thinpool_chunksize: "1536k"
 
-# HVP Gluster-block settings
+## HVP Gluster-block settings
 EOF
 if [ "${#gluster_block_size[@]}" -eq 0 ]; then
 	cat <<- EOF >> hvp.yaml
@@ -2831,19 +2954,20 @@ if [ "${#gluster_block_size[@]}" -eq 0 ]; then
 	EOF
 else
 	cat <<- EOF >> hvp.yaml
-	hvp_lun_sizes:
-	$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "  - ${gluster_block_size[${i}]}GiB"; done)
+	# TODO: disabled since Gluster-block LUNs creation is not working yet
+	hvp_lun_sizes: []
+	#$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "  - ${gluster_block_size[${i}]}GiB"; done)
 	EOF
 fi
 cat << EOF >> hvp.yaml
 
-# Engine credentials:
+## Engine credentials:
 url: "https://{{ hvp_engine_name }}.{{ hvp_engine_domainname }}/ovirt-engine/api"
 username: admin@internal
 password: ${root_password}
 ca_file: /etc/pki/ovirt-engine/ca.pem
 
-# Hosts credentials:
+## Hosts credentials:
 # TODO: add support for BMC options
 host_password: ${root_password}
 ${bmc_vars_comment}host_bmc_type: ${bmc_type}
@@ -2886,13 +3010,19 @@ engine_sd_path: "/{{ hvp_enginedomain_volume_name }}"
 engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 
 ## Networking
-got_gluster_network: "${gluster_network}"
+hvp_static_address_block_start: $((${dhcp_offset} + ${dhcp_count}))
+
+got_mgmt_network: true
+mgmt_network: $(unset PREFIX ; eval $(ipcalc -s -p "${network['mgmt']}" "${netmask['mgmt']}"); echo "${network['mgmt']}/${PREFIX}")
+hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
+
+got_gluster_network: ${gluster_network}
 $(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" ; fi)
 
-got_lan_network: "${lan_network}"
+got_lan_network: ${lan_network}
 $(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['lan']}" "${netmask['lan']}"); echo "lan_network: ${network['lan']}/${PREFIX}" ; echo "hvp_lan_bridge_name: ${bridge_name['lan']}" ; fi)
 
-got_internal_network: "${internal_network}"
+got_internal_network: ${internal_network}
 $(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" ; echo "hvp_internal_bridge_name: ${bridge_name['internal']}" ; fi)
 
 EOF
@@ -2937,7 +3067,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040102"
+script_version="2018042701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2979,19 +3109,29 @@ cat /etc/resolv.conf >> /tmp/post.out
 echo "POST hosts" >> /tmp/post.out
 cat /etc/hosts >> /tmp/post.out
 
+# Hardcoded defaults
+
+unset node_name
+unset network
+unset netmask
+unset network_base
+unset bondmode
+unset bondopts
+unset mtu
+unset domain_name
+unset reverse_domain_name
+unset bridge_name
+unset nicmacfix
+unset orthodox_mode
+unset nolocalvirt
+unset ovirt_version
+
 # Define associative arrays
 declare -A node_name
 declare -A network netmask network_base bondmode bondopts mtu
 declare -A domain_name
 declare -A reverse_domain_name
 declare -A bridge_name
-
-# Hardcoded defaults
-
-unset nicmacfix
-unset orthodox_mode
-unset nolocalvirt
-unset ovirt_version
 
 nicmacfix="false"
 orthodox_mode="false"
@@ -3067,14 +3207,18 @@ yum -y install yum-plugin-priorities
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-2.noarch.rpm
-# If not explicitly denied, make sure that we prefer HVP own RHGS/OVN rebuild repos versus oVirt-dependency repos
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-3.noarch.rpm
+# If not explicitly denied, make sure that we prefer HVP own rebuild repos
 # Note: if explicitly denied, HVP RHGS rebuild must not be enabled anyway on this external support machine (no special software requirements atm)
 if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhv-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-rhsat-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
 fi
 
 # Add upstream repository definitions
@@ -3127,7 +3271,7 @@ yum -y install webalizer mrtg net-snmp net-snmp-utils
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 ovirt-ansible-roles NetworkManager-glib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib
 
 # Install HVP Ansible support files
 yum -y install hvp-ansible
@@ -3140,7 +3284,7 @@ yum -y install squid
 
 # Install X2Go
 yum -y install x2goserver x2goserver-xsession x2godesktopsharing
-yum -y install x2goclient pyhoca-{cli,gui}
+yum -y install x2goclient pyhoca-{cli,gui} x2goplugin
 
 # Install PDSH
 yum -y install pdsh pdsh-rcmd-ssh
@@ -4171,6 +4315,16 @@ sed -i -e 's>^\(.\s*/var/tmp.*\)$>#\1>' /etc/tmpfiles.d/tmp.conf
 # Configure X2Go
 systemctl enable x2gocleansessions
 
+# Configure PDSH behaviour
+cat << EOF > /etc/profile.d/pdsh.sh
+PDSH_SSH_ARGS_APPEND="-oLogLevel=Error -q"
+export PDSH_SSH_ARGS_APPEND
+EOF
+cat << EOF > /etc/profile.d/pdsh.csh
+setenv PDSH_SSH_ARGS_APPEND "-oLogLevel=Error -q"
+EOF
+chmod 644 /etc/profile.d/pdsh.*
+
 # Conditionally enable MCE logging/management service
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	systemctl enable mcelog
@@ -4206,6 +4360,48 @@ $(date '+%Y/%m/%d')
 *) installed $(lsb_release -i -r -s) $(uname -m) from kickstart
 
 EOF
+
+# Allow first boot configuration through SELinux
+# Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myks1stboot
+# TODO: remove when SELinux policy fixed upstream
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myks1stboot.te
+
+module myks1stboot 3.0;
+
+require {
+	type sendmail_t;
+	type postfix_master_t;
+	type admin_home_t;
+	type setfiles_t;
+	type ifconfig_t;
+	type initrc_t;
+	type systemd_hostnamed_t;
+	class dbus send_msg;
+	class file { getattr write };
+}
+
+#============= ifconfig_t ==============
+allow ifconfig_t admin_home_t:file write;
+
+#============= sendmail_t ==============
+allow sendmail_t admin_home_t:file write;
+
+#============= postfix_master_t ==============
+allow postfix_master_t admin_home_t:file { getattr write };
+
+#============= setfiles_t ==============
+allow setfiles_t admin_home_t:file write;
+
+#============= systemd_hostnamed_t ==============
+allow systemd_hostnamed_t initrc_t:dbus send_msg;
+EOF
+chmod 644 /etc/selinux/local/myks1stboot.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myks1stboot.mod myks1stboot.te
+semodule_package -o myks1stboot.pp -m myks1stboot.mod
+semodule -i myks1stboot.pp
 
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
