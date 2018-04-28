@@ -32,11 +32,13 @@
 # Note: to force custom installer naming add hvp_installername=myinstallername where myinstallername is the unqualified (ie without domain name part) hostname of the installer management interface
 # Note: to force custom switch naming add hvp_switchname=myswitchname where myswitchname is the unqualified (ie without domain name part) hostname of the switch management interface
 # Note: to force custom engine naming add hvp_enginename=myenginename where myenginename is the unqualified (ie without domain name part) hostname of the Engine
+# Note: to force custom metrics server naming add hvp_metricsname=mymetricsname where mymetricsname is the unqualified (ie without domain name part) hostname of the metrics server
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
 # Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumename=myvolumename where myvolumename is the volume name
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
+# Note: to force custom metrics server IP add hvp_metrics=n.n.n.n where n.n.n.n is the metrics server IP on the mgmt network
 # Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan/internal networks
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
@@ -66,11 +68,13 @@
 # Note: the default installer naming uses the "My Little Pony" character name twilight for the installer
 # Note: the default switch naming uses the "My Little Pony" character name scootaloo for the switch
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
+# Note: the default metrics server naming uses the "My Little Pony" character name luna for the metrics server
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
 # Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
+# Note: the default metrics server IP on the mgmt network is assumed to be the mgmt network address plus 6
 # Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
@@ -211,10 +215,13 @@ unset switch_ip_offset
 unset installer_name
 unset switch_name
 unset engine_name
+unset metrics_name
 unset storage_name
 unset gluster_vol_name
 unset engine_ip
 unset engine_ip_offset
+unset metrics_ip
+unset metrics_ip_offset
 unset storage_ip_offset
 unset master_index
 unset my_index
@@ -253,6 +260,8 @@ switch_name="scootaloo"
 
 engine_name="celestia"
 
+metrics_name="luna"
+
 storage_name="discord"
 
 declare -A gluster_vol_name
@@ -284,6 +293,9 @@ node_ip_offset="10"
 
 # TODO: verify whether the address (network+offset) lies inside the network boundaries
 engine_ip_offset="5"
+
+# TODO: verify whether the address (network+offset) lies inside the network boundaries
+metrics_ip_offset="6"
 
 # TODO: verify whether the final addresses (network+offset+index) lie inside the network boundaries
 # TODO: verify whether the final addresses (network+offset+index) overlap with base node addresses
@@ -608,6 +620,12 @@ if echo "${given_engine_name}" | grep -q '^[-[:alnum:]]\+$' ; then
 	engine_name="${given_engine_name}"
 fi
 
+# Determine metrics server name
+given_metrics_name=$(sed -n -e 's/^.*hvp_metricsname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_metrics_name}" | grep -q '^[-[:alnum:]]\+$' ; then
+	metrics_name="${given_metrics_name}"
+fi
+
 # Determine storage name
 given_storage_name=$(sed -n -e 's/^.*hvp_storagename=\(\S*\).*$/\1/p' /proc/cmdline)
 if echo "${given_storage_name}" | grep -q '^[-[:alnum:]]\+$' ; then
@@ -798,13 +816,15 @@ fi
 # Disable any interface configured by NetworkManager
 # Note: NetworkManager may interfer with interface assignment autodetection logic below
 # Note: interfaces will be explicitly activated again by our dynamically created network configuration fragment
-for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
-	if nmcli device show "${nic_name}" | grep -q '^GENERAL.STATE:.*(connected)' ; then
-		nmcli device disconnect "${nic_name}"
-		nmcli connection delete "${nic_name}"
-		ip addr flush dev "${nic_name}"
-		ip link set mtu 1500 dev "${nic_name}"
+for device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
+	if nmcli -t device show "${device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
+		nmcli device disconnect "${device_name}"
+		ip addr flush dev "${device_name}"
+		ip link set mtu 1500 dev "${device_name}"
 	fi
+done
+for connection_name in $(nmcli -t connection show | awk -F: '{print $1}' | sort); do
+	nmcli connection delete "${connection_name}"
 done
 
 # Determine network interface assignment
@@ -831,6 +851,7 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			ip addr add "${my_ip[${zone}]}/${PREFIX}" dev "${nic_name}"
 			res=$?
 			if [ ${res} -ne 0 ] ; then
+				# There has been a problem in assigning the IP address - skip
 				ip addr flush dev "${nic_name}"
 				ip link set mtu 1500 dev "${nic_name}"
 				continue
@@ -849,9 +870,11 @@ for nic_name in $(ls /sys/class/net/ 2>/dev/null | egrep -v '^(bonding_masters|l
 			ip link set mtu 1500 dev "${nic_name}"
 		done
 		if [ "${nic_assigned}" = "false" ]; then
+			# Disable unassignable nics
 			nics['unused']="${nics['unused']} ${nic_name}"
 		fi
 	else
+		# Disable unconnected nics
 		nics['unused']="${nics['unused']} ${nic_name}"
 	fi
 done
@@ -911,6 +934,15 @@ if [ -n "${given_engine}" ]; then
 fi
 if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${engine_ip_offset} +)
+fi
+
+# Determine metrics server IP
+given_metrics=$(sed -n -e 's/^.*hvp_metrics=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_metrics}" ]; then
+	metrics_ip="${given_metrics}"
+fi
+if [ -z "${metrics_ip}" ]; then
+	metrics_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${metrics_ip_offset} +)
 fi
 
 # Determine AD DC IP
@@ -1119,12 +1151,13 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		; Names for static addresses assigned to our virtual/physical machines
 		
 		EOF
-		# Note: installer, switch, engine and BMCs are connected only on the MGMT network
+		# Note: installer, switch, engine, metrics and BMCs are connected only on the MGMT network
 		if [ "${zone}" = "mgmt" ]; then
 			cat <<- EOF >> ${domain_name[${zone}]}.db
 			${installer_name}	A	${test_ip[${zone}]}
 			${switch_name}		A	${switch_ip}
 			${engine_name}		A	${engine_ip}
+			${metrics_name}		A	${metrics_ip}
 			EOF
 			for ((i=0;i<${node_count};i=i+1)); do
 				cat <<- EOF >> ${domain_name[${zone}]}.db
@@ -1161,12 +1194,13 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		; Static addresses assigned to our virtual/physical machines
 		
 		EOF
-		# Note: installer, switch, engine and BMCs are connected only on the MGMT network
+		# Note: installer, switch, engine, metrics and BMCs are connected only on the MGMT network
 		if [ "${zone}" = "mgmt" ]; then
 			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 			$(echo ${test_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${installer_name}.${domain_name[${zone}]}.
 			$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
 			$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
+			$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
 			EOF
 			for ((i=0;i<${node_count};i=i+1)); do
 				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
@@ -1562,6 +1596,10 @@ cat << EOF > smb.conf
 [global]
    server string = Workgroup File Server
    netbios name = $(echo "${storage_name}" | awk '{print toupper($0)}')
+   #workgroup = NETBIOSDOMAINNAME
+   #security = ads
+   #kerberos method = secrets only
+   # Note: when joining Active Directory change the following two lines with the three commented above
    workgroup = WORKGROUP
    security = user
    bind interfaces only = no
@@ -1570,6 +1608,16 @@ cat << EOF > smb.conf
    private dir = /gluster/lock
 
    passdb backend = tdbsam
+   # Note: when joining Active Directory add the following:
+   #idmap config * : backend = autorid
+   #idmap config * : range = 2000000000-3999999999
+   #idmap config * : rangesize = 1000000
+   #idmap config NETBIOSDOMAINNAME : backend = ad
+   #idmap config NETBIOSDOMAINNAME : range = 9999-1999999999
+   #idmap config NETBIOSDOMAINNAME : schema_mode = rfc2307
+   #idmap config NETBIOSDOMAINNAME : unix_nss_info = yes
+   #winbind nested groups = yes
+   #winbind expand groups = 2
 
    load printers = no
    printing = bsd
@@ -1618,25 +1666,23 @@ cat << EOF > smb.conf
 
 #====================== Local Share Definitions ==============================
 
-[Homes]
+# Set ACL from Windows as per https://wiki.samba.org/index.php/User_Home_Folders
+[Users]
    comment = User personal folder
-   path = /homes
+   path = /users
    browseable = no
    writable = yes
    available = yes
    guest ok = no
    valid users = %S
-   create mask = 0600
-   directory mask = 0700
-   force create mode = 00
-   force directory mode = 00
    vfs objects = glusterfs recycle
    recycle:keeptree = no
    recycle:versions = yes
    #glusterfs:loglevel = 7
-   glusterfs:logfile = /var/log/samba/glusterfs-homes.log
+   glusterfs:logfile = /var/log/samba/glusterfs-users.log
    glusterfs:volume = ${gluster_vol_name['winshare']}
 
+# Set ACL from Windows as per https://wiki.samba.org/index.php/Roaming_Windows_User_Profiles
 [Profiles]
    comment = User profile folder
    path = /profiles
@@ -1644,13 +1690,7 @@ cat << EOF > smb.conf
    writable = yes
    available = yes
    guest ok = no
-   profile acls = yes
    csc policy = disable
-   create mask = 0600
-   directory mask = 0700
-   force create mode = 00
-   force directory mode = 00
-   hide files = /desktop.ini/outlook*.lnk/*Briefcase*/\$RECYCLE.BIN/
    vfs objects = glusterfs recycle
    recycle:keeptree = no
    recycle:versions = yes
@@ -1658,8 +1698,9 @@ cat << EOF > smb.conf
    glusterfs:logfile = /var/log/samba/glusterfs-profiles.log
    glusterfs:volume = ${gluster_vol_name['winshare']}
 
+# Set ACL from Windows as per https://wiki.samba.org/index.php/Setting_up_a_Share_Using_Windows_ACLs#Setting_ACLs_on_a_Folder
 [Groups]
-   comment = Group folders
+   comment = Group folder
    path = /groups
    browseable = yes
    writable = yes
@@ -1713,7 +1754,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018040102"
+script_version="2018042701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1757,6 +1798,23 @@ cat /etc/resolv.conf >> /tmp/post.out
 echo "POST hosts" >> /tmp/post.out
 cat /etc/hosts >> /tmp/post.out
 
+# Hardcoded defaults
+
+unset node_name
+unset network
+unset netmask
+unset network_base
+unset bondopts
+unset mtu
+unset domain_name
+unset reverse_domain_name
+unset test_ip
+unset bridge_name
+unset my_index
+unset master_index
+unset nicmacfix
+unset orthodox_mode
+
 # Define associative arrays
 declare -A node_name
 declare -A network netmask network_base bondopts mtu
@@ -1764,12 +1822,6 @@ declare -A domain_name
 declare -A reverse_domain_name
 declare -A test_ip
 declare -A bridge_name
-
-# Hardcoded defaults
-unset my_index
-unset master_index
-unset nicmacfix
-unset orthodox_mode
 
 master_index="0"
 nicmacfix="false"
@@ -1827,13 +1879,17 @@ yum -y --enablerepo base --enablerepo updates install yum-plugin-priorities
 # Note: CentOS CR repository is already present inside Node image
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-2.noarch.rpm
-# If not explicitly denied, make sure that we prefer HVP own RHGS/OVN rebuild repos versus oVirt-dependency repos
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-3.noarch.rpm
+# If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
+	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhv-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-rhsat-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
 else
 	# Note: HVP RHGS rebuild must be enabled anyway to allow access to slightly newer/tweaked (but compatible with community Gluster) versions of other packages
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
@@ -1948,7 +2004,7 @@ yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bar
 
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 ovirt-ansible-roles NetworkManager-glib
+yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -2736,13 +2792,29 @@ firewall-offline-cmd --set-log-denied=all
 # Configure Ansible
 sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
 
+# TODO: Configure Bareos
+
 # TODO: Configure Bareos fd with direct access to all GlusterFS volumes
 # TODO: Configure Bareos sd with direct access to a dedicated GlusterFS backup volume
 # Device Type = gfapi
 # Archive Device = gluster://localhost/BACKUP
 # TODO: Configure Bareos sd with direct access to an external USB/eSATA drive
 
-# TODO: Enable Bareos when configuration is completed
+# Create HVP standard directory for machine-specific application dumps
+mkdir -p /var/local/backup
+chown root:root /var/local/backup
+chmod 750 /var/local/backup
+
+# Create HVP standard script for machine-specific application dumps
+cat << EOF > /usr/local/sbin/dump2backup
+#!/bin/bash
+# Nothing to do for a HVP node
+exit 0
+EOF
+chown root:root /usr/local/sbin/dump2backup
+chmod 750 /usr/local/sbin/dump2backup
+
+# TODO: Enable Bareos
 systemctl disable bareos-fd
 systemctl disable bareos-sd
 
@@ -2774,6 +2846,48 @@ cat << EOF > /root/etc/backup.list
 /root/log
 /root/.[^ekmn]?*
 EOF
+
+# Allow first boot configuration through SELinux
+# Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myks1stboot
+# TODO: remove when SELinux policy fixed upstream
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myks1stboot.te
+
+module myks1stboot 3.0;
+
+require {
+	type sendmail_t;
+	type postfix_master_t;
+	type admin_home_t;
+	type setfiles_t;
+	type ifconfig_t;
+	type initrc_t;
+	type systemd_hostnamed_t;
+	class dbus send_msg;
+	class file { getattr write };
+}
+
+#============= ifconfig_t ==============
+allow ifconfig_t admin_home_t:file write;
+
+#============= sendmail_t ==============
+allow sendmail_t admin_home_t:file write;
+
+#============= postfix_master_t ==============
+allow postfix_master_t admin_home_t:file { getattr write };
+
+#============= setfiles_t ==============
+allow setfiles_t admin_home_t:file write;
+
+#============= systemd_hostnamed_t ==============
+allow systemd_hostnamed_t initrc_t:dbus send_msg;
+EOF
+chmod 644 /etc/selinux/local/myks1stboot.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myks1stboot.mod myks1stboot.te
+semodule_package -o myks1stboot.pp -m myks1stboot.mod
+semodule -i myks1stboot.pp
 
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
