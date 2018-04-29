@@ -18,6 +18,8 @@ switch_name="scootaloo"
 
 engine_name="celestia"
 
+metrics_name="luna"
+
 storage_name="discord"
 
 datacenter_name="HVPDataCenter"
@@ -57,8 +59,10 @@ node_ip_offset="10"
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
 switch_ip_offset="200"
 engine_ip_offset="5"
+metrics_ip_offset="6"
 switch_ip="172.20.10.200"
 engine_ip="172.20.10.5"
+metrics_ip="172.20.10.6"
 
 storage_ip_offset="30"
 
@@ -66,6 +70,8 @@ master_index="0"
 
 dhcp_offset="50"
 dhcp_count="20"
+
+multi_instance_max="9"
 
 # Note: network_base values are derived automatically anyway
 network['external']="dhcp"
@@ -116,7 +122,11 @@ db_name="bigmcintosh"
 dbtype="postgresql"
 dbversion="9.6"
 
-pr_ip_offset="250"
+web_ip_offset="210"
+
+web_name="cheerilee"
+
+pr_ip_offset="190"
 
 pr_name="rainbowdash"
 
@@ -125,6 +135,7 @@ vd_ip_offset="240"
 vd_name="grannysmith"
 
 detype="gnome"
+dedbtype="sqlite"
 
 my_nameserver="dhcp"
 
