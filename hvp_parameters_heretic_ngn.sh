@@ -18,6 +18,8 @@ switch_name="scootaloo"
 
 engine_name="celestia"
 
+metrics_name="luna"
+
 storage_name="discord"
 
 gluster_vol_name['engine']="engine"
@@ -39,8 +41,10 @@ test_ip['internal']="172.20.13.1"
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
 switch_ip_offset="200"
 engine_ip_offset="5"
+metrics_ip_offset="6"
 switch_ip="172.20.10.200"
 engine_ip="172.20.10.5"
+metrics_ip="172.20.10.6"
 
 bmc_ip_offset="100"
 
