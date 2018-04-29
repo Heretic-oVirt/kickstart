@@ -363,6 +363,8 @@ unset db_ip_offset
 unset db_name
 unset dbtype
 unset dbversion
+unset web_ip
+unset web_ip_offset
 unset web_name
 unset detype
 unset dedbtype
@@ -574,6 +576,8 @@ db_name="bigmcintosh"
 
 dbtype="postgresql"
 dbversion="9.6"
+
+web_ip_offset="210"
 
 web_name="cheerilee"
 
@@ -1403,6 +1407,15 @@ if [ -z "${engine_ip}" ]; then
 fi
 
 # Determine metrics server IP
+given_web=$(sed -n -e 's/^.*hvp_web=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_web}" ]; then
+	web_ip="${given_web}"
+fi
+if [ -z "${web_ip}" ]; then
+	web_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${web_ip_offset} +)
+fi
+
+# Determine web server IP
 given_metrics=$(sed -n -e 's/^.*hvp_metrics=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_metrics}" ]; then
 	metrics_ip="${given_metrics}"
@@ -3067,7 +3080,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018042701"
+script_version="2018042901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
