@@ -1406,7 +1406,7 @@ if [ -z "${engine_ip}" ]; then
 	engine_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
 fi
 
-# Determine metrics server IP
+# Determine web server IP
 given_web=$(sed -n -e 's/^.*hvp_web=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_web}" ]; then
 	web_ip="${given_web}"
@@ -1415,7 +1415,7 @@ if [ -z "${web_ip}" ]; then
 	web_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${web_ip_offset} +)
 fi
 
-# Determine web server IP
+# Determine metrics server IP
 given_metrics=$(sed -n -e 's/^.*hvp_metrics=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_metrics}" ]; then
 	metrics_ip="${given_metrics}"
@@ -3080,7 +3080,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018042901"
+script_version="2018042902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
