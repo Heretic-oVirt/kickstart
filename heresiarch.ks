@@ -3080,7 +3080,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018042902"
+script_version="2018050101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3611,6 +3611,18 @@ Continued use of this computer implies acceptance of the above conditions.
 EOF
 chmod 644 /etc/{issue*,motd}
 
+# Configure Logcheck
+sed -i -e '/^SENDMAILTO=/s/logcheck/root/' /etc/logcheck/logcheck.conf
+for rule in kernel systemd bind; do
+	ln -s ../ignore.d.server/${rule} /etc/logcheck/violations.ignore.d/
+fi
+
+# TODO: reconfigure syslog files for Logcheck as per https://bugzilla.redhat.com/show_bug.cgi?id=1062147 - remove when fixed upstream
+sed -i -e 's/^\(\s*\)\(missingok.*\)$/\1\2\n\1create 0640 root adm/' /etc/logrotate.d/syslog
+touch /var/log/{messages,secure,cron,maillog,spooler}
+chown root:adm /var/log/{messages,secure,cron,maillog,spooler}
+chmod 640 /var/log/{messages,secure,cron,maillog,spooler}
+
 # Configure ABRTd
 # Keep crash info even for non-rpm-packaged programs but exclude users writable paths
 sed -i -e 's/^ProcessUnpackaged.*$/ProcessUnpackaged = yes/' -e 's%\(BlackListedPaths.*\)$%\1, /home*, /tmp/*, /var/tmp/*%' /etc/abrt/abrt-action-save-package-data.conf
@@ -3999,6 +4011,7 @@ else
 fi
 
 # Configure Webalizer (allow access from everywhere)
+# Note: webalizer initialization demanded to post-install rc.ks1stboot script
 sed -i -e 's/^\(\s*\)\(Require local.*\)$/\1#\2/' /etc/httpd/conf.d/webalizer.conf
 
 # Enable Webalizer
@@ -4188,6 +4201,10 @@ systemctl enable squid
 
 # Enable verbose logging in firewalld
 firewall-offline-cmd --set-log-denied=all
+
+# TODO: it seems that a Postfix error gets regularly logged because of this missing pipe - remove when fixed upstream
+mkfifo /var/spool/postfix/public/pickup
+chown postfix:postdrop /var/spool/postfix/public/pickup
 
 # Define GNOME3 global settings (mandatory/defaults)
 # Note: schema inspected on a live GNOME session using "gsettings list-recursively"
@@ -4492,6 +4509,11 @@ elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
 fi
 popd
 # Note: CentOS 7 persistent net device naming means that MAC addresses are not statically registered by default anymore
+
+# Initialize webalizer
+# Note: Apache logs must be not empty
+wget -O /dev/null http://localhost/
+/etc/cron.daily/00webalizer
 
 # Initialize MRTG configuration (needs Net-SNMP up)
 # TODO: add CPU/RAM/disk/etc. resource monitoring
