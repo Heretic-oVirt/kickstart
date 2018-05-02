@@ -1754,7 +1754,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018042701"
+script_version="2018043001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2070,15 +2070,26 @@ else
 	grub2_cfg_file="/etc/grub2.cfg"
 fi
 
-# TODO: Setup a serial terminal
-# TODO: find a way to detect actual serial hardware presence
-#sed -i -e '/^GRUB_CMDLINE_LINUX/s/quiet/quiet console=tty0 console=ttyS0,115200n8/' /etc/default/grub
-#cat << EOF >> /etc/default/grub
-#GRUB_TERMINAL="console serial"
-#GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
-#EOF
-# Note: the following uses the generic symlink under /etc to abstract from BIOS/UEFI actual file placement
-#grub2-mkconfig -o "${grub2_cfg_file}"
+# Setup a serial terminal
+serial_found="false"
+for link in /sys/class/tty/*/device/driver ; do
+	if stat -c '%N' ${link} | grep -q 'serial' ; then
+		if [ -n "$(setserial -g -b  /dev/$(echo ${link} | sed -e 's%^.*/tty/\([^/]*\)/.*$%\1%'))" ]; then
+			serial_found="true"
+			break
+		fi
+	fi
+done
+if [ "${serial_found}" = "true" ]; then
+	sed -i -e '/^GRUB_CMDLINE_LINUX/s/quiet/quiet console=tty0 console=ttyS0,115200n8/' /etc/default/grub
+	cat <<- EOF >> /etc/default/grub
+	GRUB_TERMINAL="console serial"
+	GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
+	EOF
+	grub2-mkconfig -o "${grub2_cfg_file}"
+fi
+
+# Note: GRUB2 configuration as per NGN default
 
 # Conditionally add memory test entry to boot loader
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
@@ -2788,6 +2799,10 @@ systemctl enable ovn-controller
 
 # TODO: Debug - enable verbose logging in firewalld - maybe disable for production use?
 firewall-offline-cmd --set-log-denied=all
+
+# TODO: it seems that a Postfix error gets regularly logged because of this missing pipe - remove when fixed upstream
+mkfifo /var/spool/postfix/public/pickup
+chown postfix:postdrop /var/spool/postfix/public/pickup
 
 # Configure Ansible
 sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
