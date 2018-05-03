@@ -2915,6 +2915,7 @@ hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 hvp_admin_username: ${admin_username}
+hvp_admin_password: ${admin_password}
 hvp_email_sender: ${notification_sender}
 hvp_email_receiver: ${notification_receiver}
 
@@ -3080,7 +3081,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018050101"
+script_version="2018050301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
