@@ -11,6 +11,7 @@
 # nomodeset elevator=deadline inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg hvp_nodeid=[0123]
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
+# Note: to allow installing snapshot/nightly versions of oVirt packages add hvp_ovirt_nightly
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
@@ -48,6 +49,7 @@
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
+# Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
 # Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default node id is assumed to be 0
@@ -307,6 +309,7 @@ fi
 # Note: engine-related data will only be used for automatic DNS zones configuration
 unset nicmacfix
 unset orthodox_mode
+unset ovirt_nightly_mode
 unset node_count
 unset network
 unset netmask
@@ -356,6 +359,7 @@ unset ovirt_version
 nicmacfix="false"
 
 orthodox_mode="false"
+ovirt_nightly_mode="false"
 
 default_nodeosdisk="smallest"
 
@@ -622,6 +626,11 @@ fi
 # Determine choice of skipping custom packages intallation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
+fi
+
+# Determine choice of allowing snapshot/nightly oVirt packages installation
+if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
+	ovirt_nightly_mode="true"
 fi
 
 # Determine node OS disk choice
@@ -1870,7 +1879,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018050101"
+script_version="2018051801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1928,6 +1937,7 @@ unset my_index
 unset master_index
 unset nicmacfix
 unset orthodox_mode
+unset ovirt_nightly_mode
 unset ovirt_version
 unset notification_receiver
 
@@ -1942,6 +1952,7 @@ declare -A bridge_name
 master_index="0"
 nicmacfix="false"
 orthodox_mode="false"
+ovirt_nightly_mode="false"
 ovirt_version="4.1"
 
 notification_receiver="monitoring@localhost"
@@ -1972,6 +1983,11 @@ fi
 # Determine choice of skipping custom packages intallation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
+fi
+
+# Determine choice of allowing snapshot/nightly oVirt packages installation
+if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
+	ovirt_nightly_mode="true"
 fi
 
 # Determine cluster member identity
@@ -2052,6 +2068,10 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
+# If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
+if [ "${ovirt_nightly_mode}" = "true" ]; then
+	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
+fi
 # Note: adding to already present package restrictions on EPEL repo
 sed -i -e 's/epel-release,/epel-release,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer,/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 
