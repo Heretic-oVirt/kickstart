@@ -12,6 +12,7 @@
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing/configuring local virtualization support irrespective of hardware capabilities add hvp_novirt
 # Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
+# Note: to allow installing snapshot/nightly versions of oVirt packages add hvp_ovirt_nightly
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom host naming add hvp_myname=myhostname where myhostname is the unqualified (ie without domain name part) hostname
@@ -77,6 +78,7 @@
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
 # Note: the default behaviour involves installing/configuring local virtualization support when virtualization hardware capabilities are detected
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
+# Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
 # Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default host naming uses the "My Little Pony" character name twilight
@@ -342,6 +344,7 @@ ipdiff() {
 unset nicmacfix
 unset nolocalvirt
 unset orthodox_mode
+unset ovirt_nightly_mode
 unset network_priority
 unset node_count
 unset network
@@ -423,6 +426,7 @@ nicmacfix="false"
 nolocalvirt="false"
 
 orthodox_mode="false"
+ovirt_nightly_mode="false"
 
 default_nodeosdisk="smallest"
 
@@ -751,9 +755,14 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
-# Determine choice of skipping custom packages intallation
+# Determine choice of skipping custom packages installation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
+fi
+
+# Determine choice of allowing snapshot/nightly oVirt packages installation
+if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
+	ovirt_nightly_mode="true"
 fi
 
 # Determine choice of skipping local virtualization support
@@ -1842,6 +1851,16 @@ else
 	# Note: to skip using custom Gluster-related/OVN packages add the option hvp_nicmacfix
 	EOF
 fi
+if [ "${ovirt_nightly_mode}" = "true" ] ; then
+	common_network_params="${common_network_params} hvp_ovirt_nightly"
+else
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
+	# Note: to allow using snapshot/nightly oVirt packages add the option hvp_ovirt_nightly
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
+	# Note: to allow using snapshot/nightly oVirt packages add the option hvp_ovirt_nightly
+	EOF
+fi
 if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
 	# TODO: verify whether it actually makes sense to propagate nicmacfix to vms
@@ -1935,6 +1954,8 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
 nicmacfix="${nicmacfix}"
 
 orthodox_mode="${orthodox_mode}"
+
+ovirt_nightly_mode="${ovirt_nightly_mode}"
 
 default_node_count="${node_count}"
 
@@ -2890,6 +2911,7 @@ hvp_management_domainname: ${domain_name[${dhcp_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_storage_name: ${storage_name}
 hvp_orthodox_mode: ${orthodox_mode}
+hvp_ovirt_nightly_mode: ${ovirt_nightly_mode}
 hvp_master_node: "{{ groups['ovirt_master'] | first }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
@@ -3081,7 +3103,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018050301"
+script_version="2018051801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3137,6 +3159,7 @@ unset reverse_domain_name
 unset bridge_name
 unset nicmacfix
 unset orthodox_mode
+unset ovirt_nightly_mode
 unset nolocalvirt
 unset ovirt_version
 
@@ -3149,6 +3172,7 @@ declare -A bridge_name
 
 nicmacfix="false"
 orthodox_mode="false"
+ovirt_nightly_mode="false"
 nolocalvirt="false"
 ovirt_version="4.1"
 
@@ -3175,9 +3199,14 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
-# Determine choice of skipping custom packages intallation
+# Determine choice of skipping custom packages installation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
+fi
+
+# Determine choice of allowing snapshot/nightly oVirt packages installation
+if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
+	ovirt_nightly_mode="true"
 fi
 
 # Determine choice of skipping local virtualization support
@@ -3246,6 +3275,10 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
+# If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
+if [ "${ovirt_nightly_mode}" = "true" ]; then
+	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
+fi
 
 # Enable use of delta rpms since we are not using our local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
