@@ -3061,6 +3061,16 @@ $(if [ -n "${nics['lan']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network
 got_internal_network: ${internal_network}
 $(if [ -n "${nics['internal']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['internal']}" "${netmask['internal']}"); echo "internal_network: ${network['internal']}/${PREFIX}" ; echo "hvp_internal_bridge_name: ${bridge_name['internal']}" ; fi)
 
+## HVP guest VM settings
+vms_network_name: "{{ got_lan_network | ternary(hvp_lan_bridge_name, hvp_mgmt_bridge_name) }}"
+vms_network: "{{ got_lan_network | ternary(lan_network, mgmt_network) }}"
+# TODO: dynamically extract the following from mirrored kickstart files
+guest_vms:
+  - "{ vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'domaincontroller', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: "server", vm_operating_system: "rhel_7x64", vm_disk_size: 60GiB, vm_network_name: {{ vms_network_name }} }"
+  - "{ vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'database', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: "server", vm_operating_system: "rhel_7x64", vm_disk_size: 120GiB, vm_network_name: {{ vms_network_name }} }"
+  - "{ vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: "server", vm_operating_system: "rhel_7x64", vm_disk_size: 80GiB, vm_network_name: {{ vms_network_name }} }"
+- "{ vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: "server", vm_operating_system: "rhel_7x64", vm_disk_size: 120GiB, vm_network_name: {{ vms_network_name }} }"
+
 EOF
 
 # Prepare Active Directory defaults
@@ -3103,7 +3113,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018051801"
+script_version="2018051802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
