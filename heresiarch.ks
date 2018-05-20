@@ -3074,7 +3074,7 @@ guest_vms:
   - "{ vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'domaincontroller', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: {{ vms_network_name }} }"
   - "{ vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'database', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: {{ vms_network_name }} }"
   - "{ vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: {{ vms_network_name }} }"
-- "{ vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: {{ vms_network_name }} }"
+  - "{ vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: {{ vms_network_name }} }"
 
 EOF
 
@@ -3118,7 +3118,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018052001"
+script_version="2018052002"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
