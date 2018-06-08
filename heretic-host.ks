@@ -12,6 +12,7 @@
 # Note: to access the running installation by SSH (beware of publishing the access informations specified with the sshpw directive below) add the option inst.sshd
 # Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
 # Note: to allow installing snapshot/nightly versions of oVirt packages add hvp_ovirt_nightly
+# Note: to force use of VDO in nodes add hvp_use_vdo
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
@@ -50,6 +51,7 @@
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
+# Note: the default behaviour involves ignoring use of VDO on nodes
 # Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default node id is assumed to be 0
@@ -310,6 +312,7 @@ fi
 unset nicmacfix
 unset orthodox_mode
 unset ovirt_nightly_mode
+unset use_vdo
 unset node_count
 unset network
 unset netmask
@@ -360,6 +363,7 @@ nicmacfix="false"
 
 orthodox_mode="false"
 ovirt_nightly_mode="false"
+use_vdo="false"
 
 default_nodeosdisk="smallest"
 
@@ -631,6 +635,11 @@ fi
 # Determine choice of allowing snapshot/nightly oVirt packages installation
 if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
 	ovirt_nightly_mode="true"
+fi
+
+# Determine choice of using VDO
+if grep -w -q 'hvp_use_vdo' /proc/cmdline ; then
+	use_vdo="true"
 fi
 
 # Determine node OS disk choice
@@ -1879,7 +1888,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018051801"
+script_version="2018060801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1938,6 +1947,7 @@ unset master_index
 unset nicmacfix
 unset orthodox_mode
 unset ovirt_nightly_mode
+unset use_vdo
 unset ovirt_version
 unset notification_receiver
 
@@ -1953,6 +1963,7 @@ master_index="0"
 nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
+use_vdo="false"
 ovirt_version="4.1"
 
 notification_receiver="monitoring@localhost"
@@ -1988,6 +1999,11 @@ fi
 # Determine choice of allowing snapshot/nightly oVirt packages installation
 if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
 	ovirt_nightly_mode="true"
+fi
+
+# Determine choice of using VDO
+if grep -w -q 'hvp_use_vdo' /proc/cmdline ; then
+	use_vdo="true"
 fi
 
 # Determine cluster member identity
@@ -2161,6 +2177,9 @@ yum -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
 yum -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
 
 # Install custom packages for NAS functions
+if [ "${use_vdo}" = "true" ] ; then
+	yum -y install vdo kmod-kvdo
+fi
 yum -y install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
