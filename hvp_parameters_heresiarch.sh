@@ -5,6 +5,10 @@ nicmacfix="false"
 
 nolocalvirt="false"
 
+orthodox_mode="false"
+ovirt_nightly_mode="false"
+use_vdo="false"
+
 default_nodeosdisk="smallest"
 
 default_node_count="3"
