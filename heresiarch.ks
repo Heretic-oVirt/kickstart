@@ -13,6 +13,7 @@
 # Note: to skip installing/configuring local virtualization support irrespective of hardware capabilities add hvp_novirt
 # Note: to skip installing custom versions of Gluster-related/OVN packages add hvp_orthodox
 # Note: to allow installing snapshot/nightly versions of oVirt packages add hvp_ovirt_nightly
+# Note: to force use of VDO in nodes add hvp_use_vdo
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom host naming add hvp_myname=myhostname where myhostname is the unqualified (ie without domain name part) hostname
@@ -79,6 +80,7 @@
 # Note: the default behaviour involves installing/configuring local virtualization support when virtualization hardware capabilities are detected
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
+# Note: the default behaviour involves ignoring use of VDO on nodes
 # Note: the default node OS disk is the first of the smallests
 # Note: the default behaviour does not register fixed nic name-to-MAC mapping
 # Note: the default host naming uses the "My Little Pony" character name twilight
@@ -345,6 +347,7 @@ unset nicmacfix
 unset nolocalvirt
 unset orthodox_mode
 unset ovirt_nightly_mode
+unset use_vdo
 unset network_priority
 unset node_count
 unset network
@@ -427,6 +430,7 @@ nolocalvirt="false"
 
 orthodox_mode="false"
 ovirt_nightly_mode="false"
+use_vdo="false"
 
 default_nodeosdisk="smallest"
 
@@ -763,6 +767,11 @@ fi
 # Determine choice of allowing snapshot/nightly oVirt packages installation
 if grep -w -q 'hvp_ovirt_nightly' /proc/cmdline ; then
 	ovirt_nightly_mode="true"
+fi
+
+# Determine choice of using VDO
+if grep -w -q 'hvp_use_vdo' /proc/cmdline ; then
+	use_vdo="true"
 fi
 
 # Determine choice of skipping local virtualization support
@@ -1863,6 +1872,16 @@ else
 	# Note: to allow using snapshot/nightly oVirt packages add the option hvp_ovirt_nightly
 	EOF
 fi
+if [ "${use_vdo}" = "true" ] ; then
+	common_network_params="${common_network_params} hvp_use_vdo"
+else
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
+	# Note: to force using VDO add the option hvp_use_vdo
+	EOF
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
+	# Note: to force using VDO add the option hvp_use_vdo
+	EOF
+fi
 if [ "${nicmacfix}" = "true" ] ; then
 	common_network_params="${common_network_params} hvp_nicmacfix"
 	# TODO: verify whether it actually makes sense to propagate nicmacfix to vms
@@ -1958,6 +1977,8 @@ nicmacfix="${nicmacfix}"
 orthodox_mode="${orthodox_mode}"
 
 ovirt_nightly_mode="${ovirt_nightly_mode}"
+
+use_vdo="${use_vdo}"
 
 default_node_count="${node_count}"
 
@@ -2915,6 +2936,7 @@ hvp_lan_domainname: ${domain_name[${lan_zone}]}
 hvp_storage_name: ${storage_name}
 hvp_orthodox_mode: ${orthodox_mode}
 hvp_ovirt_nightly_mode: ${ovirt_nightly_mode}
+hvp_use_vdo: ${use_vdo}
 hvp_master_node: "{{ groups['ovirt_master'] | first }}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
@@ -3128,7 +3150,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018052201"
+script_version="2018060801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
