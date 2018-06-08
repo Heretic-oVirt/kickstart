@@ -3,6 +3,10 @@
 
 nicmacfix="false"
 
+orthodox_mode="false"
+ovirt_nightly_mode="false"
+use_vdo="false"
+
 default_nodeosdisk="last-smallest"
 
 default_node_count="3"
