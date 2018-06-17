@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018060801"
+script_version="2018061401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2002,7 +2002,10 @@ if dmidecode -s system-manufacturer | egrep -q "(Microsoft|VMware|innotek|Parall
 	systemctl mask microcode
 else
 	# Install Memtest86+
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install memtest86+
+	# Note: open source memtest86+ does not support UEFI
+	if [ ! -d /sys/firmware/efi ]; then
+		yum -y install memtest86+
+	fi
 
 	# Install MCE logging/management service
 	yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
@@ -2134,8 +2137,11 @@ fi
 
 # Conditionally add memory test entry to boot loader
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
-	memtest-setup
-	grub2-mkconfig -o "${grub2_cfg_file}"
+	# Note: open source memtest86+ does not support UEFI
+	if [ ! -d /sys/firmware/efi ]; then
+		memtest-setup
+		grub2-mkconfig -o "${grub2_cfg_file}"
+	fi
 fi
 
 # Configure kernel I/O scheduler policy
@@ -2841,9 +2847,8 @@ systemctl enable ovn-controller
 # TODO: Debug - enable verbose logging in firewalld - maybe disable for production use?
 firewall-offline-cmd --set-log-denied=all
 
-# TODO: it seems that a Postfix error gets regularly logged because of this missing pipe - remove when fixed upstream
-mkfifo /var/spool/postfix/public/pickup
-chown postfix:postdrop /var/spool/postfix/public/pickup
+# Enable Postfix
+systemctl enable postfix
 
 # Configure Ansible
 sed -i -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
