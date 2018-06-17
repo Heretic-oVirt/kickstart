@@ -249,7 +249,6 @@ device-mapper-multipath
 lm_sensors
 OpenIPMI
 ipmitool
-memtest86+
 hdparm
 sdparm
 lsscsi
@@ -1794,7 +1793,7 @@ LABEL bootlocal
 
 # Load Memtest86+
 LABEL memtest
-	MENU LABEL RAM Test (Memtest86+)
+	MENU LABEL RAM Test (Memtest86+ - incompatible with UEFI)
 	kernel memtest86+
 
 # Load CentOS rescue image
@@ -3108,11 +3107,7 @@ guest_vms:
   - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
   - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
 
-EOF
-
-# Prepare Active Directory defaults
-cat << EOF > ad.yaml
-# AD-related variables for HVP Ansible playbooks
+## HVP AD-related settings
 hvp_adjoin_domain: ${ad_subdomain_prefix}.${domain_name[${ad_zone}]}
 hvp_adjoin_realm: ${realm_name}
 hvp_adjoin_username: ${winadmin_username}
@@ -3150,7 +3145,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018060801"
+script_version="2018061401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3483,8 +3478,11 @@ dracut -f /boot/initramfs-$(uname -r).img $(uname -r)
 
 # Conditionally add memory test entry to boot loader
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
-	memtest-setup
-	grub2-mkconfig -o "${grub2_cfg_file}"
+	# Note: open source memtest86+ does not support UEFI
+	if [ ! -d /sys/firmware/efi ]; then
+		memtest-setup
+		grub2-mkconfig -o "${grub2_cfg_file}"
+	fi
 fi
 
 # Configure kernel I/O scheduler policy
@@ -4283,10 +4281,6 @@ systemctl enable squid
 # Enable verbose logging in firewalld
 firewall-offline-cmd --set-log-denied=all
 
-# TODO: it seems that a Postfix error gets regularly logged because of this missing pipe - remove when fixed upstream
-mkfifo /var/spool/postfix/public/pickup
-chown postfix:postdrop /var/spool/postfix/public/pickup
-
 # Define GNOME3 global settings (mandatory/defaults)
 # Note: schema inspected on a live GNOME session using "gsettings list-recursively"
 # Note: pre-seeding values with gsettings as root works for root user only and needs dbus running - using dconf instead
@@ -4517,6 +4511,11 @@ semodule -i myks1stboot.pp
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
 #!/bin/bash
+
+# Start Postfix to setup fifos etc
+systemctl start postfix
+sleep 5
+systemctl stop postfix
 
 # Conditionally enable either IPMI or LMsensors monitoring
 # TODO: configure IPMI options
@@ -4798,11 +4797,6 @@ if [ -f /tmp/hvp-ansible-files/hvp.yaml ]; then
 	cp -f /tmp/hvp-ansible-files/hvp.yaml ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 	chmod 600 ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
 	chown root:root ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/hvp.yaml
-fi
-if [ -f /tmp/hvp-ansible-files/ad.yaml ]; then
-	cp -f /tmp/hvp-ansible-files/ad.yaml ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
-	chmod 600 ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
-	chown root:root ${ANA_INSTALL_PATH}/usr/local/etc/hvp-ansible/roles/common/vars/ad.yaml
 fi
 for file in /tmp/hvp-ansible-files/group_vars/* ; do
 	if [ -f "${file}" ]; then
