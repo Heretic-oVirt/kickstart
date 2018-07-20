@@ -3694,7 +3694,7 @@ chmod 644 /etc/{issue*,motd}
 sed -i -e '/^SENDMAILTO=/s/logcheck/root/' /etc/logcheck/logcheck.conf
 for rule in kernel systemd bind; do
 	ln -s ../ignore.d.server/${rule} /etc/logcheck/violations.ignore.d/
-fi
+done
 
 # TODO: reconfigure syslog files for Logcheck as per https://bugzilla.redhat.com/show_bug.cgi?id=1062147 - remove when fixed upstream
 sed -i -e 's/^\(\s*\)\(missingok.*\)$/\1\2\n\1create 0640 root adm/' /etc/logrotate.d/syslog
