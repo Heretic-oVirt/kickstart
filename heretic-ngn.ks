@@ -535,15 +535,15 @@ if [ -z "${given_nodeosdisk}" ]; then
 fi
 if [ -b "/dev/${given_nodeosdisk}" ]; then
 	# If the given string is a device name then use that
-	device_name="${given_nodeosdisk}"
+	disk_device_name="${given_nodeosdisk}"
 else
 	# If the given string is a generic indication then find the proper device
 	case "${given_nodeosdisk}" in
 		first)
-			device_name=$(echo "${all_devices}" | head -1)
+			disk_device_name=$(echo "${all_devices}" | head -1)
 			;;
 		last)
-			device_name=$(echo "${all_devices}" | tail -1)
+			disk_device_name=$(echo "${all_devices}" | tail -1)
 			;;
 		*)
 			# Note: we allow for choosing either the first smallest device (default, if only "smallest" has been indicated) or the last one
@@ -558,16 +558,16 @@ else
 					comparison_logic="-lt"
 					;;
 			esac
-			device_name=""
+			disk_device_name=""
 			for current_device in ${all_devices}; do
 				current_size=$(blockdev --getsize64 /dev/${current_device})
-				if [ -z "${device_name}" ]; then
-					device_name="${current_device}"
-					device_size="${current_size}"
+				if [ -z "${disk_device_name}" ]; then
+					disk_device_name="${current_device}"
+					disk_device_size="${current_size}"
 				else
-					if [ ${current_size} ${comparison_logic} ${device_size} ]; then
-						device_name="${current_device}"
-						device_size="${current_size}"
+					if [ ${current_size} ${comparison_logic} ${disk_device_size} ]; then
+						disk_device_name="${current_device}"
+						disk_device_size="${current_size}"
 					fi
 				fi
 			done
@@ -834,11 +834,11 @@ fi
 # Disable any interface configured by NetworkManager
 # Note: NetworkManager may interfer with interface assignment autodetection logic below
 # Note: interfaces will be explicitly activated again by our dynamically created network configuration fragment
-for device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
-	if nmcli -t device show "${device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
-		nmcli device disconnect "${device_name}"
-		ip addr flush dev "${device_name}"
-		ip link set mtu 1500 dev "${device_name}"
+for nic_device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
+	if nmcli -t device show "${nic_device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
+		nmcli device disconnect "${nic_device_name}"
+		ip addr flush dev "${nic_device_name}"
+		ip link set mtu 1500 dev "${nic_device_name}"
 	fi
 done
 for connection_name in $(nmcli -t connection show | awk -F: '{print $1}' | sort); do
@@ -960,7 +960,7 @@ if [ -n "${given_metrics}" ]; then
 	metrics_ip="${given_metrics}"
 fi
 if [ -z "${metrics_ip}" ]; then
-	metrics_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${metrics_ip_offset} +)
+	metrics_ip=$(ipmat $(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${node_ip_offset} -) ${metrics_ip_offset} +)
 fi
 
 # Determine AD DC IP
@@ -1085,7 +1085,7 @@ EOF
 
 # Create disk setup fragment
 # Note: all sizes in MiB except for data_block_size which is in KiB
-data_dev_size=$((${device_size} / 1024 / 1024))
+data_dev_size=$((${disk_device_size} / 1024 / 1024))
 data_block_size="2048"
 min_metadata_size="3072"
 metadata_size=$((48 * ${data_dev_size} / ${data_block_size} / 1024))
@@ -1100,7 +1100,7 @@ clearpart --all --initlabel --disklabel=gpt
 bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomodeset processor.max_cstate=1 intel_idle.max_cstate=0"
 # Ignore further disks
 # Note: further disks will be used as bricks later on
-ignoredisk --only-use=${device_name}
+ignoredisk --only-use=${disk_device_name}
 # Either all automatic...
 #autopart --type=thinp
 # ...or explicitly detailed as per https://github.com/oVirt/ovirt-node-ng/blob/master/docs/book/install.md and https://bugzilla.redhat.com/show_bug.cgi?id=1369874
@@ -1300,9 +1300,9 @@ cat << EOF >> named.conf
         listen-on port 53 {
                 127.0.0.1;
 EOF
-for zone in "${!my_ip[@]}" ; do
+for listen_zone in "${!my_ip[@]}" ; do
 	cat <<- EOF >> named.conf
-	                ${my_ip[${zone}]};
+	                ${my_ip[${listen_zone}]};
 	EOF
 done
 # TODO: disabling IPv6 DNS resolution - remove when smoothly working everywhere
@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018061401"
+script_version="2018080301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2775,7 +2775,7 @@ cat << EOF > /etc/firewalld/services/gluster-block.xml
   <port protocol="tcp" port="24010"/>
 </service>
 EOF
-chmod 644 /etc/firewalld/services/webmin.xml
+chmod 644 /etc/firewalld/services/gluster-block.xml
 
 # Enable Gluster-block
 # Note: Gluster-block needs the iSCSI target too

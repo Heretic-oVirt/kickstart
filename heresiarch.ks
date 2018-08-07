@@ -1249,11 +1249,11 @@ done
 # Disable any interface configured by NetworkManager
 # Note: NetworkManager may interfer with interface assignment autodetection logic below
 # Note: interfaces will be explicitly activated again by our dynamically created network configuration fragment
-for device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
-	if nmcli -t device show "${device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
-		nmcli device disconnect "${device_name}"
-		ip addr flush dev "${device_name}"
-		ip link set mtu 1500 dev "${device_name}"
+for nic_device_name in $(nmcli -t device show | awk -F: '/^GENERAL\.DEVICE:/ {print $2}' | egrep -v '^(bonding_masters|lo|sit[0-9])$' | sort); do
+	if nmcli -t device show "${nic_device_name}" | grep -q '^GENERAL\.STATE:.*(connected)' ; then
+		nmcli device disconnect "${nic_device_name}"
+		ip addr flush dev "${nic_device_name}"
+		ip link set mtu 1500 dev "${nic_device_name}"
 	fi
 done
 for connection_name in $(nmcli -t connection show | awk -F: '{print $1}' | sort); do
@@ -1613,25 +1613,25 @@ EOF
 # TODO: find a better way to detect emulated/VirtIO devices
 all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
 if [ -b /dev/vda ]; then
-	device_name="vda"
+	disk_device_name="vda"
 elif [ -b /dev/xvda ]; then
-	device_name="xvda"
+	disk_device_name="xvda"
 else
-	device_name="sda"
+	disk_device_name="sda"
 fi
 cat << EOF > /tmp/full-disk
 # Simple disk configuration: single SCSI/SATA/VirtIO disk
 # Initialize partition table (GPT) on selected disk
-clearpart --drives=${device_name} --all --initlabel --disklabel=gpt
+clearpart --drives=${disk_device_name} --all --initlabel --disklabel=gpt
 # Bootloader placed on MBR, with 3 seconds waiting and with password protection
-bootloader --location=mbr --timeout=3 --password=${root_password} --boot-drive=${device_name} --driveorder=${device_name}
+bootloader --location=mbr --timeout=3 --password=${root_password} --boot-drive=${disk_device_name} --driveorder=${disk_device_name}
 # Ignore further disk - maybe USB key!!!
-ignoredisk --only-use=${device_name}
+ignoredisk --only-use=${disk_device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
 # Simple partitioning: single root and swap
-part swap --fstype swap --hibernation --ondisk=${device_name} --asprimary
-part / --fstype xfs --size=100 --grow --ondisk=${device_name} --asprimary
+part swap --fstype swap --hibernation --ondisk=${disk_device_name} --asprimary
+part / --fstype xfs --size=100 --grow --ondisk=${disk_device_name} --asprimary
 EOF
 # Clean up disks from any previous LVM setup
 # Note: it seems that simply zeroing out below is not enough
@@ -2337,6 +2337,7 @@ popd
 # Use information gathered above to create bind configuration file
 mkdir -p /tmp/hvp-bind-zones
 pushd /tmp/hvp-bind-zones
+
 my_role="master"
 my_options="// allow-update { key ddns_key; };"
 file_location="dynamic"
@@ -2383,9 +2384,9 @@ cat << EOF >> named.conf
         listen-on port 53 {
                 127.0.0.1;
 EOF
-for zone in "${!my_ip[@]}" ; do
+for listen_zone in "${!my_ip[@]}" ; do
 	cat <<- EOF >> named.conf
-	                ${my_ip[${zone}]};
+	                ${my_ip[${listen_zone}]};
 	EOF
 done
 # TODO: disabling IPv6 DNS resolution - remove when smoothly working everywhere
@@ -3145,7 +3146,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018072001"
+script_version="2018080301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3355,6 +3356,9 @@ yum -y install httpd mod_ssl
 # Install Webalizer and MRTG
 yum -y install webalizer mrtg net-snmp net-snmp-utils
 
+# Install Logcheck
+yum -y install logcheck
+
 # Install DHCPd, TFTPd, Syslinux and Bind to support PXE
 # Note: using HVP Fedora-rebuild repo to get a newer (6.x) Syslinux
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
@@ -3443,6 +3447,8 @@ else
 	EOF
 	chmod 644 /etc/yum.repos.d/webmin.repo
 	yum -y install webmin
+	# Note: immediately stop webmin started by postinst scriptlet
+	/etc/init.d/webmin stop
 fi
 
 # Clean up after all installations
