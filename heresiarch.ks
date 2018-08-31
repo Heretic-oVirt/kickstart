@@ -2951,7 +2951,7 @@ hvp_engine_netprefix: ${PREFIX}
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
 # Note: we do not expect a virtualized setup to have an independent pingable IP apart from the default gateway
-hvp_switch_ip: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %} ${dhcp_gateway} {% else %} ${switch_ip} {% endif %}"
+hvp_switch_ip: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %}${dhcp_gateway}{% else %}${switch_ip}{% endif %}"
 # Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
 hvp_gateway_ip: ${dhcp_gateway}
 hvp_metrics_name: ${metrics_name}
@@ -3027,7 +3027,7 @@ else
 	cat <<- EOF >> hvp.yaml
 	# TODO: disabled since Gluster-block LUNs creation is not working yet
 	hvp_lun_sizes: []
-	#$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "  - ${gluster_block_size[${i}]}GiB"; done)
+	$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "#  - ${gluster_block_size[${i}]}GiB"; done)
 	EOF
 fi
 cat << EOF >> hvp.yaml
@@ -3146,7 +3146,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018080301"
+script_version="2018083101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
