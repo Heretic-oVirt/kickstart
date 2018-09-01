@@ -3052,7 +3052,7 @@ ${bmc_vars_comment}host_bmc_password: ${bmc_password}
 hvp_dc_name: ${datacenter_name}
 dc_name: "Default"
 # TODO: verify whether "master" is a valid compatibility_version - replace otherwise
-compatibility_version: ${ovirt_version}
+compatibility_version: "${ovirt_version}"
 
 ## Cluster:
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
@@ -3146,7 +3146,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018083101"
+script_version="2018090101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
