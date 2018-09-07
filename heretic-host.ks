@@ -2088,7 +2088,7 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
 fi
 # Note: adding to already present package restrictions on EPEL repo
-sed -i -e 's/epel-release,/epel-release,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer,logcheck,/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
+sed -i -e 's/epel-release,/epel-release,logcheck,perl-mime-construct,perl-Proc-WaitStat,perl-IPC-Signal,lockfile-progs,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer,logcheck,/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
