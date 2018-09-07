@@ -1844,7 +1844,7 @@ LABEL rootmenu
 
 EOF
 # Note: we will automatically extend to further installations the parameters passed during our own installation
-if [ -n "${notification_receiver}" ] ; then
+if [ -n "${multi_instance_max}" ] ; then
 	vm_network_params="${vm_network_params} hvp_maxinstances=${multi_instance_max}"
 fi
 if [ -n "${notification_receiver}" ] ; then
@@ -2064,7 +2064,7 @@ admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
 
-notification_receiver="${given_receiver_email}"
+notification_receiver="${notification_receiver}"
 EOF
 # Create kickstart-specific configuration parameters fragments
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
@@ -3146,7 +3146,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090101"
+script_version="2018090701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
