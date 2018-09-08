@@ -1887,7 +1887,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090801"
+script_version="2018090802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3064,10 +3064,8 @@ mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
 
 [Unit]
-#After=gluster-lock.mount cgroup-rt-bandwidth.service
-#Requires=gluster-lock.mount cgroup-rt-bandwidth.service
-After=gluster-lock.mount
-Requires=gluster-lock.mount
+After=gluster-lock.mount cgroup-rt-bandwidth.service
+Requires=gluster-lock.mount cgroup-rt-bandwidth.service
 
 [Service]
 Restart=on-failure
