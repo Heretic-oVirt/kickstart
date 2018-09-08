@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018080301"
+script_version="2018090801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2465,6 +2465,11 @@ cat << EOF >> /etc/sysconfig/ctdb
 #CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
 CTDB_SET_TraverseTimeout=60
+CTDB_STARTUP_TIMEOUT=30
+CTDB_SHUTDOWN_TIMEOUT=30
+CTDB_LOGGING=syslog
+# TODO: disabling fifo scheduling policy since no known workaround works - remove when fixed upstream
+CTDB_NOSETSCHED=yes
 # Set CTDB socket location
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
@@ -2618,7 +2623,8 @@ exit \${result}
 EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
 
-# Modify CTDB service to force dependency on shared locking area and realtime bandwidth availability
+# Modify CTDB service to force dependency on shared locking area
+# TODO: realtime bandwidth availability workaround does not work anymore - review when fixed upstream
 # TODO: verify restart-mode reconfiguration
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
@@ -2629,7 +2635,8 @@ Requires=gluster-lock.mount cgroup-rt-bandwidth.service
 
 [Service]
 Restart=on-failure
-CPUSchedulingPolicy=fifo
+RestartSec=10
+#CPUSchedulingPolicy=fifo
 
 EOF
 chmod 644 /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
@@ -2637,12 +2644,15 @@ chmod 644 /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
 # Add custom unit to add realtime bandwidth shares required by CTDB to use SCHED_FIFO scheduler
 # Note: see https://bugzilla.redhat.com/show_bug.cgi?id=1201952 http://www.linuxquestions.org/questions/centos-111/running-ctdb-in-an-lxc-container-4175549857/ http://systemd-devel.freedesktop.narkive.com/YoWYF8EI/set-cgroup-attributes-not-supported-by-systemd-what-do-you-recommend
 # TODO: remove when supported explicitly in systemd
+# TODO: realtime bandwidth availability workaround does not work anymore - review when fixed upstream
 cat << EOF > /etc/systemd/system/cgroup-rt-bandwidth.service
 [Unit]
 Description=Set apart RT bandwidth for storage uses in cgroup hierarchy
 Before=ctdb.service multi-user.target
 
 [Service]
+Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/cpu.rt_runtime_us'
 
 [Install]
