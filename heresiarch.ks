@@ -1106,11 +1106,13 @@ given_block_sizes=$(sed -n -e "s/^.*hvp_block_luns=\\(\\S*\\).*\$/\\1/p" /proc/c
 if [ -n "${given_block_sizes}" ]; then
 	unset gluster_block_size
 	if [ "${given_block_sizes}" = '""' -o "${given_block_sizes}" = "''" ]; then
-		declare -A gluster_block_size
+		declare -a gluster_block_size
 	else
+		declare -a gluster_block_size
 		i=0
 		for lun_size in $(echo "${given_block_sizes}" | sed -e 's/,/ /g'); do
 			gluster_block_size[${i}]="${lun_size}"
+			i=$((i+1))
 		done
 	fi
 fi
@@ -2243,6 +2245,13 @@ for ((i=0;i<${node_count};i=i+1)); do
 	${node_name[${i}]}		A	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} +)
 	EOF
 done
+# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services
+# Note: registered with a TTL of 1 to enhance round-robin load balancing
+for ((i=0;i<${active_storage_node_count};i=i+1)); do
+	cat <<- EOF >> ${domain_name[${zone}]}.db
+	${storage_name}	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
+	EOF
+done
 cat << EOF > ${reverse_domain_name[${zone}]}.db
 \$ORIGIN ${reverse_domain_name[${zone}]}.
 \$TTL 15552000
@@ -2278,10 +2287,15 @@ for ((i=0;i<${node_count};i=i+1)); do
 	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc.${domain_name[${zone}]}.
 	EOF
 done
-# Create the zone files for GLUSTER network if it is present
 for ((i=0;i<${node_count};i=i+1)); do
 	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}.${domain_name[${zone}]}.
+	EOF
+done
+# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services
+for ((i=0;i<${active_storage_node_count};i=i+1)); do
+	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
 	EOF
 done
 # Create the zone files for GLUSTER network if it is present
@@ -2938,6 +2952,8 @@ hvp_orthodox_mode: ${orthodox_mode}
 hvp_ovirt_nightly_mode: ${ovirt_nightly_mode}
 hvp_use_vdo: ${use_vdo}
 hvp_master_node: "{{ groups['ovirt_master'] | first }}"
+# Note: workaround for hang on boot in nested kvm - remove when fixed upstream
+hvp_vm_machinetype: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %}pc-i440fx-rhel7.2.0{% else %}pc{% endif %}"
 # TODO: dynamically determine proper values for Engine RAM/CPUs/imgsize
 hvp_engine_ram: 4096
 hvp_engine_cpus: 2
@@ -2950,8 +2966,8 @@ hvp_engine_netprefix: ${PREFIX}
 # TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
-# Note: we do not expect a virtualized setup to have an independent pingable IP apart from the default gateway
-hvp_switch_ip: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %}${dhcp_gateway}{% else %}${switch_ip}{% endif %}"
+# Note: in a virtualized setup without an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
+hvp_switch_ip: "${switch_ip}"
 # Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
 hvp_gateway_ip: ${dhcp_gateway}
 hvp_metrics_name: ${metrics_name}
@@ -2981,6 +2997,7 @@ fi
 cat << EOF >> hvp.yaml
 
 ## HVP Gluster settings
+# TODO: derive proper values for Gluster volume sizes from user settings and/or available space
 # TODO: dynamically determine arbiter sizes for each Gluster volume
 hvp_enginedomain_volume_name: ${gluster_vol_name['engine']}
 hvp_enginedomain_size: "{{ (hvp_engine_imgsize * 1.2) | int | abs }}GB"
@@ -3039,6 +3056,7 @@ password: ${root_password}
 ca_file: /etc/pki/ovirt-engine/ca.pem
 
 ## Hosts credentials:
+# Note: the user must manually confirm BMC settings by editing here if not explicitly confirmed by non-default settings
 # TODO: add support for BMC options
 host_password: ${root_password}
 ${bmc_vars_comment}host_bmc_type: ${bmc_type}
@@ -3063,7 +3081,7 @@ cluster_name: "Default"
 # Note: ISO domain will be of type NFS while all others will be of type GlusterFS
 # Note: Engine vm has no access to Gluster network, so for ISO domain we must resort to NFS on management network (Engine must access it for image upload)
 glusterfs_addr: "{{ groups['gluster_master'] | first }}"
-glusterfs_mountopts: "backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},fetch-attempts=2,log-level=WARNING"
+glusterfs_mountopts: "{% if groups['glusternodes'] | length >= 3 %}backup-volfile-servers={{ groups['gluster_nonmaster_nodes'] | join(':') }},{% endif %}fetch-attempts=2,log-level=WARNING"
 iso_sd_type: nfs
 iso_sd_addr: "{{ hvp_storage_name }}.{{ hvp_management_domainname }}"
 iso_sd_name: "{{ hvp_isodomain_volume_name + '_domain' }}"
@@ -3103,10 +3121,10 @@ vms_network_domainname: "{{ hvp_lan_domainname }}"
 vms_network: "{{ got_lan_network | ternary(lan_network, mgmt_network) }}"
 # TODO: dynamically extract the following from mirrored kickstart files
 guest_vms:
-  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'domaincontroller', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
-  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'database', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: 80 }
-  - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
-  - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
+  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'domaincontroller', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_instance_type: "{{ hvp_vm_machinetype }}", vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
+  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'database', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_instance_type: "{{ hvp_vm_machinetype }}", vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: 80 }
+  - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_instance_type: "{{ hvp_vm_machinetype }}", vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
+  - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_instance_type: "{{ hvp_vm_machinetype }}", vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
 
 ## HVP AD-related settings
 hvp_adjoin_domain: ${ad_subdomain_prefix}.${domain_name[${ad_zone}]}
@@ -3146,7 +3164,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090701"
+script_version="2018090801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4252,10 +4270,9 @@ cp /root/.ssh/id_ecdsa.pub /root/.ssh/authorized_keys
 kill ${haveged_pid}
 
 # Configure Ansible and gDeploy
-# TODO: take out all these files and place them inside a proper rpm package to be installed above - leave only variable definition files creation in kickstart
 # Note: Configured Ansible hosts file in pre above and copied in second post below
 # TODO: find a way to re-enable host key checking without impacting automation
-sed -i -e 's/^#*\s*host_key_checking\s*=.*$/host_key_checking = False/' -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' /etc/ansible/ansible.cfg
+sed -i -e 's/^#*\s*host_key_checking\s*=.*$/host_key_checking = False/' -e 's/^#*\s*pipelining\s*=.*$/pipelining = True/' -e 's/^#*\s*retry_files_enabled\s*=.*$/retry_files_enabled = False/' /etc/ansible/ansible.cfg
 # Prepare Ansible roles
 # Note: Ansible group var files created in pre section above and copied in third post section below
 # TODO: create var file vms.yaml for virtual machines creation (parse kickstart files downloaded above)
