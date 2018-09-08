@@ -1190,7 +1190,7 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		done
 		# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
 		# Note: registered with a TTL of 1 to enhance round-robin load balancing
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" -a -z "${network['lan']}" ]; then
+		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
 				cat <<- EOF >> ${domain_name[${zone}]}.db
 				${storage_name}	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
@@ -1232,7 +1232,7 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 			EOF
 		done
 		# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" -a -z "${network['lan']}" ]; then
+		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
 				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 				$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
@@ -1545,7 +1545,7 @@ for zone in "${!network[@]}" ; do
 	# Only active storage nodes can receive shared storage IPs
 	if [ "${my_index}" -le $((${active_storage_node_count}-1)) ]; then
 		# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" -a -z "${network['lan']}" ]; then
+		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
 			unset PREFIX
 			eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090801"
+script_version="2018090802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1928,10 +1928,6 @@ else
 fi
 
 # Add upstream repository definitions
-yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
-# Note: restricting packages from 3rd party repo
-yum-config-manager --save --setopt='psychotic.include=unrar*' > /dev/null
-yum-config-manager --enable psychotic > /dev/null
 # TODO: verify how to manage ELRepo packages inside a Node image
 
 # Extract oVirt version from installed packages
@@ -1968,8 +1964,8 @@ yum -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Install Gdisk, PWGen, HPing, 7Zip, UnRAR and ARJ
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} unrar arj pwgen
+# Install Gdisk, PWGen, HPing, 7Zip and ARJ
+yum -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} arj pwgen
 yum -y --enablerepo base --enablerepo updates --enablerepo cr install gdisk
 
 # Install Nmon and Dstat
