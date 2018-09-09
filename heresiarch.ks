@@ -2742,6 +2742,9 @@ class "pxeclients" {
 #
 # --- Workarounds for broken PXE implementations using Etherboot ROMs
         include "/etc/dhcp/dhcpd-broken-pxe.conf";
+#
+# --- Configurations for automated PXE installation of our virtual machines
+        include "/etc/dhcp/dhcpd-custom-pxe.conf";
 }
 
 # A subnet declaration for our main network
@@ -3164,7 +3167,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090802"
+script_version="2018090901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4192,6 +4195,15 @@ cat << EOF > /etc/dhcp/dhcpd-broken-pxe.conf
 EOF
 chmod 644 /etc/dhcp/dhcpd-broken-pxe.conf
 
+# Create separate file for for automated PXE installations of virtual machines
+cat << EOF > /etc/dhcp/dhcpd-custom-pxe.conf
+#
+# Custom entries for our virtual machines
+#
+
+EOF
+chmod 644 /etc/dhcp/dhcpd-custom-pxe.conf
+
 # Create separate file for reservations
 cat << EOF > /etc/dhcp/dhcpd-static-leases.conf
 ## Add static address leases here
@@ -4246,6 +4258,24 @@ PATH efi64
 INCLUDE common.cfg
 EOF
 chmod 644 /var/lib/tftpboot/efi64.cfg
+
+# Create PXELinux non-interactive menus for automated installation of our virtual machines
+# TODO: find a way to differentiate between BIOS and UEFI
+for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
+	vm_kickstart=$(basename ${vm_kickstart_path})
+	vm_role=$(echo "${vm_kickstart}" | sed -e 's/^hvp-\([^-]*\)-.*$/\1/')
+	cat <<- EOF > "/var/lib/tftpboot/${vm_role}.cfg"
+	PATH bios
+	DEFAULT menu.c32
+	PROMPT 0
+	TIMEOUT 1
+	MENU TITLE --== Heretic oVirt Project PXE Menu ==--
+	LABEL AutoInstallVM
+	  kernel linux/centos/vmlinuz
+	  append initrd=linux/centos/initrd.img inst.stage2=http://twilight.mgmt.private/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://twilight.mgmt.private/hvp-repos/el7/ks/${vm_kickstart}
+	EOF
+	ln -s ../${vm_role}.cfg /var/lib/tftpboot/pxelinux.cfg/
+done
 
 # Copy netboot images mirrored above
 mkdir -p /var/lib/tftpboot/linux/{centos,node}
