@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090902"
+script_version="2018090903"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3317,7 +3317,7 @@ yum -y install yum-plugin-priorities
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-3.noarch.rpm
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-4.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 # Note: if explicitly denied, HVP RHGS rebuild must not be enabled anyway on this external support machine (no special software requirements atm)
 if [ "${orthodox_mode}" = "false" ]; then
@@ -3332,9 +3332,6 @@ if [ "${orthodox_mode}" = "false" ]; then
 fi
 
 # Add upstream repository definitions
-yum -y install http://packages.psychotic.ninja/6/base/i386/RPMS/psychotic-release-1.0.0-1.el6.psychotic.noarch.rpm
-yum-config-manager --save --setopt='psychotic.include=unrar*' > /dev/null
-yum-config-manager --enable psychotic > /dev/null
 yum -y install epel-release
 yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
@@ -3367,8 +3364,8 @@ yum -y install socat
 # Note: even in presence of an actual/virtualized hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
-# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip, UnRAR and ARJ
-yum -y install hping3 p7zip{,-{gui,plugins}} unrar arj pwgen
+# Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip and ARJ
+yum -y install hping3 p7zip{,-{gui,plugins}} arj pwgen
 yum -y install yum-cron yum-plugin-ps gdisk
 
 # Install Nmon and Dstat
