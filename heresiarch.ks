@@ -2058,7 +2058,8 @@ my_nameserver="${my_ip[${dhcp_zone}]}"
 
 my_forwarders="${my_forwarders}"
 
-my_gateway="${dhcp_gateway}"
+# The following must be kept undefined to allow virtual machines to choose their gateway according to the available connections
+unset my_gateway
 
 root_password='${root_password}'
 admin_username="${admin_username}"
@@ -2113,6 +2114,8 @@ ad_dc_ip="${ad_dc_ip}"
 ad_dc_ip_offset="${ad_dc_ip_offset}"
 
 ad_dc_name="${ad_dc_name}"
+
+my_gateway="${dhcp_gateway}"
 
 EOF
 
@@ -3167,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090901"
+script_version="2018090902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
