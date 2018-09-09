@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090802"
+script_version="2018090901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1911,7 +1911,7 @@ yum -y --enablerepo base --enablerepo updates install yum-plugin-priorities
 # Note: CentOS CR repository is already present inside Node image
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-3.noarch.rpm
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-4.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
