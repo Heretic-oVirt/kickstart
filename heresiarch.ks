@@ -2135,7 +2135,7 @@ my_ip_offset="${ad_dc_ip_offset}"
 
 my_name="${ad_dc_name}"
 
-my_forwarders="$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)"
+my_forwarders="$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${ad_zone}]} ${node_ip_offset} +) ${i} +)"; done)"
 
 # Note: when installing further AD DCs you must change the following option to true
 domain_join="false"
@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090903"
+script_version="2018091001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
