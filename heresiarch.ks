@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091001"
+script_version="2018091401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4270,9 +4270,9 @@ for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
 	PROMPT 0
 	TIMEOUT 1
 	MENU TITLE --== Heretic oVirt Project PXE Menu ==--
-	LABEL AutoInstallVM
+	LABEL AutoInstallVM${vm_role}
 	  kernel linux/centos/vmlinuz
-	  append initrd=linux/centos/initrd.img inst.stage2=http://twilight.mgmt.private/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://twilight.mgmt.private/hvp-repos/el7/ks/${vm_kickstart}
+	  append initrd=linux/centos/initrd.img inst.stage2=http://${HOSTNAME}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${HOSTNAME}/hvp-repos/el7/ks/${vm_kickstart}
 	EOF
 	ln -s ../${vm_role}.cfg /var/lib/tftpboot/pxelinux.cfg/
 done
