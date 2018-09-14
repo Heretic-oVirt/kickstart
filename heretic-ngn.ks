@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018090901"
+script_version="2018091401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2436,6 +2436,13 @@ chmod 644 /etc/systemd/system/storage.slice
 # Configure GlusterFS
 # TODO: Lower GlusterFS log level
 #sed -i -e 's/^#*\s*LOG_LEVEL=.*$/LOG_LEVEL=WARNING/' /etc/sysconfig/glusterd
+
+# Raise kernel limits for local ports (avoid SELinux denials as per https://bugzilla.redhat.com/show_bug.cgi?id=1455840 - use a solution valid also for GlusterFS < 3.12)
+cat << EOF > /etc/sysctl.d/gluster.conf
+# Controls the local IP port range to make it fit with GlusterFS usage
+net.ipv4.ip_local_port_range = 32768 65535
+EOF
+chmod 644 /etc/sysctl.d/gluster.conf
 
 # Put GlusterFS services under proper cgroup control (configured above)
 # Note: the following applies to both glusterd and glusterfsd (the latter being started on demand by the former)
