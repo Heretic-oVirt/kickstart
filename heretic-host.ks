@@ -1887,7 +1887,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091501"
+script_version="2018091502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2198,7 +2198,7 @@ yum -y install bind
 yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
 
 # Install Webmin for generic web management
 # TODO: adapt Cockpit from NGN installation and switch to using that instead
