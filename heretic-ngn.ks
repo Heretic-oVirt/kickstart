@@ -1393,8 +1393,8 @@ view "localhost_resolver"
         // These are your "authoritative" internal zones :
 
         zone "${ad_zone}" IN {
-                type slave;
-                masters { ${ad_dc_ip}; };
+                type static-stub;
+                server-addresses { ${ad_dc_ip}; };
                 forwarders {};
         };
 
@@ -1445,8 +1445,8 @@ view "internal"
         // also be included in the "localhost_resolver" view above :
 
         zone "${ad_zone}" IN {
-                type slave;
-                masters { ${ad_dc_ip}; };
+                type static-stub;
+                server-addresses { ${ad_dc_ip}; };
                 forwarders {};
         };
 
@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091401"
+script_version="2018091501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
