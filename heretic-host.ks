@@ -1887,7 +1887,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091502"
+script_version="2018091503"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3143,17 +3143,41 @@ setsebool -P -N samba_share_fusefs on
 mkdir -p /etc/selinux/local
 cat << EOF > /etc/selinux/local/myglustersmb.te
 
-module myglustersmb 1.0;
+module myglustersmb 12.0;
 
 require {
 	type fusefs_t;
+	type samba_net_t;
+	type smbcontrol_t;
+	type ctdbd_var_lib_t;
+	type cert_t;
 	type smbd_t;
-	class sock_file create;
+	type ctdbd_t;
+	class sock_file { unlink create write };
+	class dir { add_name getattr search write };
+	class file { getattr lock open read setattr write };
+	class process { noatsecure rlimitinh siginh };
+	class unix_stream_socket { read write };
 }
 
 #============= smbd_t ==============
 
 allow smbd_t fusefs_t:sock_file create;
+allow smbd_t fusefs_t:sock_file { unlink write };
+
+#============= smbcontrol_t ==============
+allow smbcontrol_t cert_t:dir search;
+allow smbcontrol_t fusefs_t:dir { search getattr write add_name };
+allow smbcontrol_t fusefs_t:sock_file create;
+allow smbcontrol_t ctdbd_var_lib_t:dir search;
+allow smbcontrol_t ctdbd_var_lib_t:file { read write open lock getattr setattr };
+
+#============= ctdbd_t ==============
+allow ctdbd_t samba_net_t:process { noatsecure rlimitinh siginh };
+
+#============= samba_net_t ==============
+allow samba_net_t ctdbd_t:unix_stream_socket { read write };
+allow samba_net_t fusefs_t:dir search;
 EOF
 chmod 644 /etc/selinux/local/myglustersmb.te
 
