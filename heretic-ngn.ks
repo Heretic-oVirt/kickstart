@@ -1616,7 +1616,7 @@ cat << EOF > smb.conf
    netbios name = $(echo "${storage_name}" | awk '{print toupper($0)}')
    #workgroup = NETBIOSDOMAINNAME
    #security = ads
-   #kerberos method = secrets only
+   #kerberos method = secrets and keytab
    # Note: when joining Active Directory change the following two lines with the three commented above
    workgroup = WORKGROUP
    security = user
@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091503"
+script_version="2018092101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2451,6 +2451,8 @@ cat << EOF > /etc/systemd/system/glusterd.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
+ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
+
 
 EOF
 chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
@@ -2471,8 +2473,6 @@ CTDB_SET_TraverseTimeout=60
 CTDB_STARTUP_TIMEOUT=30
 CTDB_SHUTDOWN_TIMEOUT=30
 CTDB_LOGGING=syslog
-# TODO: disabling fifo scheduling policy since no known workaround works - remove when fixed upstream
-CTDB_NOSETSCHED=yes
 # Set CTDB socket location
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
@@ -2639,15 +2639,13 @@ Requires=gluster-lock.mount cgroup-rt-bandwidth.service
 [Service]
 Restart=on-failure
 RestartSec=10
-#CPUSchedulingPolicy=fifo
 
 EOF
 chmod 644 /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
 
-# Add custom unit to add realtime bandwidth shares required by CTDB to use SCHED_FIFO scheduler
+# Add custom unit to add realtime bandwidth shares required by CTDB to use SETSCHED
 # Note: see https://bugzilla.redhat.com/show_bug.cgi?id=1201952 http://www.linuxquestions.org/questions/centos-111/running-ctdb-in-an-lxc-container-4175549857/ http://systemd-devel.freedesktop.narkive.com/YoWYF8EI/set-cgroup-attributes-not-supported-by-systemd-what-do-you-recommend
 # TODO: remove when supported explicitly in systemd
-# TODO: realtime bandwidth availability workaround does not work anymore - review when fixed upstream
 cat << EOF > /etc/systemd/system/cgroup-rt-bandwidth.service
 [Unit]
 Description=Set apart RT bandwidth for storage uses in cgroup hierarchy
