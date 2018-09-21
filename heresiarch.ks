@@ -2972,7 +2972,7 @@ hvp_engine_netprefix: ${PREFIX}
 # TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
-# Note: in a virtualized setup without an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
+# Note: when missing an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
 hvp_switch_ip: "${switch_ip}"
 # Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
 hvp_gateway_ip: ${dhcp_gateway}
@@ -3127,10 +3127,10 @@ vms_network_domainname: "{{ hvp_lan_domainname }}"
 vms_network: "{{ got_lan_network | ternary(lan_network, mgmt_network) }}"
 # TODO: dynamically extract the following from mirrored kickstart files
 guest_vms:
-  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'domaincontroller', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
-  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'database', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: 80 }
-  - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'printer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
-  - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'terminal', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
+  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'DomainController', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
+  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'DatabaseServer', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: 80 }
+  - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'PrintServer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
+  - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'TerminalServer', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
 
 ## HVP AD-related settings
 hvp_adjoin_domain: ${ad_subdomain_prefix}.${domain_name[${ad_zone}]}
@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018091501"
+script_version="2018092101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
