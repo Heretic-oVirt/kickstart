@@ -1887,7 +1887,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092101"
+script_version="2018092401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2885,8 +2885,6 @@ cat << EOF > /etc/systemd/system/glusterd.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
-ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
-
 
 EOF
 chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
@@ -3061,7 +3059,6 @@ EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
 
 # Modify CTDB service to force dependency on shared locking area
-# TODO: realtime bandwidth availability workaround does not work anymore - review when fixed upstream
 # TODO: verify restart-mode reconfiguration
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
@@ -3262,12 +3259,14 @@ systemctl disable gluster-blockd
 #sed -i -r -e 's/(DEBUG|INFO)/WARNING/' /etc/ovirt-hosted-engine-ha/broker-log.conf
 
 # Put CTDB controlled services under proper cgroup control (the GlusterFS slice configured above)
+# Note: the ExecStartPre action is needed to allow SETSCHED together with the cgroup-rt-bandwidth service above
 # TODO: verify whether the following applies to both ctdb and smbd/nmbd/winbindd/nfs-ganesha and remove specific smbd/nmbd/winbindd/nfs-ganesha fragments if not needed
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
+ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
 
 EOF
 chmod 644 /etc/systemd/system/ctdb.service.d/custom-slice.conf
