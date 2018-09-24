@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092101"
+script_version="2018092402"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1905,13 +1905,15 @@ fi
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
+# Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside a Node according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
+
 # Add YUM priorities plugin
-yum -y --enablerepo base --enablerepo updates install yum-plugin-priorities
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
 
 # Note: CentOS CR repository is already present inside Node image
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-4.noarch.rpm
+yum --disableincludes=all -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-4.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
@@ -1934,13 +1936,8 @@ fi
 ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
+	yum --disableincludes=all -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
 fi
-# Note: adding to already present package restrictions on EPEL repo
-sed -i -e 's/epel-release,/epel-release,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,/' /etc/yum.repos.d/ovirt-*-dependencies.repo
-
-# TODO: disable spurious includepkgs lines - they are meant to avoid accidental upgrades inside a Node according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
-sed -i -e '/^includepkgs=.*ovirt-node-ng/s/^/#/g' /etc/yum.repos.d/ovirt-*-dependencies.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
@@ -1958,38 +1955,38 @@ sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.
 # TODO: verify how to upgrade additional packages when upgrading the Node image
 
 # Install Rsync, Wget, patch, ntpdate and LSB support
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate redhat-lsb
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate redhat-lsb
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
-yum -y install haveged
+yum --disableincludes=all -y install haveged
 
 # Install Gdisk, PWGen, HPing, 7Zip and ARJ
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} arj pwgen
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install gdisk
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} arj pwgen
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install gdisk
 
 # Install Nmon and Dstat
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install nmon dstat
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install nmon dstat
 
 # Install PDSH
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install pdsh pdsh-rcmd-ssh
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install pdsh pdsh-rcmd-ssh
 
 # Install virtualization tools support packages
 if dmidecode -s system-manufacturer | egrep -q "(innotek|Parallels)" ; then
 	# Install dkms for virtualization tools support
 	# TODO: configure virtualization tools under dkms
 	# TODO: disabled since required development packages cannot be installed
-	#yum -y --enablerepo base --enablerepo updates --enablerepo cr install dkms
+	#yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install dkms
 	echo "DKMS unsupported"
 elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install qemu-guest-agent
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install qemu-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install ovirt-guest-agent
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install ovirt-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install hyperv-daemons
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install hyperv-daemons
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it is included in base distro now)
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools open-vm-tools-desktop fuse
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools open-vm-tools-desktop fuse
 fi
 
 # Tune package list to underlying platform
@@ -2000,51 +1997,51 @@ else
 	# Install Memtest86+
 	# Note: open source memtest86+ does not support UEFI
 	if [ ! -d /sys/firmware/efi ]; then
-		yum -y install memtest86+
+		yum --disableincludes=all -y install memtest86+
 	fi
 
 	# Install MCE logging/management service
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
 fi
 # Install oVirt Host
 # Note: the following packages should already be present on a Node image
 # Note: tuned and qemu-kvm-tools are needed to add host to datacenter
 # Note: the following already brings in GlusterFS as a dependency
 # Note: explicitly adding virt-v2v as per https://bugzilla.redhat.com/show_bug.cgi?id=1250376 - needs CentOS >= 7.2
-yum -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
+yum --disableincludes=all -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
 
 # Install GlusterFS
 if [ "${orthodox_mode}" = "false" ]; then
 	# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-	yum -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
+	yum --disableincludes=all -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
 fi
 # Note: the following packages should already be present on a Node image
 # Note: rpm post scriptlet for glusterfs-server fails - errors can be safely ignored
-yum -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
+yum --disableincludes=all -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
 
 # Install custom packages for NAS functions
 if [ "${use_vdo}" = "true" ] ; then
-	yum -y --enablerepo base --enablerepo updates --enablerepo cr install vdo kmod-kvdo
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install vdo kmod-kvdo
 fi
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
-	yum -y install ovirt-engine-appliance
+	yum --disableincludes=all -y install ovirt-engine-appliance
 fi
 
 # Install further packages for additional functions: Bind
-yum -y --enablerepo base --enablerepo updates --enablerepo cr install bind
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install bind
 
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
-yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
+yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -2451,8 +2448,6 @@ cat << EOF > /etc/systemd/system/glusterd.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
-ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
-
 
 EOF
 chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
@@ -2627,7 +2622,6 @@ EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
 
 # Modify CTDB service to force dependency on shared locking area
-# TODO: realtime bandwidth availability workaround does not work anymore - review when fixed upstream
 # TODO: verify restart-mode reconfiguration
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
@@ -2828,12 +2822,14 @@ systemctl disable gluster-blockd
 #sed -i -r -e 's/(DEBUG|INFO)/WARNING/' /etc/ovirt-hosted-engine-ha/broker-log.conf
 
 # Put CTDB controlled services under proper cgroup control (the GlusterFS slice configured above)
+# Note: the ExecStartPre action is needed to allow SETSCHED together with the cgroup-rt-bandwidth service above
 # TODO: verify whether the following applies to both ctdb and smbd/nmbd/winbindd/nfs-ganesha and remove specific smbd/nmbd/winbindd/nfs-ganesha fragments if not needed
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
+ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
 
 EOF
 chmod 644 /etc/systemd/system/ctdb.service.d/custom-slice.conf
@@ -3018,7 +3014,7 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	chmod 644 /etc/sysctl.d/99-xen-guest.conf
 	sysctl -p
 	wget https://dangerous.ovirt.life/support/Xen/xe-guest-utilities*.rpm
-	yum -y --nogpgcheck install ./xe-guest-utilities*.rpm
+	yum --disableincludes=all -y --nogpgcheck install ./xe-guest-utilities*.rpm
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
