@@ -196,11 +196,15 @@ rsyslog-gssapi
 openldap-clients
 cyrus-sasl-gssapi
 nss-tools
+rsync
+wget
 patch
 expect
+setserial
+ntpdate
+redhat-lsb-core
 ncompress
 libnl
-redhat-lsb
 -zsh
 -nmap
 -xdelta
@@ -1887,7 +1891,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092401"
+script_version="2018092501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2083,8 +2087,7 @@ yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_rele
 if [ "${ovirt_nightly_mode}" = "true" ]; then
 	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
 fi
-# Note: adding to already present package restrictions on EPEL repo
-sed -i -e 's/epel-release,/epel-release,logcheck,perl-mime-construct,perl-Proc-WaitStat,perl-IPC-Signal,lockfile-progs,haveged,hping3,p7zip*,arj,pwgen,pdsh*,nmon,webalizer,logcheck,/' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
+# Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 # TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
@@ -2113,43 +2116,43 @@ grubby --set-default=/boot/vmlinuz-$(rpm -q --last kernel | head -1 | cut -f 1 -
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
-yum -y install haveged
+yum --disableincludes=all -y install haveged
 
 # Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip and ARJ
-yum -y install hping3 p7zip{,-plugins} arj pwgen
-yum -y install yum-cron yum-plugin-ps gdisk
+yum --disableincludes=all -y install hping3 p7zip{,-plugins} arj pwgen
+yum --disableincludes=all -y install yum-cron yum-plugin-ps gdisk
 
 # Install Nmon and Dstat
-yum -y install nmon dstat
+yum --disableincludes=all -y install nmon dstat
 
 # Install Apache
-yum -y install httpd mod_ssl
+yum --disableincludes=all -y install httpd mod_ssl
 
 # Install Webalizer and MRTG
-yum -y install webalizer mrtg net-snmp net-snmp-utils
+yum --disableincludes=all -y install webalizer mrtg net-snmp net-snmp-utils
 
 # Install Logcheck
-yum -y install logcheck
+yum --disableincludes=all -y install logcheck
 
 # Install PDSH
-yum -y install pdsh pdsh-rcmd-ssh
+yum --disableincludes=all -y install pdsh pdsh-rcmd-ssh
 
 # Install virtualization tools support packages
 if dmidecode -s system-manufacturer | egrep -q "(innotek|Parallels)" ; then
 	# Install dkms for virtualization tools support
 	# TODO: configure virtualization tools under dkms
 	# TODO: disabled since required development packages cannot be installed
-	#yum -y install dkms
+	#yum --disableincludes=all -y install dkms
 	echo "DKMS unsupported"
 elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
-	yum -y install qemu-guest-agent
+	yum --disableincludes=all -y install qemu-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
-	yum -y install ovirt-guest-agent
+	yum --disableincludes=all -y install ovirt-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
-	yum -y install hyperv-daemons
+	yum --disableincludes=all -y install hyperv-daemons
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it is included in base distro now)
-	yum -y install open-vm-tools open-vm-tools-desktop fuse
+	yum --disableincludes=all -y install open-vm-tools fuse
 fi
 
 # Tune package list to underlying platform
@@ -2160,45 +2163,45 @@ else
 	# Install Memtest86+
 	# Note: open source memtest86+ does not support UEFI
 	if [ ! -d /sys/firmware/efi ]; then
-		yum -y install memtest86+
+		yum --disableincludes=all -y install memtest86+
 	fi
 
 	# Install MCE logging/management service
-	yum -y install mcelog
+	yum --disableincludes=all -y install mcelog
 fi
 
 # Install oVirt Host
 # Note: tuned and qemu-kvm-tools are needed to add host to datacenter
 # Note: the following already brings in GlusterFS as a dependency
 # Note: explicitly adding virt-v2v as per https://bugzilla.redhat.com/show_bug.cgi?id=1250376 - needs CentOS >= 7.2
-yum -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
+yum --disableincludes=all -y install ovirt-hosted-engine-setup virt-v2v tuned qemu-kvm-tools
 
 # Install GlusterFS
 # Note: rpm post scriptlet for glusterfs-server fails - errors can be safely ignored
-yum -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
+yum --disableincludes=all -y install glusterfs glusterfs-fuse glusterfs-server glusterfs-coreutils vdsm-gluster
 
 # Install custom packages for NAS functions
 if [ "${use_vdo}" = "true" ] ; then
-	yum -y install vdo kmod-kvdo
+	yum --disableincludes=all -y install vdo kmod-kvdo
 fi
-yum -y install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
+yum --disableincludes=all -y install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
-yum -y install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum --disableincludes=all -y install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
-	yum -y install ovirt-engine-appliance
+	yum --disableincludes=all -y install ovirt-engine-appliance
 fi
 
 # Install further packages for additional functions: Bind
-yum -y install bind
+yum --disableincludes=all -y install bind
 
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
-yum -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
+yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
+yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
 
 # Install Webmin for generic web management
 # TODO: adapt Cockpit from NGN installation and switch to using that instead
@@ -2213,7 +2216,7 @@ gpgkey = http://www.webmin.com/jcameron-key.asc
 skip_if_unavailable = 1
 EOF
 chmod 644 /etc/yum.repos.d/webmin.repo
-yum -y install webmin
+yum --disableincludes=all -y install webmin
 # Note: immediately stop webmin started by postinst scriptlet
 /etc/init.d/webmin stop
 
