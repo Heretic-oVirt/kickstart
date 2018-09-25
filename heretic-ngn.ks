@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092402"
+script_version="2018092501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1905,7 +1905,7 @@ fi
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside a Node according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
+# Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside NGN according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
 
 # Add YUM priorities plugin
 yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
@@ -1939,23 +1939,13 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	yum --disableincludes=all -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
 fi
 
-# Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
-# TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
-for repofile in /etc/yum.repos.d/*.repo; do
-	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
-		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
-		sed -i -e 's/^metalink/#metalink/g' "${repofile}"
-		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
-	fi
-done
-# Modify baseurl definitions to allow effective use of our proxy cache
-sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-*-dependencies.repo
+# Note: no baseurl/mirrorlist optimizations attempted on NGN since its repo definitions are highly customized
 
 # Note: a Node image should be upgraded as a whole and not package-by-package
 # TODO: verify how to upgrade additional packages when upgrading the Node image
 
-# Install Rsync, Wget, patch, ntpdate and LSB support
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch ntpdate redhat-lsb
+# Install Rsync, Wget, patch, expect, setserial, ntpdate and core LSB support
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch expect setserial ntpdate redhat-lsb-core
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
@@ -1986,7 +1976,7 @@ elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
 	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install hyperv-daemons
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it is included in base distro now)
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools open-vm-tools-desktop fuse
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools fuse
 fi
 
 # Tune package list to underlying platform
