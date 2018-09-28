@@ -1772,7 +1772,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092501"
+script_version="2018092701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2920,6 +2920,7 @@ chmod 755 /root/bin/backup-conf
 cat << EOF > /root/etc/backup.list
 /boot/grub2
 /etc
+/var/named
 /usr/local/bin
 /usr/local/sbin
 /usr/local/etc
