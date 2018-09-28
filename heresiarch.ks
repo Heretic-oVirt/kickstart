@@ -2252,7 +2252,7 @@ done
 # Note: registered with a TTL of 1 to enhance round-robin load balancing
 for ((i=0;i<${active_storage_node_count};i=i+1)); do
 	cat <<- EOF >> ${domain_name[${zone}]}.db
-	${storage_name}	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
+	${storage_name}	1 IN	A	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} +)
 	EOF
 done
 cat << EOF > ${reverse_domain_name[${zone}]}.db
@@ -2298,7 +2298,7 @@ done
 # Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services
 for ((i=0;i<${active_storage_node_count};i=i+1)); do
 	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
+	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
 	EOF
 done
 # Create the zone files for GLUSTER network if it is present
@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092802"
+script_version="2018092803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3352,13 +3352,13 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	[ovirt-${ovirt_version}-snapshot]
 	name=oVirt ${ovirt_version} - Nightly snapshot
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
-	gpgchek=0
+	gpgcheck=0
 	enabled=1
 
 	[ovirt-${ovirt_version}-snapshot-static]
 	name=oVirt ${ovirt_version} - Nightly snapshot static
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
-	gpgchek=0
+	gpgcheck=0
 	enabled=1
 	EOF
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
