@@ -3170,7 +3170,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092801"
+script_version="2018092802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3348,20 +3348,20 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	yum-config-manager --disable 'ovirt-centos-ovirt*' > /dev/null
 	yum-config-manager --disable 'ovirt-*-centos-gluster*' > /dev/null
 	# Manually add snapshot repositories
-	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_release_package_suffix}-snapshot.repo"
-	[ovirt-${ovirt_release_package_suffix}-snapshot]
-	name=oVirt ${ovirt_release_package_suffix} - Nightly snapshot
-	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_release_package_suffix}-snapshot/rpm/el\$releasever/
+	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
+	[ovirt-${ovirt_version}-snapshot]
+	name=oVirt ${ovirt_version} - Nightly snapshot
+	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
 	gpgchek=0
 	enabled=1
 
-	[ovirt-${ovirt_release_package_suffix}-snapshot-static]
-	name=oVirt ${ovirt_release_package_suffix} - Nightly snapshot static
-	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_release_package_suffix}-snapshot-static/rpm/el\$releasever/
+	[ovirt-${ovirt_version}-snapshot-static]
+	name=oVirt ${ovirt_version} - Nightly snapshot static
+	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
 	gpgchek=0
 	enabled=1
 	EOF
-	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_release_package_suffix}-snapshot.repo"
+	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
 
 # Enable use of delta rpms since we are not using our local mirror
