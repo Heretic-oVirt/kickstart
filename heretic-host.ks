@@ -1891,7 +1891,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092701"
+script_version="2018092801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2288,6 +2288,9 @@ grub2-mkconfig -o "${grub2_cfg_file}"
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	sed -i -e '/Handle[^=]*=[^i]/s/^#\(Handle[^=]*\)=.*$/\1=ignore/' /etc/systemd/logind.conf
 fi
+
+# Configure systemd (no shutdown from keyboard)
+systemctl mask ctrl-alt-del.target
 
 # Configure kernel behaviour
 
