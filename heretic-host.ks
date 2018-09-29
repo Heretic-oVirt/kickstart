@@ -1891,7 +1891,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092801"
+script_version="2018092802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2060,7 +2060,7 @@ yum -y install yum-plugin-priorities
 yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-4.noarch.rpm
+yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
@@ -2071,6 +2071,8 @@ if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-rhsat-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
+	yum-config-manager --enable hvp-ansible-rebuild > /dev/null
+	yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
 else
 	# Note: HVP RHGS rebuild must be enabled anyway to allow access to slightly newer/tweaked (but compatible with community Gluster) versions of other packages
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
@@ -2084,8 +2086,26 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
+# Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}-snapshot.rpm
+	# Disable CentOS-hosted oVirt and GlusterFS repositories
+	yum-config-manager --disable 'ovirt-centos-ovirt*' > /dev/null
+	yum-config-manager --disable 'ovirt-*-centos-gluster*' > /dev/null
+	# Manually add snapshot repositories
+	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
+	[ovirt-${ovirt_version}-snapshot]
+	name=oVirt ${ovirt_version} - Nightly snapshot
+	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
+	gpgcheck=0
+	enabled=1
+
+	[ovirt-${ovirt_version}-snapshot-static]
+	name=oVirt ${ovirt_version} - Nightly snapshot static
+	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
+	gpgcheck=0
+	enabled=1
+	EOF
+	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
 # Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
 
