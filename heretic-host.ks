@@ -1891,7 +1891,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092802"
+script_version="2018092902"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3292,6 +3292,7 @@ cat << EOF > /etc/systemd/system/ctdb.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
+CPUAccounting=true
 ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
 
 EOF
@@ -3531,8 +3532,15 @@ popd
 
 # Initialize webalizer
 # Note: Apache logs must be not empty
-wget -O /dev/null http://localhost/
-/etc/cron.daily/00webalizer
+max_steps="30"
+for ((i=0;i<\${max_steps};i=i+1)); do
+	if systemctl -q is-active httpd ; then
+		wget -O /dev/null http://localhost/
+		/etc/cron.daily/00webalizer
+		break
+	fi
+	sleep 5
+done
 
 # Initialize MRTG configuration (needs Net-SNMP up)
 # TODO: add CPU/RAM/disk/etc. resource monitoring
