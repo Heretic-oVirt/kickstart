@@ -2843,6 +2843,7 @@ cat << EOF > /etc/systemd/system/ctdb.service.d/custom-slice.conf
 
 [Service]
 Slice=storage.slice
+CPUAccounting=true
 ExecStartPre=/usr/bin/bash -c '/usr/bin/echo 10000 > /sys/fs/cgroup/cpu/storage.slice/ctdb.service/cpu.rt_runtime_us'
 
 EOF
