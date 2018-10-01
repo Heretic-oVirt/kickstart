@@ -2927,7 +2927,14 @@ cat << EOF >> hosts
 [gluster_master]
 ${node_name[${master_index}]}.${domain_name[${zone}]}
 
+# Our active storage Nodes
+[active_storage_nodes]
 EOF
+for ((i=0;i<${active_storage_node_count};i=i+1)); do
+	cat <<- EOF >> hosts
+	${node_name[${i}]}.${domain_name[${ad_zone}]}
+	EOF
+done
 
 # Prepare Ansible SSH access passwords
 mkdir -p group_vars
@@ -2957,6 +2964,7 @@ hvp_storage_name: ${storage_name}
 hvp_orthodox_mode: ${orthodox_mode}
 hvp_ovirt_nightly_mode: ${ovirt_nightly_mode}
 hvp_use_vdo: ${use_vdo}
+hvp_upgrade_engine: false
 hvp_master_node: "{{ groups['ovirt_master'] | first }}"
 # Note: workaround for hang on boot in nested kvm - remove when fixed upstream
 hvp_vm_machinetype: "{% if hostvars[hvp_master_node]['ansible_virtualization_role'] == 'guest' %}pc-i440fx-rhel7.2.0{% else %}pc{% endif %}"
@@ -3048,9 +3056,8 @@ if [ "${#gluster_block_size[@]}" -eq 0 ]; then
 	EOF
 else
 	cat <<- EOF >> hvp.yaml
-	# TODO: disabled since Gluster-block LUNs creation is not working yet
-	hvp_lun_sizes: []
-	$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "#  - ${gluster_block_size[${i}]}GiB"; done)
+	hvp_lun_sizes:
+	$(for ((i=0;i<${#gluster_block_size[@]};i=i+1)); do echo "  - ${gluster_block_size[${i}]}GiB"; done)
 	EOF
 fi
 cat << EOF >> hvp.yaml
@@ -3170,7 +3177,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092803"
+script_version="2018093001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4666,8 +4673,15 @@ popd
 
 # Initialize webalizer
 # Note: Apache logs must be not empty
-wget -O /dev/null http://localhost/
-/etc/cron.daily/00webalizer
+max_steps="30"
+for ((i=0;i<\${max_steps};i=i+1)); do
+	if systemctl -q is-active httpd ; then
+		wget -O /dev/null http://localhost/
+		/etc/cron.daily/00webalizer
+		break
+	fi
+	sleep 5
+done
 
 # Initialize MRTG configuration (needs Net-SNMP up)
 # TODO: add CPU/RAM/disk/etc. resource monitoring
