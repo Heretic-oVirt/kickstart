@@ -620,10 +620,15 @@ notification_receiver="monitoring@localhost"
 ovirt_version="4.1"
 
 # Detect any configuration fragments and load them into the pre environment
-# Note: BIOS based devices, file and DHCP methods are unsupported
+# Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
 ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+if [ -z "${ks_source}" ]; then
+	# Note: if we are here and no Kickstart has been explicitly specified, then it must have been found by OEMDRV method (needs CentOS >= 7.2)
+	# TODO: currently this does not work (Kickstart not found so we cannot get here) due to https://bugzilla.redhat.com/show_bug.cgi?id=1497729
+	ks_source="hd:LABEL=OEMDRV:/ks.cfg"
+fi
 if [ -z "${ks_source}" ]; then
 	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
 else
@@ -653,8 +658,8 @@ else
 					ks_fsopt="ro"
 					ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
 					if [ -z "${ks_path}" ]; then
-						echo "Unable to determine Kickstart source path" 1>&2
-						ks_dev=""
+						ks_path="/ks.cfg"
+						ks_dir="/"
 					else
 						ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
 					fi
@@ -665,24 +670,35 @@ else
 	elif echo "${ks_source}" | grep -q '^hd:' ; then
 		# Note: blindly extracting device name from Kickstart commandline
 		ks_dev="/dev/$(echo ${ks_source} | awk -F: '{print $2}')"
+		# Detect LABEL-based device selection
+		if echo "${ks_dev}" | grep -q '^LABEL=' ; then
+			ks_label="$(echo ${ks_dev} | awk -F= '{print $2}')"
+			if [ -z "${ks_label}" ]; then
+				echo "Invalid definition of Kickstart labeled device" 1>&2
+				ks_dev=""
+			else
+				ks_dev=$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
+			fi
+		fi
 		# TODO: Detect actual filesystem type on local drive - assuming VFAT
 		ks_fstype="vfat"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
-			echo "Unable to determine Kickstart source path" 1>&2
-			ks_dev=""
+			ks_path="/ks.cfg"
+			ks_dir="/"
 		else
 			ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
+		# TODO: support NFS options
 		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
 		ks_fstype="nfs"
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
-			echo "Unable to determine Kickstart source path" 1>&2
+			echo "Unable to determine Kickstart NFS source path" 1>&2
 			ks_dev=""
 		else
 			ks_dev="${ks_host}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
@@ -1614,6 +1630,8 @@ EOF
 # Create disk setup fragment
 # TODO: find a better way to detect emulated/VirtIO devices
 all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
+in_use_devices=$(mount | awk '/^\/dev/ {print gensub("/dev/","","g",$1)}')
+kickstart_device=$(echo "${ks_dev}" | sed -e 's%/dev/%%')
 if [ -b /dev/vda ]; then
 	disk_device_name="vda"
 elif [ -b /dev/xvda ]; then
@@ -1653,6 +1671,10 @@ done
 if cat /sys/class/dmi/id/sys_vendor | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	# Note: resetting all disk devices since leftover configurations may interfer with installation and/or setup later on
 	for current_device in ${all_devices}; do
+		# Skipping devices in active use
+		if [ "${current_device}" = "${kickstart_device}" ] || echo "${in_use_devices}" | grep -q -w "${current_device}" ; then
+			continue
+		fi
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10 seek=$(($(blockdev --getsize64 /dev/${current_device}) / (1024 * 1024) - 10))
 	done
@@ -3177,7 +3199,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018093001"
+script_version="2018110101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
