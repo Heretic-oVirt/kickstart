@@ -3197,7 +3197,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018110802"
+script_version="2018120801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3341,7 +3341,8 @@ yum --enablerepo '*' clean all
 yum -y install yum-plugin-priorities
 
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
-yum-config-manager --enable cr > /dev/null
+# Note: a partially populated CR repo may introduce dependency-related errors - better to leave this to post-installation manual choices
+#yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
 yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
@@ -3375,18 +3376,22 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	yum-config-manager --disable 'ovirt-centos-ovirt*' > /dev/null
 	yum-config-manager --disable 'ovirt-*-centos-gluster*' > /dev/null
 	# Manually add snapshot repositories
+	# Note: adding these manually since the release package may have disappeared
+	# Note: adding skip_if_unavailable since the repos too seem to disappear after a while
 	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 	[ovirt-${ovirt_version}-snapshot]
 	name=oVirt ${ovirt_version} - Nightly snapshot
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
 	gpgcheck=0
 	enabled=1
+	skip_if_unavailable=1
 
 	[ovirt-${ovirt_version}-snapshot-static]
 	name=oVirt ${ovirt_version} - Nightly snapshot static
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
 	gpgcheck=0
 	enabled=1
+	skip_if_unavailable=1
 	EOF
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
