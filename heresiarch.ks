@@ -623,15 +623,12 @@ ovirt_version="4.1"
 # Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
-ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+ks_source="$(cat /proc/cmdline | sed -n -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
 if [ -z "${ks_source}" ]; then
 	# Note: if we are here and no Kickstart has been explicitly specified, then it must have been found by OEMDRV method (needs CentOS >= 7.2)
-	# TODO: currently this does not work (Kickstart not found so we cannot get here) due to https://bugzilla.redhat.com/show_bug.cgi?id=1497729
-	ks_source="hd:LABEL=OEMDRV:/ks.cfg"
+	ks_source='hd:LABEL=OEMDRV'
 fi
-if [ -z "${ks_source}" ]; then
-	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
-else
+if [ -n "${ks_source}" ]; then
 	ks_dev=""
 	if echo "${ks_source}" | grep -q '^floppy' ; then
 		# Note: hardcoded device name for floppy disk
@@ -643,7 +640,7 @@ else
 		if [ -z "${ks_path}" ]; then
 			ks_path="/ks.cfg"
 		fi
-		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+		ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
 		# Note: cdrom gets accessed as real device name which must be detected - assuming it is the first removable device
 		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
@@ -661,7 +658,7 @@ else
 						ks_path="/ks.cfg"
 						ks_dir="/"
 					else
-						ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+						ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 					fi
 					break
 				fi
@@ -669,15 +666,16 @@ else
 		done
 	elif echo "${ks_source}" | grep -q '^hd:' ; then
 		# Note: blindly extracting device name from Kickstart commandline
-		ks_dev="/dev/$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_spec="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_dev="/dev/${ks_spec}"
 		# Detect LABEL-based device selection
-		if echo "${ks_dev}" | grep -q '^LABEL=' ; then
-			ks_label="$(echo ${ks_dev} | awk -F= '{print $2}')"
+		if echo "${ks_spec}" | grep -q '^LABEL=' ; then
+			ks_label="$(echo ${ks_spec} | awk -F= '{print $2}')"
 			if [ -z "${ks_label}" ]; then
 				echo "Invalid definition of Kickstart labeled device" 1>&2
 				ks_dev=""
 			else
-				ks_dev=$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
+				ks_dev=/dev/$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
 			fi
 		fi
 		# TODO: Detect actual filesystem type on local drive - assuming VFAT
@@ -688,7 +686,7 @@ else
 			ks_path="/ks.cfg"
 			ks_dir="/"
 		else
-			ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+			ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
@@ -701,13 +699,13 @@ else
 			echo "Unable to determine Kickstart NFS source path" 1>&2
 			ks_dev=""
 		else
-			ks_dev="${ks_host}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dev="${ks_host}:$(echo ${ks_path} | sed -e 's%/[^/]*$%%')}"
 			ks_dir="/"
 		fi
 	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
 		# Note: blindly extracting URL from Kickstart commandline
 		ks_host="$(echo ${ks_source} | sed -e 's%^.*//%%' -e 's%/.*$%%')"
-		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
+		ks_dev="$(echo ${ks_source} | sed -e 's%/[^/]*$%%')"
 		ks_fstype="url"
 	else
 		echo "Unsupported Kickstart source detected" 1>&2
@@ -1631,7 +1629,7 @@ EOF
 # TODO: find a better way to detect emulated/VirtIO devices
 all_devices="$(list-harddrives | egrep -v '^(fd|sr)[[:digit:]]*[[:space:]]' | awk '{print $1}' | sort)"
 in_use_devices=$(mount | awk '/^\/dev/ {print gensub("/dev/","","g",$1)}')
-kickstart_device=$(echo "${ks_dev}" | sed -e 's%/dev/%%')
+kickstart_device=$(echo "${ks_dev}" | sed -e 's%^/dev/%%')
 if [ -b /dev/vda ]; then
 	disk_device_name="vda"
 elif [ -b /dev/xvda ]; then
@@ -3199,7 +3197,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018110101"
+script_version="2018110802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3325,7 +3323,7 @@ fi
 mp=$(grep -w "/" /etc/fstab | sed -e 's/ .*//')
 if echo "$mp" | grep -q "^UUID="
 then
-    uuid=$(echo "$mp" |sed 's/UUID=//')
+    uuid=$(echo "$mp" | sed -e 's/UUID=//')
     rootdisk=$(blkid -U $uuid)
 elif echo "$mp" | grep -q "^/dev/"
 then
