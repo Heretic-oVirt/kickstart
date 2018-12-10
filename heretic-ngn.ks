@@ -100,8 +100,8 @@ text
 # (must be sure that system does not try to loop-install again and again)
 reboot
 
-# The following replaces any package set composition and their cdrom/url/nfs directives
 # Liveimg configuration dynamically generated in pre section below
+# Note: the following replaces any package set composition and their cdrom/url/nfs directives
 %include /tmp/full-liveimg
 
 # System localization configuration dynamically generated in pre section below
@@ -372,13 +372,16 @@ local_timezone="UTC"
 notification_receiver="monitoring@localhost"
 
 # Detect any configuration fragments and load them into the pre environment
-# Note: BIOS based devices, file and DHCP methods are unsupported
+# Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
+ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh"
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
-ks_source="$(cat /proc/cmdline | sed -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+ks_source="$(cat /proc/cmdline | sed -n -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
 if [ -z "${ks_source}" ]; then
-	echo "Unable to determine Kickstart source - skipping configuration fragments retrieval" 1>&2
-else
+	# Note: if we are here and no Kickstart has been explicitly specified, then it must have been found by OEMDRV method (needs CentOS >= 7.2)
+	ks_source='hd:LABEL=OEMDRV'
+fi
+if [ -n "${ks_source}" ]; then
 	ks_dev=""
 	if echo "${ks_source}" | grep -q '^floppy' ; then
 		# Note: hardcoded device name for floppy disk
@@ -390,7 +393,7 @@ else
 		if [ -z "${ks_path}" ]; then
 			ks_path="/ks.cfg"
 		fi
-		ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+		ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
 		# Note: cdrom gets accessed as real device name which must be detected - assuming it is the first removable device
 		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
@@ -405,10 +408,10 @@ else
 					ks_fsopt="ro"
 					ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
 					if [ -z "${ks_path}" ]; then
-						echo "Unable to determine Kickstart source path" 1>&2
-						ks_dev=""
+						ks_path="/ks.cfg"
+						ks_dir="/"
 					else
-						ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+						ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 					fi
 					break
 				fi
@@ -416,34 +419,46 @@ else
 		done
 	elif echo "${ks_source}" | grep -q '^hd:' ; then
 		# Note: blindly extracting device name from Kickstart commandline
-		ks_dev="/dev/$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_spec="$(echo ${ks_source} | awk -F: '{print $2}')"
+		ks_dev="/dev/${ks_spec}"
+		# Detect LABEL-based device selection
+		if echo "${ks_spec}" | grep -q '^LABEL=' ; then
+			ks_label="$(echo ${ks_spec} | awk -F= '{print $2}')"
+			if [ -z "${ks_label}" ]; then
+				echo "Invalid definition of Kickstart labeled device" 1>&2
+				ks_dev=""
+			else
+				ks_dev=/dev/$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
+			fi
+		fi
 		# TODO: Detect actual filesystem type on local drive - assuming VFAT
 		ks_fstype="vfat"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
-			echo "Unable to determine Kickstart source path" 1>&2
-			ks_dev=""
+			ks_path="/ks.cfg"
+			ks_dir="/"
 		else
-			ks_dir="$(echo ${ks_path} | sed 's%/[^/]*$%%')"
+			ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
+		# TODO: support NFS options
 		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
 		ks_fstype="nfs"
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
-			echo "Unable to determine Kickstart source path" 1>&2
+			echo "Unable to determine Kickstart NFS source path" 1>&2
 			ks_dev=""
 		else
-			ks_dev="${ks_host}:$(echo ${ks_path} | sed 's%/[^/]*$%%')}"
+			ks_dev="${ks_host}:$(echo ${ks_path} | sed -e 's%/[^/]*$%%')}"
 			ks_dir="/"
 		fi
 	elif echo "${ks_source}" | egrep -q '^(http|https|ftp):' ; then
 		# Note: blindly extracting URL from Kickstart commandline
 		ks_host="$(echo ${ks_source} | sed -e 's%^.*//%%' -e 's%/.*$%%')"
-		ks_dev="$(echo ${ks_source} | sed 's%/[^/]*$%%')"
+		ks_dev="$(echo ${ks_source} | sed -e 's%/[^/]*$%%')"
 		ks_fstype="url"
 	else
 		echo "Unsupported Kickstart source detected" 1>&2
@@ -451,7 +466,6 @@ else
 	if [ -z "${ks_dev}" ]; then
 		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
 	else
-		ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh"
 		# Note: for network-based kickstart retrieval methods we extract the relevant nic MAC address to get the machine-specific fragment
 		if [ "${ks_fstype}" = "url" -o "${ks_fstype}" = "nfs" ]; then
 			# Note: we detect the nic device name as the one detaining the route towards the host holding the kickstart script
@@ -510,7 +524,7 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
-# Determine choice of skipping custom packages intallation
+# Determine choice of skipping custom packages installation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
 fi
@@ -536,14 +550,17 @@ fi
 if [ -b "/dev/${given_nodeosdisk}" ]; then
 	# If the given string is a device name then use that
 	disk_device_name="${given_nodeosdisk}"
+	disk_device_size=$(blockdev --getsize64 /dev/${disk_device_name})
 else
 	# If the given string is a generic indication then find the proper device
 	case "${given_nodeosdisk}" in
 		first)
 			disk_device_name=$(echo "${all_devices}" | head -1)
+			disk_device_size=$(blockdev --getsize64 /dev/${disk_device_name})
 			;;
 		last)
 			disk_device_name=$(echo "${all_devices}" | tail -1)
+			disk_device_size=$(blockdev --getsize64 /dev/${disk_device_name})
 			;;
 		*)
 			# Note: we allow for choosing either the first smallest device (default, if only "smallest" has been indicated) or the last one
@@ -618,7 +635,6 @@ for name in $(echo "${given_names}" | sed -e 's/,/ /g'); do
 		node_index=$((node_index+1))
 	fi
 done
-my_name="${node_name[${my_index}]}"
 
 # Determine installer name
 given_installer_name=$(sed -n -e 's/^.*hvp_installername=\(\S*\).*$/\1/p' /proc/cmdline)
@@ -704,6 +720,23 @@ if echo "${given_storage_offset}" | grep -q '^[[:digit:]]\+$' ; then
 	storage_ip_offset="${given_storage_offset}"
 fi
 
+# Determine hostname
+my_name="${node_name[${my_index}]}"
+
+# Determine AD subdomain name
+given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ad_subdomainname}" ]; then
+	ad_subdomain_prefix="${given_ad_subdomainname}"
+fi
+
+# Determine Gluster volume names
+for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
+	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_volume_name}" ]; then
+		gluster_vol_name["${volume}"]="${given_volume_name}"
+	fi
+done
+
 # Determine nameserver address
 given_nameserver=$(sed -n -e "s/^.*hvp_nameserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_nameserver}" ]; then
@@ -721,20 +754,6 @@ given_gateway=$(sed -n -e "s/^.*hvp_gateway=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_gateway}" ]; then
 	my_gateway="${given_gateway}"
 fi
-
-# Determine AD subdomain name
-given_ad_subdomainname=$(sed -n -e "s/^.*hvp_ad_subdomainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-if [ -n "${given_ad_subdomainname}" ]; then
-	ad_subdomain_prefix="${given_ad_subdomainname}"
-fi
-
-# Determine Gluster volume names
-for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
-	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_volume_name}" ]; then
-		gluster_vol_name["${volume}"]="${given_volume_name}"
-	fi
-done
 
 # Determine network segments parameters
 fixed_mgmt_bondmode="false"
@@ -1084,6 +1103,8 @@ timezone ${local_timezone} --isUtc
 EOF
 
 # Create disk setup fragment
+in_use_devices=$(mount | awk '/^\/dev/ {print gensub("/dev/","","g",$1)}')
+kickstart_device=$(echo "${ks_dev}" | sed -e 's%^/dev/%%')
 # Note: all sizes in MiB except for data_block_size which is in KiB
 data_dev_size=$((${disk_device_size} / 1024 / 1024))
 data_block_size="2048"
@@ -1099,7 +1120,7 @@ clearpart --all --initlabel --disklabel=gpt
 # Bootloader placed on MBR, with 3 seconds waiting, with password protection, disabling high res text console, disabling CPU C-states and with I/O scheduler optimized for a virtualization/storage server
 bootloader --location=mbr --timeout=3 --password=${root_password} --append="nomodeset processor.max_cstate=1 intel_idle.max_cstate=0"
 # Ignore further disks
-# Note: further disks will be used as bricks later on
+# Note: some other disks will be used as bricks later on
 ignoredisk --only-use=${disk_device_name}
 # Either all automatic...
 #autopart --type=thinp
@@ -1142,6 +1163,10 @@ done
 if cat /sys/class/dmi/id/sys_vendor | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
 	# Note: resetting all disk devices since leftover configurations may interfer with installation and/or setup later on
 	for current_device in ${all_devices}; do
+		# Skipping devices in active use
+		if [ "${current_device}" = "${kickstart_device}" ] || echo "${in_use_devices}" | grep -q -w "${current_device}" ; then
+			continue
+		fi
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10
 		dd if=/dev/zero of=/dev/${current_device} bs=1M count=10 seek=$(($(blockdev --getsize64 /dev/${current_device}) / (1024 * 1024) - 10))
 	done
@@ -1772,7 +1797,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018092802"
+script_version="2018121001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1872,7 +1897,7 @@ if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
 fi
 
-# Determine choice of skipping custom packages intallation
+# Determine choice of skipping custom packages installation
 if grep -w -q 'hvp_orthodox' /proc/cmdline ; then
 	orthodox_mode="true"
 fi
@@ -1937,24 +1962,29 @@ fi
 # Extract oVirt version from installed packages
 ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
-# Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt lifecycle and some repositories and release packages may have disappeared - working around here
+# Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	# Disable CentOS-hosted oVirt and GlusterFS repositories
-	yum-config-manager --disable 'ovirt-centos-ovirt*' > /dev/null
-	yum-config-manager --disable 'ovirt-*-centos-gluster*' > /dev/null
+	# Marking CentOS-hosted repositories as skip_if_unavailable
+	for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+		yum-config-manager --save --setopt="${repo_name}.skip_if_unavailable=1" > /dev/null
+	done
 	# Manually add snapshot repositories
+	# Note: adding these manually since the release package may have disappeared
+	# Note: adding skip_if_unavailable since the repos too seem to disappear after a while
 	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 	[ovirt-${ovirt_version}-snapshot]
 	name=oVirt ${ovirt_version} - Nightly snapshot
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
 	gpgcheck=0
 	enabled=1
+	skip_if_unavailable=1
 
 	[ovirt-${ovirt_version}-snapshot-static]
 	name=oVirt ${ovirt_version} - Nightly snapshot static
 	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
 	gpgcheck=0
 	enabled=1
+	skip_if_unavailable=1
 	EOF
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
@@ -1963,7 +1993,7 @@ fi
 # Note: no baseurl/mirrorlist optimizations attempted on NGN since its repo definitions are highly customized
 
 # Note: a Node image should be upgraded as a whole and not package-by-package
-# TODO: verify how to upgrade additional packages when upgrading the Node image
+# TODO: verify how to upgrade custom additional packages when upgrading the Node image
 
 # Install Rsync, Wget, patch, expect, setserial, ntpdate and core LSB support
 yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch expect setserial ntpdate redhat-lsb-core
@@ -2118,6 +2148,8 @@ else
 	grub2_cfg_file="/etc/grub2.cfg"
 fi
 
+# Note: GRUB2 configuration as per NGN default
+
 # Setup a serial terminal
 serial_found="false"
 for link in /sys/class/tty/*/device/driver ; do
@@ -2136,8 +2168,6 @@ if [ "${serial_found}" = "true" ]; then
 	EOF
 	grub2-mkconfig -o "${grub2_cfg_file}"
 fi
-
-# Note: GRUB2 configuration as per NGN default
 
 # Conditionally add memory test entry to boot loader
 if dmidecode -s system-manufacturer | egrep -q -v "(Microsoft|VMware|innotek|Parallels|Red.*Hat|oVirt|Xen)" ; then
@@ -3175,9 +3205,11 @@ fi
 
 # TODO: perform NetworkManager workaround configuration on interfaces as detected in pre section above - remove when fixed upstream
 for file in /tmp/hvp-networkmanager-conf/ifcfg-* ; do
-	cfg_file_name=$(basename ${file})
-	sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' ${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}
-	cat ${file} >> ${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}
+	if [ -f "${file}" ]; then
+		cfg_file_name=$(basename "${file}")
+		sed -i -e '/^DEFROUTE=/d' -e '/^MTU=/d' "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}"
+		cat "${file}" >> "${ANA_INSTALL_PATH}/etc/sysconfig/network-scripts/${cfg_file_name}"
+	fi
 done
 
 # Save exact pre-stage environment
