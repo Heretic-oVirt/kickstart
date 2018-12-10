@@ -621,6 +621,7 @@ ovirt_version="4.1"
 
 # Detect any configuration fragments and load them into the pre environment
 # Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
+ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh"
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
 ks_source="$(cat /proc/cmdline | sed -n -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
@@ -713,7 +714,6 @@ if [ -n "${ks_source}" ]; then
 	if [ -z "${ks_dev}" ]; then
 		echo "Unable to extract Kickstart source - skipping configuration fragments retrieval" 1>&2
 	else
-		ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh"
 		# Note: for network-based kickstart retrieval methods we extract the relevant nic MAC address to get the machine-specific fragment
 		if [ "${ks_fstype}" = "url" -o "${ks_fstype}" = "nfs" ]; then
 			# Note: we detect the nic device name as the one detaining the route towards the host holding the kickstart script
@@ -1643,7 +1643,7 @@ cat << EOF > /tmp/full-disk
 clearpart --drives=${disk_device_name} --all --initlabel --disklabel=gpt
 # Bootloader placed on MBR, with 3 seconds waiting and with password protection
 bootloader --location=mbr --timeout=3 --password=${root_password} --boot-drive=${disk_device_name} --driveorder=${disk_device_name}
-# Ignore further disk - maybe USB key!!!
+# Ignore further disks
 ignoredisk --only-use=${disk_device_name}
 # Automatically create UEFI or BIOS boot partition depending on hardware capabilities
 reqpart --add-boot
@@ -3197,7 +3197,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018120801"
+script_version="2018121001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3370,11 +3370,12 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 fi
 yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
-# Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt lifecycle and some repositories and release packages may have disappeared - working around here
+# Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	# Disable CentOS-hosted oVirt and GlusterFS repositories
-	yum-config-manager --disable 'ovirt-centos-ovirt*' > /dev/null
-	yum-config-manager --disable 'ovirt-*-centos-gluster*' > /dev/null
+	# Marking CentOS-hosted repositories as skip_if_unavailable
+	for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+		yum-config-manager --save --setopt="${repo_name}.skip_if_unavailable=1" > /dev/null
+	done
 	# Manually add snapshot repositories
 	# Note: adding these manually since the release package may have disappeared
 	# Note: adding skip_if_unavailable since the repos too seem to disappear after a while
@@ -3396,7 +3397,7 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
 
-# Enable use of delta rpms since we are not using our local mirror
+# Enable use of delta rpms since we are not using a local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
@@ -4618,7 +4619,7 @@ semodule -i myks1stboot.pp
 cat << EOF > /etc/rc.d/rc.ks1stboot
 #!/bin/bash
 
-# Start Postfix to setup fifos etc
+# Start Postfix once to setup fifos etc
 systemctl start postfix
 sleep 5
 systemctl stop postfix
