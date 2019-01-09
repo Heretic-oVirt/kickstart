@@ -635,7 +635,7 @@ if [ -n "${ks_source}" ]; then
 		# Note: hardcoded device name for floppy disk
 		ks_dev="/dev/fd0"
 		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
-		# TODO: Detect actual filesystem type on local drive
+		# TODO: Detect actual filesystem type on floppy disk
 		ks_fstype="vfat"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
@@ -3198,7 +3198,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019010801"
+script_version="2019010802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
