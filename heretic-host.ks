@@ -456,7 +456,7 @@ ovirt_version="4.1"
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_heretic_host.sh"
 mkdir /tmp/kscfg-pre
 mkdir /tmp/kscfg-pre/mnt
-ks_source="$(cat /proc/cmdline | sed -n -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/')"
+ks_source="$(cat /proc/cmdline | sed -n -e 's/^.*\s*inst\.ks=\(\S*\)\s*.*$/\1/p')"
 if [ -z "${ks_source}" ]; then
 	# Note: if we are here and no Kickstart has been explicitly specified, then it must have been found by OEMDRV method (needs CentOS >= 7.2)
 	ks_source='hd:LABEL=OEMDRV'
@@ -465,8 +465,9 @@ if [ -n "${ks_source}" ]; then
 	ks_dev=""
 	if echo "${ks_source}" | grep -q '^floppy' ; then
 		# Note: hardcoded device name for floppy disk
-		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
 		ks_dev="/dev/fd0"
+		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
+		# TODO: Detect actual filesystem type on floppy disk
 		ks_fstype="vfat"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
@@ -474,12 +475,11 @@ if [ -n "${ks_source}" ]; then
 			ks_path="/ks.cfg"
 		fi
 		ks_dir="$(echo ${ks_path} | sed -e 's%/[^/]*$%%')"
-	elif echo "${ks_source}" | grep -q '^cdrom:' ; then
+	elif echo "${ks_source}" | grep -q '^cdrom' ; then
 		# Note: cdrom gets accessed as real device name which must be detected - assuming it is the first removable device
 		# Note: hardcoded possible device names for CD/DVD - should cover all reasonable cases
 		# Note: on RHEL>=6 even IDE/ATAPI devices have SCSI device names
 		for dev in /dev/sd[a-z] /dev/sr[0-9]; do
-			ks_dev=""
 			if [ -b "${dev}" ]; then
 				is_removable="$(cat /sys/block/$(basename ${dev})/removable 2>/dev/null)"
 				if [ "${is_removable}" = "1" ]; then
@@ -511,7 +511,8 @@ if [ -n "${ks_source}" ]; then
 				ks_dev=/dev/$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
 			fi
 		fi
-		# TODO: Detect actual filesystem type on local drive - assuming VFAT
+		# Note: hardcoded filesystem type on local drive - assuming VFAT
+		# TODO: Detect actual filesystem type on local drive
 		ks_fstype="vfat"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
@@ -523,9 +524,9 @@ if [ -n "${ks_source}" ]; then
 		fi
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
-		# TODO: support NFS options
 		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
 		ks_fstype="nfs"
+		# TODO: support NFS options
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
@@ -1916,7 +1917,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2018121001"
+script_version="2019010801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
