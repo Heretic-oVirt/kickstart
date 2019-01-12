@@ -3198,7 +3198,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019010802"
+script_version="2019010901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4786,6 +4786,10 @@ systemctl mask firstboot-graphical
 systemctl mask initial-setup-graphical
 systemctl mask initial-setup-text
 systemctl mask initial-setup
+
+# TODO: sometimes it seems that an haveged process lingers on, blocking the end of the post phase
+# TODO: killing any surviving haveged process as a workaround
+pkill -KILL -f havege
 
 ) 2>&1 | tee /root/kickstart_post_1.log
 %end
