@@ -1917,7 +1917,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019011201"
+script_version="2019011202"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3528,21 +3528,11 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
-	# Note: using vmware-hgfsclient (already part of open-vm-tools) for shared folders support
-	shared_folders="\$(vmware-hgfsclient)"
-	if [ -z "\${shared_folders}" ]; then
-		cat <<- EOM >> /etc/fstab
-		# Template line to activate boot-mounted shared folders
-		#.host:/Test	/mnt/hgfs/Test	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
-		EOM
-	else
-		for shared_folder in \${shared_folders} ; do
-			mkdir -p "/mnt/hgfs/\${shared_folder}"
-			cat <<- EOM >> /etc/fstab
-			.host:/\${shared_folder}	/mnt/hgfs/\${shared_folder}	fuse.vmhgfs-fuse	allow_other,auto_unmount,defaults	0 0
-			EOM
-		done
-	fi
+	mkdir -p /mnt/hgfs
+	cat <<- EOM >> /etc/fstab
+	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	EOM
+	mount /mnt/hgfs
 	need_reboot="no"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
 	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
