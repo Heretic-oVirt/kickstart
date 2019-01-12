@@ -940,7 +940,7 @@ done
 
 # TODO: Adapt bonding mode to network setup
 # TODO: disabled for maximum compatibility (LACP needs switch support)
-# Note: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
+# TODO: previously: if not explicitly configured, mgmt network bonding mode is activepassive if there are separate gluster and lan networks, otherwise lacp
 #if [ "${fixed_mgmt_bondmode}" = "false" ]; then
 #	if [ -n "${nics['gluster']}" -a -n "${nics['lan']}" ]; then
 #		bondopts['mgmt']="mode=active-backup;miimon=100"
@@ -1798,7 +1798,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019010801"
+script_version="2019011201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1961,7 +1961,12 @@ fi
 # TODO: verify how to manage ELRepo packages inside a Node image
 
 # Extract oVirt version from installed packages
+# Note: oVirt release package is already installed inside the node image
 ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
+# Marking CentOS-hosted repositories as higher priority than others (mainly to prevent EPEL from replacing oVirt-specific packages) but less than our own (when not in orthodox mode)
+for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
+done
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
@@ -3140,6 +3145,10 @@ RequiredBy=getty.target sshd.service display-manager.service
 EOF
 chmod 644 /etc/systemd/system/ks1stboot.service
 systemctl enable ks1stboot.service
+
+# TODO: sometimes it seems that an haveged process lingers on, blocking the end of the post phase
+# TODO: killing any surviving haveged process as a workaround
+pkill -KILL -f havege
 
 ) 2>&1 | tee /root/kickstart_post_1.log
 %end
