@@ -3198,7 +3198,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019021301"
+script_version="2019021302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3339,8 +3339,7 @@ rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
 # Make YUM more robust in presence of network problems
-yum-config-manager --save --setopt='retries=30' > /dev/null
-yum-config-manager --save --setopt='timeout=60' > /dev/null
+yum-config-manager --save --setopt='retries=30' --setopt='timeout=60' > /dev/null
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
