@@ -1798,7 +1798,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019011202"
+script_version="2019021301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1933,10 +1933,15 @@ yum --enablerepo '*' clean all
 
 # Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside NGN according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
 
+# Make YUM more robust in presence of network problems
+yum-config-manager --save --setopt='retries=30' > /dev/null
+yum-config-manager --save --setopt='timeout=60' > /dev/null
+
 # Add YUM priorities plugin
 yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
 
 # Note: CentOS CR repository is already present inside Node image
+# Note: a partially populated CR repo may introduce dependency-related errors - better to leave this to post-installation manual choices
 
 # Add HVP custom repo
 yum --disableincludes=all -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
@@ -2002,38 +2007,38 @@ fi
 # TODO: verify how to upgrade custom additional packages when upgrading the Node image
 
 # Install Rsync, Wget, patch, expect, setserial, ntpdate and core LSB support
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install rsync wget patch expect setserial ntpdate redhat-lsb-core
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install rsync wget patch expect setserial ntpdate redhat-lsb-core
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum --disableincludes=all -y install haveged
 
 # Install Gdisk, PWGen, HPing, 7Zip and ARJ
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install hping3 p7zip{,-plugins} arj pwgen
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install gdisk
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install hping3 p7zip{,-plugins} arj pwgen
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install gdisk
 
 # Install Nmon and Dstat
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install nmon dstat
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install nmon dstat
 
 # Install PDSH
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install pdsh pdsh-rcmd-ssh
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install pdsh pdsh-rcmd-ssh
 
 # Install virtualization tools support packages
 if dmidecode -s system-manufacturer | egrep -q "(innotek|Parallels)" ; then
 	# Install dkms for virtualization tools support
 	# TODO: configure virtualization tools under dkms
 	# TODO: disabled since required development packages cannot be installed
-	#yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install dkms
+	#yum --disableincludes=all -y --enablerepo base --enablerepo updates install dkms
 	echo "DKMS unsupported"
 elif dmidecode -s system-manufacturer | grep -q "Red.*Hat" ; then
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install qemu-guest-agent
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install qemu-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "oVirt" ; then
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install ovirt-guest-agent
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install ovirt-guest-agent
 elif dmidecode -s system-manufacturer | grep -q "Microsoft" ; then
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install hyperv-daemons
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install hyperv-daemons
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support installed here (since it is included in base distro now)
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install open-vm-tools fuse
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install open-vm-tools fuse
 fi
 
 # Tune package list to underlying platform
@@ -2048,7 +2053,7 @@ else
 	fi
 
 	# Install MCE logging/management service
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install mcelog
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install mcelog
 fi
 # Install oVirt Host
 # Note: the following packages should already be present on a Node image
@@ -2068,12 +2073,12 @@ yum --disableincludes=all -y install glusterfs glusterfs-fuse glusterfs-server g
 
 # Install custom packages for NAS functions
 if [ "${use_vdo}" = "true" ] ; then
-	yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install vdo kmod-kvdo
+	yum --disableincludes=all -y --enablerepo base --enablerepo updates install vdo kmod-kvdo
 fi
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install krb5-workstation samba samba-client samba-winbind samba-winbind-clients samba-winbind-krb5-locator samba-vfs-glusterfs ctdb nfs-ganesha gluster-block gstatus
 
 # Install custom packages for OVN functions
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install openvswitch openvswitch-ovn-common openvswitch-ovn-host python-openvswitch ovirt-provider-ovn-driver
 
 # Install oVirt Engine appliance (on master node only)
 if [ "${my_index}" = "${master_index}" ]; then
@@ -2081,14 +2086,14 @@ if [ "${my_index}" = "${master_index}" ]; then
 fi
 
 # Install further packages for additional functions: Bind
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr install bind
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install bind
 
 # Install Bareos tools, client (file daemon + console) and storage daemon (all with Gluster support)
 yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
 # TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo cr --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo hvp-rhgs-rebuild install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -3070,9 +3075,10 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
 	mkdir -p /mnt/hgfs
 	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,x-systemd.requires=vmtoolsd.service,defaults	0 0
 	EOM
 	mount /mnt/hgfs
 	need_reboot="no"
