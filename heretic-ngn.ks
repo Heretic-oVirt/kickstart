@@ -1798,7 +1798,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019021301"
+script_version="2019021302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1934,8 +1934,7 @@ yum --enablerepo '*' clean all
 # Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside NGN according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
 
 # Make YUM more robust in presence of network problems
-yum-config-manager --save --setopt='retries=30' > /dev/null
-yum-config-manager --save --setopt='timeout=60' > /dev/null
+yum-config-manager --save --setopt='retries=30' --setopt='timeout=60' > /dev/null
 
 # Add YUM priorities plugin
 yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
