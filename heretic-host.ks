@@ -1917,7 +1917,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019011202"
+script_version="2019021301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2079,6 +2079,10 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
+# Make YUM more robust in presence of network problems
+yum-config-manager --save --setopt='retries=30' > /dev/null
+yum-config-manager --save --setopt='timeout=60' > /dev/null
+
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
 
@@ -2146,7 +2150,6 @@ fi
 # Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
-# TODO: investigate whether to disable fastestmirror yum plugin too (may interfer in round-robin-DNS-served names?)
 for repofile in /etc/yum.repos.d/*.repo; do
 	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
 		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
@@ -2156,9 +2159,17 @@ for repofile in /etc/yum.repos.d/*.repo; do
 done
 # Modify baseurl definitions to allow effective use of our proxy cache
 sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
+# Disable fastestmirror yum plugin too
+sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 
 # Enable use of delta rpms since we are not using a local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
+
+# Correctly initialize YUM cache again before actual bulk installations/upgrades
+# Note: following advice in https://access.redhat.com/articles/1320623
+# TODO: remove when fixed upstream
+rm -rf /var/cache/yum/*
+yum --enablerepo '*' clean all
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
 yum -y upgrade
@@ -3528,9 +3539,10 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
 	mkdir -p /mnt/hgfs
 	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,x-systemd.requires=vmtoolsd.service,defaults	0 0
 	EOM
 	mount /mnt/hgfs
 	need_reboot="no"
