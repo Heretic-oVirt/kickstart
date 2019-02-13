@@ -2997,14 +2997,14 @@ hvp_engine_setup_timeout: 7200
 hvp_engine_name: ${engine_name}
 hvp_engine_domainname: "{{ hvp_management_domainname }}"
 hvp_engine_ip: "{{ lookup('dig', hvp_engine_name + '.' + hvp_engine_domainname + '.') }}"
-hvp_engine_netprefix: ${PREFIX}
+hvp_engine_netprefix: "${PREFIX}"
 # TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
 # Note: when missing an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
 hvp_switch_ip: "${switch_ip}"
 # Note: generally, we keep a distinct proper gateway address on the management network only for network routing configuration
-hvp_gateway_ip: ${dhcp_gateway}
+hvp_gateway_ip: "${dhcp_gateway}"
 hvp_metrics_name: ${metrics_name}
 hvp_metrics_domainname: "{{ hvp_management_domainname }}"
 hvp_timezone: ${local_timezone}
@@ -3013,7 +3013,7 @@ hvp_spice_pki_subject: "C=EN, L=Test, O=Test, CN=Test"
 hvp_pki_subject: "/C=EN/L=Test/O=Test/CN=Test"
 hvp_ca_subject: "/C=EN/L=Test/O=Test/CN=TestCA"
 hvp_admin_username: ${admin_username}
-hvp_admin_password: ${admin_password}
+hvp_admin_password: '${admin_password}'
 hvp_email_sender: ${notification_sender}
 hvp_email_receiver: ${notification_receiver}
 
@@ -3086,17 +3086,17 @@ cat << EOF >> hvp.yaml
 ## Engine credentials:
 url: "https://{{ hvp_engine_name }}.{{ hvp_engine_domainname }}/ovirt-engine/api"
 username: admin@internal
-password: ${root_password}
+password: '${root_password}'
 ca_file: /etc/pki/ovirt-engine/ca.pem
 
 ## Hosts credentials:
 # Note: the user must manually confirm BMC settings by editing here if not explicitly confirmed by non-default settings
 # TODO: add support for BMC options
-host_password: ${root_password}
+host_password: '${root_password}'
 ${bmc_vars_comment}host_bmc_type: ${bmc_type}
 ${bmc_vars_comment}#host_bmc_options: []
 ${bmc_vars_comment}host_bmc_user: ${bmc_username}
-${bmc_vars_comment}host_bmc_password: ${bmc_password}
+${bmc_vars_comment}host_bmc_password: '${bmc_password}'
 
 # Env:
 ## Datacenter:
@@ -3136,7 +3136,7 @@ engine_sd_mountopts: "{{ glusterfs_mountopts }}"
 hvp_static_address_block_start: $((${dhcp_offset} + ${dhcp_count}))
 
 got_mgmt_network: true
-mgmt_network: $(unset PREFIX ; eval $(ipcalc -s -p "${network['mgmt']}" "${netmask['mgmt']}"); echo "${network['mgmt']}/${PREFIX}")
+mgmt_network: "$(unset PREFIX ; eval $(ipcalc -s -p "${network['mgmt']}" "${netmask['mgmt']}"); echo "${network['mgmt']}/${PREFIX}")"
 hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
 
 got_gluster_network: ${gluster_network}
@@ -3164,7 +3164,7 @@ guest_vms:
 hvp_adjoin_domain: ${ad_subdomain_prefix}.${domain_name[${ad_zone}]}
 hvp_adjoin_realm: ${realm_name}
 hvp_adjoin_username: ${winadmin_username}
-hvp_adjoin_password: ${winadmin_password}
+hvp_adjoin_password: '${winadmin_password}'
 hvp_netbios_domainname: ${netbios_domain_name}
 hvp_netbios_storagename: ${netbios_storage_name}
 hvp_ad_range: 9999-1999999999
@@ -3198,7 +3198,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019011201"
+script_version="2019021301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3337,6 +3337,10 @@ ln -sf $rootdisk /dev/root
 # TODO: remove when fixed upstream
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
+
+# Make YUM more robust in presence of network problems
+yum-config-manager --save --setopt='retries=30' > /dev/null
+yum-config-manager --save --setopt='timeout=60' > /dev/null
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
@@ -4658,9 +4662,10 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
 	mkdir -p /mnt/hgfs
 	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,x-systemd.requires=vmtoolsd.service,defaults	0 0
 	EOM
 	mount /mnt/hgfs
 	need_reboot="no"
