@@ -466,9 +466,8 @@ if [ -n "${ks_source}" ]; then
 	if echo "${ks_source}" | grep -q '^floppy' ; then
 		# Note: hardcoded device name for floppy disk
 		ks_dev="/dev/fd0"
-		# Note: hardcoded filesystem type on floppy disk - assuming VFAT
-		# TODO: Detect actual filesystem type on floppy disk
-		ks_fstype="vfat"
+		# Note: filesystem type on floppy disk autodetected
+		ks_fstype="*"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $2}')"
 		if [ -z "${ks_path}" ]; then
@@ -511,9 +510,8 @@ if [ -n "${ks_source}" ]; then
 				ks_dev=/dev/$(lsblk -r -n -o name,label | awk "/\\<$(echo ${ks_label} | sed -e 's%\([./*\\]\)%\\\1%g')\\>/ {print \$1}" | head -1)
 			fi
 		fi
-		# Note: hardcoded filesystem type on local drive - assuming VFAT
-		# TODO: Detect actual filesystem type on local drive
-		ks_fstype="vfat"
+		# Note: filesystem type on local drive autodetected
+		ks_fstype="*"
 		ks_fsopt="ro"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
@@ -567,7 +565,8 @@ if [ -n "${ks_source}" ]; then
 				wget -P /tmp/kscfg-pre "${ks_dev}/${custom_frag}" 
 			done
 		else
-			mount -t ${ks_fstype} -o ${ks_fsopt} ${ks_dev} /tmp/kscfg-pre/mnt
+			# Note: filesystem type autodetected
+			mount -o ${ks_fsopt} ${ks_dev} /tmp/kscfg-pre/mnt
 			for custom_frag in ${ks_custom_frags} ; do
 				echo "Attempting filesystem retrieval of ${custom_frag}" 1>&2
 				if [ -f "/tmp/kscfg-pre/mnt${ks_dir}/${custom_frag}" ]; then
@@ -1917,7 +1916,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019021302"
+script_version="2019022301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2480,6 +2479,9 @@ Continued use of this computer implies acceptance of the above conditions.
 
 EOF
 chmod 644 /etc/{issue*,motd}
+
+# Enable persistent Journal logs
+mkdir -p /var/log/journal
 
 # Configure Logcheck
 sed -i -e "/^SENDMAILTO=/s/logcheck/${notification_receiver}/" /etc/logcheck/logcheck.conf
