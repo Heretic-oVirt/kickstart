@@ -443,8 +443,8 @@ if [ -n "${ks_source}" ]; then
 	elif echo "${ks_source}" | grep -q '^nfs:' ; then
 		# Note: blindly extracting NFS server from Kickstart commandline
 		ks_host="$(echo ${ks_source} | awk -F: '{print $2}')"
-		# TODO: support NFS options
 		ks_fstype="nfs"
+		# TODO: support NFS options
 		ks_fsopt="ro,nolock"
 		ks_path="$(echo ${ks_source} | awk -F: '{print $3}')"
 		if [ -z "${ks_path}" ]; then
@@ -1797,7 +1797,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019022301"
+script_version="2019022701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1966,14 +1966,18 @@ fi
 # Extract oVirt version from installed packages
 # Note: oVirt release package is already installed inside the node image
 ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
-# Marking CentOS-hosted repositories as higher priority than others (mainly to prevent EPEL from replacing oVirt-specific packages) but less than our own (when not in orthodox mode)
+# Marking CentOS-hosted oVirt repositories as higher priority than others (mainly to prevent EPEL from replacing oVirt-specific packages) but less than our own (when not in orthodox mode)
 for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
+done
+# Marking CentOS Base repositories as higher priority than others (mainly to prevent CentOS-hosted oVirt repositories from masking newer packages in base/updates/extras) but less than our own (when not in orthodox mode)
+for repo_name in base updates extras; do
 	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
 done
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	# Marking CentOS-hosted repositories as skip_if_unavailable
+	# Marking CentOS-hosted oVirt repositories as skip_if_unavailable
 	for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
 		yum-config-manager --save --setopt="${repo_name}.skip_if_unavailable=1" > /dev/null
 	done
