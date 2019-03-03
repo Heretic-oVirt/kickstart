@@ -1924,7 +1924,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019030301"
+script_version="2019030302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1998,8 +1998,8 @@ declare -A domain_name
 declare -A reverse_domain_name
 declare -A test_ip
 declare -A bridge_name
-define -A hvp_repo_baseurl
-define -A hvp_repo_gpgkey
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
 
 master_index="0"
 nicmacfix="false"
