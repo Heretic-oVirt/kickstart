@@ -49,6 +49,10 @@
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
+# Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
+# Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
+# Note: to force custom repo base URL for repo reponame add hvp_reponame_baseurl=HHHHH where HHHHH is the base URL (including variables like $releasever and $basearch)
+# Note: to force custom repo GPG key URL for repo reponame add hvp_reponame_gpgkey=GGGGG where GGGGG is the GPG key URL
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
 # Note: the default behaviour involves ignoring use of VDO on nodes
@@ -88,6 +92,10 @@
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
 # Note: the default oVirt version is 4.1
+# Note: the default number of retries after a Yum failure is 10
+# Note: the default sleep time between retries after a Yum failure is 10 seconds
+# Note: the default repo base URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
+# Note: the default repo GPG key URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_heretic_host.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
@@ -1916,7 +1924,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019022701"
+script_version="2019030301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1978,6 +1986,10 @@ unset ovirt_nightly_mode
 unset use_vdo
 unset ovirt_version
 unset notification_receiver
+unset yum_sleep_time
+unset yum_retries
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
 
 # Define associative arrays
 declare -A node_name
@@ -1986,6 +1998,8 @@ declare -A domain_name
 declare -A reverse_domain_name
 declare -A test_ip
 declare -A bridge_name
+define -A hvp_repo_baseurl
+define -A hvp_repo_gpgkey
 
 master_index="0"
 nicmacfix="false"
@@ -1994,7 +2008,31 @@ ovirt_nightly_mode="false"
 use_vdo="false"
 ovirt_version="4.1"
 
+yum_sleep_time="10"
+yum_retries="10"
+
 notification_receiver="monitoring@localhost"
+
+# Add a wrapper for Yum to make it more robust against network/mirror failures
+function yum ()
+{
+	local result
+	local retries_left
+
+	/usr/bin/yum "$@"
+	result=$?
+	retries_left=${yum_retries}
+
+	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
+		sleep ${yum_sleep_time}
+		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		/usr/bin/yum "$@"
+		result=$?
+		retries_left=$((retries_left - 1))
+	done
+
+	return ${result}
+}
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_heretic_host.sh hvp_parameters_*:*.sh"
@@ -2052,6 +2090,18 @@ if [ -n "${given_ovirt_version}" ]; then
 	ovirt_version="${given_ovirt_version}"
 fi
 
+# Determine number of Yum retries on failure
+given_yum_retries=$(sed -n -e 's/^.*hvp_yum_retries=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_retries}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_retries="${given_yum_retries}"
+fi
+
+# Determine sleep time between Yum retries on failure
+given_yum_sleep_time=$(sed -n -e 's/^.*hvp_yum_sleep_time=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_sleep_time="${given_yum_sleep_time}"
+fi
+
 # Determine notification receiver email address
 given_receiver_email=$(sed -n -e "s/^.*hvp_receiver_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_receiver_email}" ]; then
@@ -2078,8 +2128,29 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Make YUM more robust in presence of network problems
-yum-config-manager --save --setopt='retries=30' --setopt='timeout=60' > /dev/null
+# Allow specifying custom base URLs for repositories and GPG keys
+# Note: done here to cater for those repos already installed by default
+for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+	# Take URL from parameters files or hardcoded defaults
+	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+	# Take URL from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		repo_baseurl="${given_repo_baseurl}"
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		repo_gpgkey="${given_repo_gpgkey}"
+	fi
+	# Force any custom URL
+	if [ -n "${repo_baseurl}" ]; then
+		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+	fi
+	if [ -n "${repo_gpgkey}" ]; then
+		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+	fi
+done
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
@@ -2151,6 +2222,19 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 fi
 # Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
 
+# Add Webmin repo
+# TODO: adapt Cockpit from NGN installation and switch to using that instead
+cat << EOF > /etc/yum.repos.d/webmin.repo
+[webmin]
+name = Webmin Distribution Neutral
+baseurl = http://download.webmin.com/download/yum
+gpgcheck = 1
+enabled = 1
+gpgkey = http://www.webmin.com/jcameron-key.asc
+skip_if_unavailable = 1
+EOF
+chmod 644 /etc/yum.repos.d/webmin.repo
+
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
 for repofile in /etc/yum.repos.d/*.repo; do
 	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
@@ -2159,10 +2243,32 @@ for repofile in /etc/yum.repos.d/*.repo; do
 		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 	fi
 done
-# Modify baseurl definitions to allow effective use of our proxy cache
-sed -i -e 's>http://download.fedoraproject.org/pub/epel/7/>http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/>g' /etc/yum.repos.d/ovirt-${ovirt_version}-dependencies.repo
 # Disable fastestmirror yum plugin too
 sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+
+# Allow specifying custom base URLs for repositories and GPG keys
+# Note: repeated here to allow applying custom base URL to further repos installed above
+for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+	# Take URL from parameters files or hardcoded defaults
+	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+	# Take URL from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		repo_baseurl="${given_repo_baseurl}"
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		repo_gpgkey="${given_repo_gpgkey}"
+	fi
+	# Force any custom URL
+	if [ -n "${repo_baseurl}" ]; then
+		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+	fi
+	if [ -n "${repo_gpgkey}" ]; then
+		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+	fi
+done
 
 # Enable use of delta rpms since we are not using a local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
@@ -2276,17 +2382,6 @@ yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python pyt
 
 # Install Webmin for generic web management
 # TODO: adapt Cockpit from NGN installation and switch to using that instead
-# Add Webmin repo
-cat << EOF > /etc/yum.repos.d/webmin.repo
-[webmin]
-name = Webmin Distribution Neutral
-baseurl = http://download.webmin.com/download/yum
-gpgcheck = 1
-enabled = 1
-gpgkey = http://www.webmin.com/jcameron-key.asc
-skip_if_unavailable = 1
-EOF
-chmod 644 /etc/yum.repos.d/webmin.repo
 yum --disableincludes=all -y install webmin
 # Note: immediately stop webmin started by postinst scriptlet
 /etc/init.d/webmin stop
@@ -2696,6 +2791,7 @@ EOF
 chmod 644 /var/www/html/index.html
 
 # Configure Webmin
+# TODO: adapt Cockpit from NGN installation and switch to using that instead
 # Add "/manage/" location with forced redirect to Webmin port in Apache configuration
 cat << EOF > /etc/httpd/conf.d/webmin.conf
 #
