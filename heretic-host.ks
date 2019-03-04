@@ -1924,7 +1924,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019030302"
+script_version="2019030401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2013,9 +2013,8 @@ yum_retries="10"
 
 notification_receiver="monitoring@localhost"
 
-# Add a wrapper for Yum to make it more robust against network/mirror failures
-function yum ()
-{
+# A wrapper for Yum to make it more robust against network/mirror failures
+yum() {
 	local result
 	local retries_left
 
@@ -2131,10 +2130,10 @@ yum --enablerepo '*' clean all
 # Allow specifying custom base URLs for repositories and GPG keys
 # Note: done here to cater for those repos already installed by default
 for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
-	# Take URL from parameters files or hardcoded defaults
+	# Take URLs from parameters files or hardcoded defaults
 	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-	# Take URL from kernel commandline
+	# Take URLs from kernel commandline
 	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_repo_baseurl}" ]; then
 		repo_baseurl="${given_repo_baseurl}"
@@ -2143,7 +2142,7 @@ for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' 
 	if [ -n "${given_repo_gpgkey}" ]; then
 		repo_gpgkey="${given_repo_gpgkey}"
 	fi
-	# Force any custom URL
+	# Force any custom URLs
 	if [ -n "${repo_baseurl}" ]; then
 		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
 	fi
@@ -2223,7 +2222,7 @@ fi
 # Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
 
 # Add Webmin repo
-# TODO: adapt Cockpit from NGN installation and switch to using that instead
+# TODO: adapt Cockpit like in NGN and switch to using that instead
 cat << EOF > /etc/yum.repos.d/webmin.repo
 [webmin]
 name = Webmin Distribution Neutral
@@ -2247,7 +2246,7 @@ done
 sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 
 # Allow specifying custom base URLs for repositories and GPG keys
-# Note: repeated here to allow applying custom base URL to further repos installed above
+# Note: repeated here to allow applying to further repos installed above
 for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
 	# Take URL from parameters files or hardcoded defaults
 	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
@@ -2381,7 +2380,7 @@ yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemo
 yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
 
 # Install Webmin for generic web management
-# TODO: adapt Cockpit from NGN installation and switch to using that instead
+# TODO: adapt Cockpit like in NGN and switch to using that instead
 yum --disableincludes=all -y install webmin
 # Note: immediately stop webmin started by postinst scriptlet
 /etc/init.d/webmin stop
@@ -2791,7 +2790,7 @@ EOF
 chmod 644 /var/www/html/index.html
 
 # Configure Webmin
-# TODO: adapt Cockpit from NGN installation and switch to using that instead
+# TODO: adapt Cockpit like in NGN and switch to using that instead
 # Add "/manage/" location with forced redirect to Webmin port in Apache configuration
 cat << EOF > /etc/httpd/conf.d/webmin.conf
 #
