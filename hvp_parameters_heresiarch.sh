@@ -159,3 +159,6 @@ notification_sender="root@localhost"
 notification_receiver="monitoring@localhost"
 
 ovirt_version="4.1"
+
+yum_sleep_time="10"
+yum_retries="10"
