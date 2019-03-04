@@ -48,6 +48,8 @@
 # Note: to force custom email address for notification receiver add hvp_receiver_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
+# Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
+# Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
 # Note: the default behaviour involves ignoring use of VDO on nodes
@@ -86,6 +88,8 @@
 # Note: the default notification email address for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
+# Note: the default number of retries after a Yum failure is 10
+# Note: the default sleep time between retries after a Yum failure is 10 seconds
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
@@ -1797,7 +1801,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019022701"
+script_version="2019030401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1859,6 +1863,8 @@ unset nicmacfix
 unset orthodox_mode
 unset ovirt_nightly_mode
 unset use_vdo
+unset yum_sleep_time
+unset yum_retries
 
 # Define associative arrays
 declare -A node_name
@@ -1873,6 +1879,29 @@ nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
 use_vdo="false"
+
+yum_sleep_time="10"
+yum_retries="10"
+
+# A wrapper for Yum to make it more robust against network/mirror failures
+yum() {
+	local result
+	local retries_left
+
+	/usr/bin/yum "$@"
+	result=$?
+	retries_left=${yum_retries}
+
+	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
+		sleep ${yum_sleep_time}
+		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		/usr/bin/yum "$@"
+		result=$?
+		retries_left=$((retries_left - 1))
+	done
+
+	return ${result}
+}
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_*:*.sh"
@@ -1924,6 +1953,18 @@ if echo "${given_master_index}" | grep -q '^[[:digit:]]\+$' ; then
 	master_index="${given_master_index}"
 fi
 
+# Determine number of Yum retries on failure
+given_yum_retries=$(sed -n -e 's/^.*hvp_yum_retries=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_retries}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_retries="${given_yum_retries}"
+fi
+
+# Determine sleep time between Yum retries on failure
+given_yum_sleep_time=$(sed -n -e 's/^.*hvp_yum_sleep_time=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_sleep_time="${given_yum_sleep_time}"
+fi
+
 # Correctly initialize YUM cache to avoid 404 errors
 # Note: following advice in https://access.redhat.com/articles/1320623
 # TODO: remove when fixed upstream
@@ -1931,9 +1972,6 @@ rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
 # Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside NGN according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
-
-# Make YUM more robust in presence of network problems
-yum-config-manager --save --setopt='retries=30' --setopt='timeout=60' > /dev/null
 
 # Add YUM priorities plugin
 yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
