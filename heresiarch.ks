@@ -1784,7 +1784,7 @@ for zone in "${!network[@]}" ; do
 done
 for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" -a "${zone}" != "gluster" ]; then
-		common_network_params="${common_network_params} hvp_${zone}_bridge=${zone_bridge_name}"
+		common_network_params="${common_network_params} hvp_${zone}_bridge=${bridge_name[${zone}]}"
 	fi
 done
 
@@ -3197,7 +3197,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019022301"
+script_version="2019030401"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
