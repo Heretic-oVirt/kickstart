@@ -1924,7 +1924,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019030401"
+script_version="2019031101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2127,6 +2127,18 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
+# Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
+# Note: done here to cater for those repos already installed by default
+for repofile in /etc/yum.repos.d/*.repo; do
+	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+		sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+	fi
+done
+# Disable fastestmirror yum plugin too
+sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+
 # Allow specifying custom base URLs for repositories and GPG keys
 # Note: done here to cater for those repos already installed by default
 for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
@@ -2235,6 +2247,7 @@ EOF
 chmod 644 /etc/yum.repos.d/webmin.repo
 
 # Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
+# Note: repeated here to allow applying to further repos installed above
 for repofile in /etc/yum.repos.d/*.repo; do
 	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
 		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
@@ -2242,8 +2255,6 @@ for repofile in /etc/yum.repos.d/*.repo; do
 		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 	fi
 done
-# Disable fastestmirror yum plugin too
-sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 
 # Allow specifying custom base URLs for repositories and GPG keys
 # Note: repeated here to allow applying to further repos installed above
