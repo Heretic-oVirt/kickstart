@@ -108,5 +108,8 @@ yum_sleep_time="10"
 yum_retries="10"
 
 # Note: default base and GPG-key values for repos are those inside .repo files - reported here as an example
+#hvp_repo_baseurl['base']="http://centos.mirror.garr.it/centos/7/os/x86_64/"
+#hvp_repo_baseurl['updates']="http://centos.mirror.garr.it/centos/7/updates/x86_64/"
+#hvp_repo_baseurl['extras']="http://centos.mirror.garr.it/centos/7/extras/x86_64/"
 #hvp_repo_baseurl['ovirt-4.1-epel']="http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/7/"
 #hvp_repo_gpgkey['ovirt-4.1-epel']="http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/RPM-GPG-KEY-EPEL-7"
