@@ -3262,7 +3262,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019031101"
+script_version="2019031701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3323,6 +3323,7 @@ unset nolocalvirt
 unset ovirt_version
 unset yum_sleep_time
 unset yum_retries
+unset custom_yum_conf
 unset hvp_repo_baseurl
 unset hvp_repo_gpgkey
 
@@ -3343,6 +3344,8 @@ ovirt_version="4.1"
 
 yum_sleep_time="10"
 yum_retries="10"
+
+custom_yum_conf="false"
 
 # A wrapper for Yum to make it more robust against network/mirror failures
 yum() {
@@ -3423,6 +3426,26 @@ if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
 	yum_sleep_time="${given_yum_sleep_time}"
 fi
 
+# Determine custom URLs for repositories and GPG keys
+for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 's/^hvp_//' -e 's/_baseurl$//' -e 's/_gpgkey$//' | sort -u); do
+	# Take URLs from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+	fi
+done
+# Verify whether a custom conf has been established (either from commandline parsing or from parameter configuration files)
+url_count="${#hvp_repo_baseurl[@]}"
+key_count="${#hvp_repo_gpgkey[@]}"
+ref_count=$((url_count + key_count))
+if [ "${ref_count}" -gt 1 ]; then
+	custom_yum_conf="true"
+fi
+
 # Create /dev/root symlink for grubby (must differentiate for use of LVM or MD based "/")
 # TODO: Open a Bugzilla notification
 # TODO: remove when grubby gets fixed
@@ -3445,7 +3468,7 @@ yum --enablerepo '*' clean all
 
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 # Note: done here to cater for those repos already installed by default
-if egrep -q 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline ; then
+if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
 		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
 			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
@@ -3455,31 +3478,20 @@ if egrep -q 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline ; then
 	done
 	# Disable fastestmirror yum plugin too
 	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos already installed by default
+	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
 fi
-
-# Allow specifying custom base URLs for repositories and GPG keys
-# Note: done here to cater for those repos already installed by default
-for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
-	# Take URLs from parameters files or hardcoded defaults
-	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
-	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-	# Take URLs from kernel commandline
-	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_baseurl}" ]; then
-		repo_baseurl="${given_repo_baseurl}"
-	fi
-	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_gpgkey}" ]; then
-		repo_gpgkey="${given_repo_gpgkey}"
-	fi
-	# Force any custom URLs
-	if [ -n "${repo_baseurl}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
-	fi
-	if [ -n "${repo_gpgkey}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
-	fi
-done
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
@@ -3561,7 +3573,7 @@ fi
 
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 # Note: repeated here to allow applying to further repos installed above
-if egrep -q 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline ; then
+if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
 		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
 			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
@@ -3569,34 +3581,28 @@ if egrep -q 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline ; then
 			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 		fi
 	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
 fi
-
-# Allow specifying custom base URLs for repositories and GPG keys
-# Note: repeated here to allow applying to further repos installed above
-for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
-	# Take URL from parameters files or hardcoded defaults
-	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
-	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-	# Take URL from kernel commandline
-	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_baseurl}" ]; then
-		repo_baseurl="${given_repo_baseurl}"
-	fi
-	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_gpgkey}" ]; then
-		repo_gpgkey="${given_repo_gpgkey}"
-	fi
-	# Force any custom URL
-	if [ -n "${repo_baseurl}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
-	fi
-	if [ -n "${repo_gpgkey}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
-	fi
-done
 
 # Enable use of delta rpms since we are not using a local mirror
 yum-config-manager --save --setopt='deltarpm=1' > /dev/null
+
+# Correctly initialize YUM cache again before actual bulk installations/upgrades
+# Note: following advice in https://access.redhat.com/articles/1320623
+# TODO: remove when fixed upstream
+rm -rf /var/cache/yum/*
+yum --enablerepo '*' clean all
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
 yum -y upgrade
