@@ -327,6 +327,8 @@ unset notification_receiver
 unset keyboard_layout
 unset local_timezone
 unset ovirt_version
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
 
 # Hardcoded defaults
 
@@ -357,6 +359,9 @@ engine_name="celestia"
 metrics_name="luna"
 
 storage_name="discord"
+
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
 
 declare -A gluster_vol_name
 gluster_vol_name['engine']="engine"
@@ -1924,7 +1929,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019031101"
+script_version="2019031701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
