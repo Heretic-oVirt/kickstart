@@ -2146,12 +2146,12 @@ yum_retries="${yum_retries}"
 EOF
 for repo_name in "${!hvp_repo_baseurl[@]}" ; do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
-	hvp_repo_baseurl['${repo_name}']=${hvp_repo_baseurl[${repo_name}]}
+	hvp_repo_baseurl['${repo_name}']='${hvp_repo_baseurl[${repo_name}]}'
 	EOF
 done
 for repo_name in "${!hvp_repo_gpgkey[@]}" ; do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
-	hvp_repo_gpgkey['${repo_name}']=${hvp_repo_gpgkey[${repo_name}]}
+	hvp_repo_gpgkey['${repo_name}']='${hvp_repo_gpgkey[${repo_name}]}'
 	EOF
 done
 # Create kickstart-specific configuration parameters fragments
@@ -3262,7 +3262,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019031701"
+script_version="2019031702"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
