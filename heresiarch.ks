@@ -1749,9 +1749,9 @@ if echo "${given_stage2}" | grep -q '^hd:' ; then
 		# or an HTTP/FTP area as in:
 		# url --url http://mirror.centos.org/centos/7/os/x86_64
 		# Explicitly list further repositories
-		#repo --name="Local-Media"  --baseurl=cdrom:sr0 --cost=100
+		#repo --name="Local-Media"  --baseurl=cdrom:sr0 --cost=1001
 		# Note: network repo added anyway to avoid installation failures when using a Minimal image
-		repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=100
+		repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=1001
 
 		EOF
 	else
@@ -1777,7 +1777,7 @@ else
 	# cdrom
 	# Explicitly list further repositories
 	# Note: network repo added anyway to avoid installation failures when a Minimal image has been copied
-	repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=100
+	repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=1001
 	EOF
 fi
 
@@ -3280,7 +3280,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019032001"
+script_version="2019032003"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3377,6 +3377,8 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: adding a complete cleanup before retrying
+		/usr/bin/yum clean all
 		/usr/bin/yum "$@"
 		result=$?
 		retries_left=$((retries_left - 1))
@@ -3525,7 +3527,7 @@ fi
 yum -y install yum-plugin-priorities
 
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
-# Note: a partially populated CR repo may introduce dependency-related errors - better to leave this to post-installation manual choices
+# Note: a partially populated CR repo may introduce dependency-related errors - better leave this to post-installation manual choices
 #yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
@@ -3624,7 +3626,8 @@ if [ "${custom_yum_conf}" = "true" ]; then
 fi
 
 # Enable use of delta rpms since we are not using a local mirror
-yum-config-manager --save --setopt='deltarpm=1' > /dev/null
+# Note: this may introduce HTTP 416 errors - better leave this to post-installation manual choices
+#yum-config-manager --save --setopt='deltarpm=1' > /dev/null
 
 # Correctly initialize YUM cache again before actual bulk installations/upgrades
 # Note: following advice in https://access.redhat.com/articles/1320623
