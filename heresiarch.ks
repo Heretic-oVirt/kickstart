@@ -206,11 +206,6 @@ selinux --enforcing
 # Disk configuration dynamically generated in pre section below
 %include /tmp/full-disk
 
-# Explicitly list provided repositories
-# Note: no additional repos setup - further packages/updates installed manually in post section
-#repo --name="CentOS"  --baseurl=cdrom:sr0 --cost=100
-#repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/centos
-
 # Packages list - package groups are preceded by an "@" sign - excluded packages by an "-" sign
 # Note: some virtualization technologies (Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
 %packages
@@ -1726,32 +1721,42 @@ fi
 # Create install source selection fragment
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
+# Define proper network source
+os_baseurl="http://mirror.centos.org/centos/7/os/x86_64"
+# Prefer custom OS repo URL, if any
+if [ -n "${hvp_repo_baseurl['base']}" ]; then
+	os_baseurl="${hvp_repo_baseurl['base']}"
+fi
 if echo "${given_stage2}" | grep -q '^hd:' ; then
 	# Detect use of NetInstall media
 	if [ -d /run/install/repo/repodata ]; then
-		# Note: we know that the local stage2 comes from a full DVD image (Packages repo included)
+		# Note: we know that the local stage2 comes from a Full/Minimal image (Packages repo included)
 		cat <<- EOF > /tmp/full-installsource
 		# Use the inserted optical media as in:
 		cdrom
 		# alternatively specify a NFS network share as in:
 		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
 		# or an HTTP/FTP area as in:
-		#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
+		# url --url http://mirror.centos.org/centos/7/os/x86_64
+		# Explicitly list further repositories
+		#repo --name="Local-Media"  --baseurl=cdrom:sr0 --cost=100
+		# Note: network repo added anyway to avoid installation failures when using a Minimal image
+		repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=100
+
 		EOF
 	else
-		# Note: since we detected use of NetInstall media (no local repo) we use network install source from CentOS mirrors
-		given_stage2="http://mirror.centos.org/centos/7/os/x86_64"
+		# Note: since we detected use of NetInstall media (no local repo) we directly use a network install source
 		cat <<- EOF > /tmp/full-installsource
 		# Specify a NFS network share as in:
 		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
 		# or an HTTP/FTP area as in:
-		url --url ${given_stage2}
+		url --url ${os_baseurl}
 		# alternatively use the inserted optical media as in:
-		#cdrom
+		# cdrom
 		EOF
 	fi
 else
-	# Note: we assume that a remote stage2 has been copied together with the full media content preserving the default DVD structure
+	# Note: we assume that a remote stage2 has been copied preserving the default Full/Minimal image structure
 	# TODO: we assume a HTTP/FTP area - add support for NFS
 	cat <<- EOF > /tmp/full-installsource
 	# Specify a NFS network share as in:
@@ -1759,7 +1764,10 @@ else
 	# or an HTTP/FTP area as in:
 	url --url ${given_stage2}
 	# alternatively use the inserted optical media as in:
-	#cdrom
+	# cdrom
+	# Explicitly list further repositories
+	# Note: network repo added anyway to avoid installation failures when a Minimal image has been copied
+	repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=100
 	EOF
 fi
 
@@ -3262,7 +3270,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019031702"
+script_version="2019031901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
