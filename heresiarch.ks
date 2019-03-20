@@ -962,11 +962,21 @@ for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 
 	# Take URLs from kernel commandline
 	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_repo_baseurl}" ]; then
-		hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
 	fi
 	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_repo_gpgkey}" ]; then
-		hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
 	fi
 done
 
@@ -3270,7 +3280,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019031901"
+script_version="2019032001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3439,11 +3449,21 @@ for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 
 	# Take URLs from kernel commandline
 	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_repo_baseurl}" ]; then
-		hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
 	fi
 	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_repo_gpgkey}" ]; then
-		hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
 	fi
 done
 # Verify whether a custom conf has been established (either from commandline parsing or from parameter configuration files)
