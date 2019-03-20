@@ -1801,7 +1801,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019030401"
+script_version="2019032001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1895,6 +1895,8 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: adding a complete cleanup before retrying
+		/usr/bin/yum clean all
 		/usr/bin/yum "$@"
 		result=$?
 		retries_left=$((retries_left - 1))
@@ -1977,7 +1979,7 @@ yum --enablerepo '*' clean all
 yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-plugin-priorities
 
 # Note: CentOS CR repository is already present inside Node image
-# Note: a partially populated CR repo may introduce dependency-related errors - better to leave this to post-installation manual choices
+# Note: a partially populated CR repo may introduce dependency-related errors - better leave this to post-installation manual choices
 
 # Add HVP custom repo
 yum --disableincludes=all -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
