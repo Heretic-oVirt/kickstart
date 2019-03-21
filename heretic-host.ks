@@ -1946,7 +1946,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019032002"
+script_version="2019032003"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2326,7 +2326,7 @@ done
 
 # Enable use of delta rpms since we are not using a local mirror
 # Note: this may introduce HTTP 416 errors - better leave this to post-installation manual choices
-#yum-config-manager --save --setopt='deltarpm=1' > /dev/null
+yum-config-manager --save --setopt='deltarpm=0' > /dev/null
 
 # Correctly initialize YUM cache again before actual bulk installations/upgrades
 # Note: following advice in https://access.redhat.com/articles/1320623
