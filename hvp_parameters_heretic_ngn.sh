@@ -101,3 +101,6 @@ keyboard_layout="us"
 local_timezone="UTC"
 
 notification_receiver="monitoring@localhost"
+
+yum_sleep_time="10"
+yum_retries="10"

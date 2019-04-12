@@ -77,6 +77,10 @@
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
+# Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
+# Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
+# Note: to force custom repo base URL for repo reponame add hvp_reponame_baseurl=HHHHH where HHHHH is the base URL (including variables like $releasever and $basearch)
+# Note: to force custom repo GPG key URL for repo reponame add hvp_reponame_gpgkey=GGGGG where GGGGG is the GPG key URL
 # Note: the default behaviour involves installing/configuring local virtualization support when virtualization hardware capabilities are detected
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
@@ -144,6 +148,10 @@
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
 # Note: the default oVirt version is 4.1
+# Note: the default number of retries after a Yum failure is 10
+# Note: the default sleep time between retries after a Yum failure is 10 seconds
+# Note: the default repo base URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
+# Note: the default repo GPG key URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
@@ -197,11 +205,6 @@ selinux --enforcing
 
 # Disk configuration dynamically generated in pre section below
 %include /tmp/full-disk
-
-# Explicitly list provided repositories
-# Note: no additional repos setup - further packages/updates installed manually in post section
-#repo --name="CentOS"  --baseurl=cdrom:sr0 --cost=100
-#repo --name="HVP-mirror" --baseurl=https://dangerous.ovirt.life/hvp-repos/el7/centos
 
 # Packages list - package groups are preceded by an "@" sign - excluded packages by an "-" sign
 # Note: some virtualization technologies (Parallels, VirtualBox) require gcc, kernel-devel and dkms (from external repo) packages
@@ -420,6 +423,10 @@ unset notification_receiver
 unset keyboard_layout
 unset local_timezone
 unset ovirt_version
+unset yum_sleep_time
+unset yum_retries
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
 
 # Hardcoded defaults
 
@@ -452,6 +459,9 @@ storage_name="discord"
 datacenter_name="HVPDataCenter"
 
 cluster_name="HVPCluster"
+
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
 
 declare -A gluster_vol_name gluster_vol_size
 gluster_vol_name['engine']="engine"
@@ -618,6 +628,9 @@ notification_sender="root@localhost"
 notification_receiver="monitoring@localhost"
 
 ovirt_version="4.1"
+
+yum_sleep_time="10"
+yum_retries="10"
 
 # Detect any configuration fragments and load them into the pre environment
 # Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
@@ -931,6 +944,41 @@ given_ovirt_version=$(sed -n -e "s/^.*hvp_ovirt_version=\\(\\S*\\).*\$/\\1/p" /p
 if [ -n "${given_ovirt_version}" ]; then
 	ovirt_version="${given_ovirt_version}"
 fi
+
+# Determine number of Yum retries on failure
+given_yum_retries=$(sed -n -e 's/^.*hvp_yum_retries=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_retries}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_retries="${given_yum_retries}"
+fi
+
+# Determine sleep time between Yum retries on failure
+given_yum_sleep_time=$(sed -n -e 's/^.*hvp_yum_sleep_time=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_sleep_time="${given_yum_sleep_time}"
+fi
+
+# Determine custom URLs for repositories and GPG keys
+for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 's/^hvp_//' -e 's/_baseurl$//' -e 's/_gpgkey$//' | sort -u); do
+	# Take URLs from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
+	fi
+done
 
 # Determine notification sender email address
 given_sender_email=$(sed -n -e "s/^.*hvp_sender_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
@@ -1683,32 +1731,42 @@ fi
 # Create install source selection fragment
 # Note: we use a non-local (hd:) stage2 location as indicator of network boot
 given_stage2=$(sed -n -e 's/^.*inst\.stage2=\(\S*\).*$/\1/p' /proc/cmdline)
+# Define proper network source
+os_baseurl="http://mirror.centos.org/centos/7/os/x86_64"
+# Prefer custom OS repo URL, if any
+if [ -n "${hvp_repo_baseurl['base']}" ]; then
+	os_baseurl="${hvp_repo_baseurl['base']}"
+fi
 if echo "${given_stage2}" | grep -q '^hd:' ; then
 	# Detect use of NetInstall media
 	if [ -d /run/install/repo/repodata ]; then
-		# Note: we know that the local stage2 comes from a full DVD image (Packages repo included)
+		# Note: we know that the local stage2 comes from a Full/Minimal image (Packages repo included)
 		cat <<- EOF > /tmp/full-installsource
 		# Use the inserted optical media as in:
 		cdrom
 		# alternatively specify a NFS network share as in:
 		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
 		# or an HTTP/FTP area as in:
-		#url --url https://dangerous.ovirt.life/hvp-repos/el7/os
+		# url --url http://mirror.centos.org/centos/7/os/x86_64
+		# Explicitly list further repositories
+		#repo --name="Local-Media"  --baseurl=cdrom:sr0 --cost=1001
+		# Note: network repo added anyway to avoid installation failures when using a Minimal image
+		repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=1001
+
 		EOF
 	else
-		# Note: since we detected use of NetInstall media (no local repo) we use network install source from CentOS mirrors
-		given_stage2="http://mirror.centos.org/centos/7/os/x86_64"
+		# Note: since we detected use of NetInstall media (no local repo) we directly use a network install source
 		cat <<- EOF > /tmp/full-installsource
 		# Specify a NFS network share as in:
 		# nfs --opts=nolock --server NfsFqdnServerName --dir /path/to/CentOS/base/dir/copied/from/DVD/media
 		# or an HTTP/FTP area as in:
-		url --url ${given_stage2}
+		url --url ${os_baseurl}
 		# alternatively use the inserted optical media as in:
-		#cdrom
+		# cdrom
 		EOF
 	fi
 else
-	# Note: we assume that a remote stage2 has been copied together with the full media content preserving the default DVD structure
+	# Note: we assume that a remote stage2 has been copied preserving the default Full/Minimal image structure
 	# TODO: we assume a HTTP/FTP area - add support for NFS
 	cat <<- EOF > /tmp/full-installsource
 	# Specify a NFS network share as in:
@@ -1716,7 +1774,10 @@ else
 	# or an HTTP/FTP area as in:
 	url --url ${given_stage2}
 	# alternatively use the inserted optical media as in:
-	#cdrom
+	# cdrom
+	# Explicitly list further repositories
+	# Note: network repo added anyway to avoid installation failures when a Minimal image has been copied
+	repo --name="CentOS-Mirror" --baseurl=${os_baseurl} --cost=1001
 	EOF
 fi
 
@@ -1786,6 +1847,14 @@ for zone in "${!network[@]}" ; do
 	if [ "${zone}" != "external" -a "${zone}" != "gluster" ]; then
 		common_network_params="${common_network_params} hvp_${zone}_bridge=${bridge_name[${zone}]}"
 	fi
+done
+for repo_name in "${!hvp_repo_baseurl[@]}" ; do
+		common_network_params="${common_network_params} hvp_${repo_name}_baseurl=${hvp_repo_baseurl[${repo_name}]}"
+		vm_network_params="${vm_network_params} hvp_${repo_name}_baseurl=${hvp_repo_baseurl[${repo_name}]}"
+done
+for repo_name in "${!hvp_repo_gpgkey[@]}" ; do
+		common_network_params="${common_network_params} hvp_${repo_name}_gpgkey=${hvp_repo_gpgkey[${repo_name}]}"
+		vm_network_params="${vm_network_params} hvp_${repo_name}_gpgkey=${hvp_repo_gpgkey[${repo_name}]}"
 done
 
 # Define common storage parameters to be added on PXE menu as kernel commandline parameters during installation
@@ -2088,7 +2157,21 @@ keyboard_layout="${keyboard_layout}"
 local_timezone="${local_timezone}"
 
 notification_receiver="${notification_receiver}"
+
+yum_sleep_time="${yum_sleep_time}"
+yum_retries="${yum_retries}"
+
 EOF
+for repo_name in "${!hvp_repo_baseurl[@]}" ; do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+	hvp_repo_baseurl['${repo_name}']='${hvp_repo_baseurl[${repo_name}]}'
+	EOF
+done
+for repo_name in "${!hvp_repo_gpgkey[@]}" ; do
+	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
+	hvp_repo_gpgkey['${repo_name}']='${hvp_repo_gpgkey[${repo_name}]}'
+	EOF
+done
 # Create kickstart-specific configuration parameters fragments
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_ngn.sh
 # Custom defaults for nodes installation
@@ -3256,6 +3339,11 @@ unset orthodox_mode
 unset ovirt_nightly_mode
 unset nolocalvirt
 unset ovirt_version
+unset yum_sleep_time
+unset yum_retries
+unset custom_yum_conf
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
 
 # Define associative arrays
 declare -A node_name
@@ -3263,12 +3351,41 @@ declare -A network netmask network_base bondmode bondopts mtu
 declare -A domain_name
 declare -A reverse_domain_name
 declare -A bridge_name
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
 
 nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
 nolocalvirt="false"
 ovirt_version="4.1"
+
+yum_sleep_time="10"
+yum_retries="10"
+
+custom_yum_conf="false"
+
+# A wrapper for Yum to make it more robust against network/mirror failures
+yum() {
+	local result
+	local retries_left
+
+	/usr/bin/yum "$@"
+	result=$?
+	retries_left=${yum_retries}
+
+	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
+		sleep ${yum_sleep_time}
+		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: adding a complete cleanup before retrying
+		/usr/bin/yum clean all
+		/usr/bin/yum "$@"
+		result=$?
+		retries_left=$((retries_left - 1))
+	done
+
+	return ${result}
+}
 
 # Load configuration parameters files (generated in pre section above)
 ks_custom_frags="hvp_parameters.sh hvp_parameters_heresiarch.sh hvp_parameters_*:*.sh"
@@ -3317,6 +3434,48 @@ if [ -n "${given_ovirt_version}" ]; then
 	ovirt_version="${given_ovirt_version}"
 fi
 
+# Determine number of Yum retries on failure
+given_yum_retries=$(sed -n -e 's/^.*hvp_yum_retries=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_retries}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_retries="${given_yum_retries}"
+fi
+
+# Determine sleep time between Yum retries on failure
+given_yum_sleep_time=$(sed -n -e 's/^.*hvp_yum_sleep_time=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
+	yum_sleep_time="${given_yum_sleep_time}"
+fi
+
+# Determine custom URLs for repositories and GPG keys
+for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 's/^hvp_//' -e 's/_baseurl$//' -e 's/_gpgkey$//' | sort -u); do
+	# Take URLs from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
+	fi
+done
+# Verify whether a custom conf has been established (either from commandline parsing or from parameter configuration files)
+url_count="${#hvp_repo_baseurl[@]}"
+key_count="${#hvp_repo_gpgkey[@]}"
+ref_count=$((url_count + key_count))
+if [ "${ref_count}" -gt 1 ]; then
+	custom_yum_conf="true"
+fi
+
 # Create /dev/root symlink for grubby (must differentiate for use of LVM or MD based "/")
 # TODO: Open a Bugzilla notification
 # TODO: remove when grubby gets fixed
@@ -3337,14 +3496,38 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Make YUM more robust in presence of network problems
-yum-config-manager --save --setopt='retries=30' --setopt='timeout=60' > /dev/null
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+# Note: done here to cater for those repos already installed by default
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Disable fastestmirror yum plugin too
+	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos already installed by default
+	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
 
 # Add support for CentOS CR repository (to allow up-to-date upgrade later)
-# Note: a partially populated CR repo may introduce dependency-related errors - better to leave this to post-installation manual choices
+# Note: a partially populated CR repo may introduce dependency-related errors - better leave this to post-installation manual choices
 #yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
@@ -3400,8 +3583,57 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
 
+if [ "${nolocalvirt}" != "true" ]; then
+	# Add support for Qemu EV version from CentOS Virt SIG repo
+	yum -y install centos-release-qemu-ev
+	# TODO: find a way to define a repo (missing upstream) for Kimchi packages (to be able to update them regularly)
+else
+	# Add Webmin repo
+	cat <<- EOF > /etc/yum.repos.d/webmin.repo
+	[webmin]
+	name = Webmin Distribution Neutral
+	baseurl = http://download.webmin.com/download/yum
+	gpgcheck = 1
+	enabled = 1
+	gpgkey = http://www.webmin.com/jcameron-key.asc
+	skip_if_unavailable = 1
+	EOF
+	chmod 644 /etc/yum.repos.d/webmin.repo
+fi
+
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+# Note: repeated here to allow applying to further repos installed above
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
 # Enable use of delta rpms since we are not using a local mirror
-yum-config-manager --save --setopt='deltarpm=1' > /dev/null
+# Note: this may introduce HTTP 416 errors - better leave this to post-installation manual choices
+yum-config-manager --save --setopt='deltarpm=0' > /dev/null
+
+# Correctly initialize YUM cache again before actual bulk installations/upgrades
+# Note: following advice in https://access.redhat.com/articles/1320623
+# TODO: remove when fixed upstream
+rm -rf /var/cache/yum/*
+yum --enablerepo '*' clean all
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
 yum -y upgrade
@@ -3498,8 +3730,6 @@ fi
 
 # Add virtualization support on suitable platforms
 if [ "${nolocalvirt}" != "true" ]; then
-	# Add support for Qemu EV version from CentOS Virt SIG repo
-	yum -y install centos-release-qemu-ev
 	# Install packages
 	yum -y install qemu-kvm qemu-img virt-manager libvirt libvirt-python libvirt-client virt-install virt-viewer virt-top libguestfs numpy virtio-win OVMF
 	# Explicitly add package requirements to allow NGN development as per https://gerrit.ovirt.org/gitweb?p=ovirt-node-ng.git;a=blob;f=README
@@ -3507,22 +3737,10 @@ if [ "${nolocalvirt}" != "true" ]; then
 	# Perform a further upgrade to align with Qemu EV repo packages
 	yum -y upgrade
 	# Install Kimchi libvirt web management interface
-	# TODO: find a way to define a repo (missing upstream) for the following packages (to be able to update them regularly)
-	# TODO: find out why Kimchi comes up empty and unusable and correct
+	# TODO: find out why Kimchi comes up empty and unusable then correct
 	yum -y install https://github.com/kimchi-project/kimchi/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
 else
 	# Alternatively install Webmin for generic web management
-	# Add Webmin repo
-	cat <<- EOF > /etc/yum.repos.d/webmin.repo
-	[webmin]
-	name = Webmin Distribution Neutral
-	baseurl = http://download.webmin.com/download/yum
-	gpgcheck = 1
-	enabled = 1
-	gpgkey = http://www.webmin.com/jcameron-key.asc
-	skip_if_unavailable = 1
-	EOF
-	chmod 644 /etc/yum.repos.d/webmin.repo
 	yum -y install webmin
 	# Note: immediately stop webmin started by postinst scriptlet
 	/etc/init.d/webmin stop
