@@ -3252,7 +3252,29 @@ hvp_netbios_storagename: ${netbios_storage_name}
 hvp_ad_range: 9999-1999999999
 hvp_autorid_range: 2000000000-3999999999
 hvp_autorid_rangesize: 1000000
+
+## HVP custom Yum repo settings
 EOF
+if [ "${#hvp_repo_baseurl[@]}" -eq 0 ]; then
+	cat <<- EOF >> hvp.yaml
+	hvp_repo_baseurl: []
+	EOF
+else
+	cat <<- EOF >> hvp.yaml
+	hvp_repo_baseurl:
+	$(for reponame in "${!hvp_repo_baseurl[@]}"; do echo "  - { name: '${reponame}', url: '${hvp_repo_baseurl[${reponame}]}' }"; done)
+	EOF
+fi
+if [ "${#hvp_repo_gpgkey[@]}" -eq 0 ]; then
+	cat <<- EOF >> hvp.yaml
+	hvp_repo_gpgkey: []
+	EOF
+else
+	cat <<- EOF >> hvp.yaml
+	hvp_repo_gpgkey:
+	$(for reponame in "${!hvp_repo_gpgkey[@]}"; do echo "  - { name: '${reponame}', url: '${hvp_repo_gpgkey[${reponame}]}' }"; done)
+	EOF
+fi
 
 popd
 
@@ -3280,7 +3302,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019032004"
+script_version="2019041101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
