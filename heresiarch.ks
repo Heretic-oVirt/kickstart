@@ -2,7 +2,6 @@
 # Note: minimum amount of RAM successfully tested for installation: 2048 MiB from network - 1024 MiB from local media
 
 # Install with commandline (see below for comments):
-# TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # elevator=deadline inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heresiarch.ks
 # Note: DHCP is assumed to be available on one and only one network (the external one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface
@@ -17,12 +16,12 @@
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom host naming add hvp_myname=myhostname where myhostname is the unqualified (ie without domain name part) hostname
-# Note: to force custom addressing add hvp_{external,mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the machine IP or the network address on the given network and yy is the prefix on the given network
+# Note: to force custom addressing add hvp_{external,mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the machine IP or the network address on the given network and yy is the prefix on the given network (distinct physical networks cannot be logically conflated)
 # Note: to force custom IPs add hvp_{external,mgmt,gluster,lan,internal}_my_ip=t.t.t.t where t.t.t.t is the chosen IP on the given network
 # Note: to force custom node bonding mode add hvp_{mgmt,gluster,lan,internal}_bondmode=vvvv where vvvv is the bonding mode, either activepassive, roundrobin (only for gluster) or lacp
 # Note: to force custom network MTU add hvp_{external,mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
 # Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
-# Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name (if distinct physical networks have conflated domain names, host names will be decorated with a "-zonename" suffix)
 # Note: to force custom network bridge naming add hvp_{mgmt,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom OVN private network naming add hvp_ovn_networks=myovn1,myovn2 where myovn1 and myovn2 are the OVN private network names
 # Note: to force custom multi-instance limit for each vm type (kickstart) add hvp_maxinstances=A where A is the maximum number of instances
@@ -75,8 +74,9 @@
 # Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
 # Note: to force custom email addresses for notification sender and receiver add hvp_{sender,receiver}_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
+# Note: to force custom system language add hvp_language=ii where ii is the language code (enacted only for heresiarch and virtual desktop installations)
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
-# Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
+# Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2, 4.3 or master)
 # Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
 # Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
 # Note: to force custom repo base URL for repo reponame add hvp_reponame_baseurl=HHHHH where HHHHH is the base URL (including variables like $releasever and $basearch)
@@ -130,7 +130,7 @@
 # Note: the default cluster naming uses the name HVPCluster for the oVirt Cluster
 # Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
 # Note: the default Gluster volume sizing uses the sizes {500,30,1,1024,1024,1024,1024} GB for volumes {vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
-# Note: the default Gluster-block LUN sizes are assumed to be 200 GiB, 300 Gib and 450 Gib
+# Note: the default Gluster-block LUN sizes are assumed to be of only 1 LUN of 300 Gib
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes BMC type is ipmilan
 # Note: the default nodes BMC username is hvpbmcadmin
@@ -146,8 +146,9 @@
 # Note: the default AD further admin user password is HVP_dem0
 # Note: the default notification email address for sender is root@localhost and for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
+# Note: the default system language is en_US.UTF-8
 # Note: the default local timezone is UTC
-# Note: the default oVirt version is 4.1
+# Note: the default oVirt version is 4.2
 # Note: the default number of retries after a Yum failure is 10
 # Note: the default sleep time between retries after a Yum failure is 10 seconds
 # Note: the default repo base URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
@@ -244,6 +245,7 @@ unix2dos
 screen
 minicom
 telnet
+ftp
 tree
 audit
 iptraf
@@ -421,6 +423,7 @@ unset winadmin_password
 unset notification_sender
 unset notification_receiver
 unset keyboard_layout
+unset system_language
 unset local_timezone
 unset ovirt_version
 unset yum_sleep_time
@@ -480,9 +483,7 @@ gluster_vol_size['blockshare']="1024"
 gluster_vol_name['backup']="backup"
 gluster_vol_size['backup']="1024"
 
-gluster_block_size[0]="200"
-gluster_block_size[1]="300"
-gluster_block_size[2]="450"
+gluster_block_size[0]="300"
 
 # Note: IP offsets below get used to automatically derive IP addresses
 # Note: no need to allow offset overriding from commandline if the IP address itself can be specified
@@ -564,12 +565,8 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+# Note: no need to define reverse network domain names since they get automatically defined below
 declare -A reverse_domain_name
-reverse_domain_name['external']="dhcp"
-reverse_domain_name['mgmt']="10.20.172.in-addr.arpa"
-reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
-reverse_domain_name['lan']="12.20.172.in-addr.arpa"
-reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
 declare -A bridge_name
 bridge_name['mgmt']="ovirtmgmt"
@@ -622,12 +619,13 @@ admin_username="hvpadmin"
 admin_password="hvpdemo"
 winadmin_password="HVP_dem0"
 keyboard_layout="us"
+system_language="en_US.UTF-8"
 local_timezone="UTC"
 
 notification_sender="root@localhost"
 notification_receiver="monitoring@localhost"
 
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 yum_sleep_time="10"
 yum_retries="10"
@@ -931,6 +929,12 @@ fi
 given_keyboard_layout=$(sed -n -e "s/^.*hvp_kblayout=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_keyboard_layout}" ]; then
 	keyboard_layout="${given_keyboard_layout}"
+fi
+
+# Determine system language
+given_system_language=$(sed -n -e "s/^.*hvp_language=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_system_language}" ]; then
+	system_language="${given_system_language}"
 fi
 
 # Determine local timezone
@@ -1656,7 +1660,6 @@ newaliases
 EOF
 
 # Create localization setup fragment
-# TODO: allow changing system language too
 if [ "${keyboard_layout}" != "us" ]; then
 	# TODO: GNOME3 seems not to respect the keyboard layout preference order (US is always the default) - removing additional layout - restore when fixed upstream
 	#xlayouts="'${keyboard_layout}','us'"
@@ -1665,8 +1668,8 @@ else
 	xlayouts="'us'"
 fi
 cat << EOF > /tmp/full-localization
-# Default system language, additional languages can be enabled installing the appropriate packages below
-lang en_US.UTF-8
+# System language, additional languages can be enabled installing the appropriate packages below
+lang ${system_language}
 # Keyboard layout
 keyboard --vckeymap=${keyboard_layout} --xlayouts=${xlayouts}
 # Configure time zone (NTP details demanded to post section)
@@ -1781,6 +1784,21 @@ else
 	EOF
 fi
 
+# Perform check to detect duplicated entries in case of conflated domain name spaces
+# Note: in presence even of a couple of conflated domain name spaces we will force hostname suffixes on all subnets
+use_hostname_decoration="false"
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		use_hostname_decoration="true"
+		break
+	fi
+	added_zones="${added_zones} ${domain_name[${zone}]}"
+done
+
 # Determine configuration for DHCP and related services
 # Note: enabling masquerading in firewalld if mgmt and external are separate networks
 # Note: in.tftpd connections must be allowed with IPv4-in-IPv6 notation
@@ -1867,11 +1885,15 @@ done
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name (ethN names are reserved and cannot be used) and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding physical interface (beware: naming not honored for bond slaves)
 # Note: to force legacy nic names (ethN) add biosdevname=0 net.ifnames=0
 # Note: DHCP is assumed to be available on one and only one network (the mgmt one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
-# TODO: node PXE nic names can be manually gathered (eg: by booting with the rescue image)
 
 mkdir -p /tmp/hvp-syslinux-conf
 cat << EOF > /tmp/hvp-syslinux-conf/common.cfg
 DEFAULT menu.c32
+EOF
+if [ -n "${keyboard_layout}" ]; then
+	echo "KBDMAP ${keyboard_layout}.ktl" >> /tmp/hvp-syslinux-conf/common.cfg
+fi
+cat << EOF >> /tmp/hvp-syslinux-conf/common.cfg
 PROMPT 0
 TIMEOUT 600
 MENU TITLE --== Heretic oVirt Project PXE Menu ==--
@@ -1891,7 +1913,7 @@ LABEL memtest
 LABEL rescue
         MENU LABEL CentOS rescue image
         kernel linux/centos/vmlinuz
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos ip=dhcp rescue
 
 # Load guest virtual machines installation menu
 LABEL vmmenu
@@ -2005,16 +2027,16 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
-	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
-	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 done
@@ -2033,29 +2055,29 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
 LABEL installdb
         MENU LABEL Install Database Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Print server installation
 LABEL installpr
         MENU LABEL Install Print Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Remote Desktop server installation
 LABEL installvd
         MENU LABEL Install Remote Desktop Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
-        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}.${domain_name[${dhcp_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
 
 EOF
 # Create common configuration parameters fragment
@@ -2154,6 +2176,7 @@ root_password='${root_password}'
 admin_username="${admin_username}"
 admin_password='${admin_password}'
 keyboard_layout="${keyboard_layout}"
+system_language="${system_language}"
 local_timezone="${local_timezone}"
 
 notification_receiver="${notification_receiver}"
@@ -2312,145 +2335,115 @@ EOF
 mkdir -p /tmp/hvp-bind-zones/dynamic
 pushd /tmp/hvp-bind-zones/dynamic
 
-zone="${dhcp_zone}"
-cat << EOF > ${domain_name[${zone}]}.db
-\$ORIGIN ${domain_name[${zone}]}.
-\$TTL 15552000
-@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-                         $(date '+%Y%m%d')01 ; serial
-                         3600 ; refresh
-                         900 ; retry
-                         1209600 ; expire
-                         43200 ; default_ttl
-                         )
-@			NS	${my_name}.${domain_name[${zone}]}.
-
-; Names for static addresses assigned to our virtual/physical machines
-
-${my_name}		A	${my_ip[${zone}]}
-EOF
-for ((i=0;i<${dhcp_count};i=i+1)); do
-	cat <<- EOF >> ${domain_name[${zone}]}.db
-	client${i}		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
-	EOF
-done
-# Add resolution for bmcs/nodes/engine/switch names
-cat << EOF >> ${domain_name[${zone}]}.db
-${switch_name}		A	${switch_ip}
-${engine_name}		A	${engine_ip}
-${metrics_name}		A	${metrics_ip}
-
-EOF
-for ((i=0;i<${node_count};i=i+1)); do
-	cat <<- EOF >> ${domain_name[${zone}]}.db
-	${node_name[${i}]}bmc		A	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} +)
-	EOF
-done
-for ((i=0;i<${node_count};i=i+1)); do
-	cat <<- EOF >> ${domain_name[${zone}]}.db
-	${node_name[${i}]}		A	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} +)
-	EOF
-done
-# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services
-# Note: registered with a TTL of 1 to enhance round-robin load balancing
-for ((i=0;i<${active_storage_node_count};i=i+1)); do
-	cat <<- EOF >> ${domain_name[${zone}]}.db
-	${storage_name}	1 IN	A	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} +)
-	EOF
-done
-cat << EOF > ${reverse_domain_name[${zone}]}.db
-\$ORIGIN ${reverse_domain_name[${zone}]}.
-\$TTL 15552000
-@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-                         $(date '+%Y%m%d')01 ; serial
-                         3600 ; refresh
-                         900 ; retry
-                         1209600 ; expire
-                         43200 ; default_ttl
-                         )
-@		IN	NS	${my_name}.${domain_name[${zone}]}.
-
-; Static addresses assigned to our virtual/physical machines
-
-$(echo ${my_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${my_name}.${domain_name[${zone}]}.
-
-EOF
-for ((i=0;i<${dhcp_count};i=i+1)); do
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	# Perform check to avoid duplicating entries in case of conflated reverse domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${reverse_domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF > ${reverse_domain_name[${zone}]}.db
+		\$ORIGIN ${reverse_domain_name[${zone}]}.
+		\$TTL 15552000
+		@		IN	SOA	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. root.${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. (
+		                         $(date '+%Y%m%d')01 ; serial
+		                         3600 ; refresh
+		                         900 ; retry
+		                         1209600 ; expire
+		                         43200 ; default_ttl
+		                         )
+		@		IN	NS	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		
+		; Static addresses assigned to our virtual/physical machines
+		
+		EOF
+		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
+	fi
 	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	client${i}.${domain_name[${zone}]}.
+	$(echo ${my_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 	EOF
-done
-# Add reverse resolution for bmcs/nodes/engine/switch names
-cat << EOF >> ${reverse_domain_name[${zone}]}.db
-
-$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
-$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
-$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
-
-EOF
-for ((i=0;i<${node_count};i=i+1)); do
-	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc.${domain_name[${zone}]}.
-	EOF
-done
-for ((i=0;i<${node_count};i=i+1)); do
-	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}.${domain_name[${zone}]}.
-	EOF
-done
-# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services
-for ((i=0;i<${active_storage_node_count};i=i+1)); do
-	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
-	EOF
-done
-# Create the zone files for GLUSTER network if it is present
-# Note: GLUSTER network names resolution is needed for Ansible/gDeploy
-if [ -n "${nics['gluster']}" ]; then
-	cat <<- EOF > ${domain_name['gluster']}.db
-	\$ORIGIN ${domain_name['gluster']}.
-	\$TTL 15552000
-	@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-	                         $(date '+%Y%m%d')01 ; serial
-	                         3600 ; refresh
-	                         900 ; retry
-	                         1209600 ; expire
-	                         43200 ; default_ttl
-	                         )
-	@			NS	${my_name}.${domain_name[${zone}]}.
-	
-	; Names for static addresses assigned to our virtual/physical machines
-	
-	${my_name}		A	${my_ip['gluster']}
-	EOF
-	for ((i=0;i<${node_count};i=i+1)); do
-		cat <<- EOF >> ${domain_name['gluster']}.db
-		${node_name[${i}]}		A	$(ipmat $(ipmat ${network['gluster']} ${node_ip_offset} +) ${i} +)
+	for ((i=0;i<${dhcp_count};i=i+1)); do
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+		$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		EOF
 	done
-	cat <<- EOF > ${reverse_domain_name['gluster']}.db
-	\$ORIGIN ${reverse_domain_name['gluster']}.
-	\$TTL 15552000
-	@		IN	SOA	${my_name}.${domain_name[${zone}]}. root.${my_name}.${domain_name[${zone}]}. (
-	                         $(date '+%Y%m%d')01 ; serial
-	                         3600 ; refresh
-	                         900 ; retry
-	                         1209600 ; expire
-	                         43200 ; default_ttl
-	                         )
-	@		IN	NS	${my_name}.${domain_name[${zone}]}.
+	# Add reverse resolution for bmcs/nodes/engine/switch names
+	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 	
-	; Static addresses assigned to our virtual/physical machines
-	
-	$(echo ${my_ip['gluster']} | sed -e "s/^$(echo ${network_base['gluster']} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${my_name}.${domain_name['gluster']}.
+	$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+	$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+	$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 	
 	EOF
 	for ((i=0;i<${node_count};i=i+1)); do
-		cat <<- EOF >> ${reverse_domain_name['gluster']}.db
-		$(ipmat $(ipmat ${network['gluster']} ${node_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base['gluster']} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}.${domain_name['gluster']}.
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+		$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		EOF
 	done
-fi
+	for ((i=0;i<${node_count};i=i+1)); do
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+		$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		EOF
+	done
+	# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services
+	for ((i=0;i<${active_storage_node_count};i=i+1)); do
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+		$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		EOF
+	done
+	
+	# Perform check to avoid duplicating entries in case of conflated domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF > ${domain_name[${zone}]}.db
+		\$ORIGIN ${domain_name[${zone}]}.
+		\$TTL 15552000
+		@		IN	SOA	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. root.${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. (
+		                         $(date '+%Y%m%d')01 ; serial
+		                         3600 ; refresh
+		                         900 ; retry
+		                         1209600 ; expire
+		                         43200 ; default_ttl
+		                         )
+		@			NS	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		
+		; Names for static addresses assigned to our virtual/physical machines
+		
+		EOF
+		added_zones="${added_zones} ${domain_name[${zone}]}"
+	fi
+	cat <<- EOF >> ${domain_name[${zone}]}.db
+	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)	A	${my_ip[${zone}]}
+	EOF
+	for ((i=0;i<${dhcp_count};i=i+1)); do
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
+		EOF
+	done
+	# Add resolution for bmcs/nodes/engine/switch names
+	cat <<- EOF >> ${domain_name[${zone}]}.db
+	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${switch_ip}
+	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${engine_ip}
+	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${metrics_ip}
+	
+	EOF
+	for ((i=0;i<${node_count};i=i+1)); do
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} +)
+		EOF
+	done
+	for ((i=0;i<${node_count};i=i+1)); do
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} +)
+		EOF
+	done
+	# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services
+	# Note: registered with a TTL of 1 to enhance round-robin load balancing
+	for ((i=0;i<${active_storage_node_count};i=i+1)); do
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		${storage_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)	1 IN	A	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} +)
+		EOF
+	done
+done
 
 popd
 
@@ -2461,7 +2454,6 @@ pushd /tmp/hvp-bind-zones
 my_role="master"
 my_options="// allow-update { key ddns_key; };"
 file_location="dynamic"
-zone="${dhcp_zone}"
 cat << EOF > named.conf
 //
 // Sample named.conf BIND DNS server 'named' configuration file
@@ -2474,6 +2466,7 @@ cat << EOF > named.conf
 options
 {
         version none;
+        check-names master ignore;
         /* make named use port 53 for the source of all queries, to allow
          * firewalls to block all ports except 53:
          */
@@ -2596,41 +2589,40 @@ view "localhost_resolver"
 
         // These are your "authoritative" internal zones :
 
-        zone "${domain_name[${zone}]}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${domain_name[${zone}]}.db";
-        };
-
-        zone "${reverse_domain_name[${zone}]}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${reverse_domain_name[${zone}]}.db";
-        };
-
 EOF
-# Add the zone for GLUSTER network if it is present
-# Note: GLUSTER network names resolution is needed for Ansible/gDeploy
-if [ -n "${nics['gluster']}" ]; then
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	# Perform check to avoid duplicating entries in case of conflated reverse domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${reverse_domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${reverse_domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+		        };
+		
+		EOF
+		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
+	fi
+	# Perform check to avoid duplicating entries in case of conflated domain name spaces
+	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		continue
+	fi
 	cat <<- EOF >> named.conf
-        zone "${domain_name['gluster']}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${domain_name['gluster']}.db";
-        };
-
-        zone "${reverse_domain_name['gluster']}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${reverse_domain_name['gluster']}.db";
-        };
-
+	        zone "${domain_name[${zone}]}" { 
+	                type ${my_role};
+	                ${my_options}
+	                // put dynamically updateable zones in the dynamic/ directory so named can update them
+	                file "${file_location}/${domain_name[${zone}]}.db";
+	        };
+	
 	EOF
-fi
+	added_zones="${added_zones} ${domain_name[${zone}]}"
+done
 cat << EOF >> named.conf
 };
 
@@ -2658,41 +2650,37 @@ view "internal"
         // These are your "authoritative" internal zones, and would probably
         // also be included in the "localhost_resolver" view above :
 
-        zone "${domain_name[${zone}]}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${domain_name[${zone}]}.db";
-        };
-
-        zone "${reverse_domain_name[${zone}]}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${reverse_domain_name[${zone}]}.db";
-        };
-
 EOF
-# Add the zone for GLUSTER network if it is present
-# Note: GLUSTER network names resolution is needed for Ansible/gDeploy
-if [ -n "${nics['gluster']}" ]; then
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
 	cat <<- EOF >> named.conf
-        zone "${domain_name['gluster']}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${domain_name['gluster']}.db";
-        };
-
-        zone "${reverse_domain_name['gluster']}" { 
-                type ${my_role};
-                ${my_options}
-                // put dynamically updateable zones in the dynamic/ directory so named can update them
-                file "${file_location}/${reverse_domain_name['gluster']}.db";
-        };
-
+	        zone "${reverse_domain_name[${zone}]}" { 
+	                type ${my_role};
+	                ${my_options}
+	                // put dynamically updateable zones in the dynamic/ directory so named can update them
+	                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+	        };
+	
 	EOF
-fi
+	# Perform check to avoid duplicating entries in case of conflated domain name spaces
+	# Note: reverse zones cannot be conflated and are unconditionally added anyway above
+	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		continue
+	fi
+	cat <<- EOF >> named.conf
+	        zone "${domain_name[${zone}]}" { 
+	                type ${my_role};
+	                ${my_options}
+	                // put dynamically updateable zones in the dynamic/ directory so named can update them
+	                file "${file_location}/${domain_name[${zone}]}.db";
+	        };
+	
+	EOF
+	added_zones="${added_zones} ${domain_name[${zone}]}"
+done
 cat << EOF >> named.conf
 };
 
@@ -2734,7 +2722,7 @@ pushd /tmp/hvp-bind-zones
 cat << EOF > hosts
 
 # Static hostname
-${my_ip[${dhcp_zone}]}		${my_name}.${domain_name[${dhcp_zone}]}
+${my_ip[${dhcp_zone}]}		${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${dhcp_zone}" ; fi).${domain_name[${dhcp_zone}]}
 EOF
 popd
 
@@ -2862,6 +2850,7 @@ subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
 # --- default gateway
         option routers			${dhcp_gateway};
         option subnet-mask		${netmask[${dhcp_zone}]};
+        option interface-mtu		${mtu[${dhcp_zone}]};
 
         option domain-name		"${domain_name[${dhcp_zone}]}";
         option domain-name-servers	${my_ip[${dhcp_zone}]};
@@ -2897,6 +2886,7 @@ for further_zone in lan internal; do
 		# --- default gateway
 		        option routers			${my_ip[${further_zone}]};
 		        option subnet-mask		${netmask[${further_zone}]};
+		        option interface-mtu		${mtu[${further_zone}]};
 		
 		        option domain-name		"${domain_name[${further_zone}]}";
 		        option domain-name-servers	${my_ip[${further_zone}]};
@@ -2934,7 +2924,7 @@ cat << EOF > httpd.conf
 <VirtualHost *:80>
     DocumentRoot /var/www/html
     ServerName ${my_ip[${dhcp_zone}]}
-    ServerAlias ${my_name}.${domain_name[${dhcp_zone}]}
+    ServerAlias ${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${dhcp_zone}" ; fi).${domain_name[${dhcp_zone}]}
 </VirtualHost>
 
 EOF
@@ -3302,7 +3292,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019041101"
+script_version="2019082501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3380,7 +3370,7 @@ nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
 nolocalvirt="false"
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 yum_sleep_time="10"
 yum_retries="10"
@@ -3532,7 +3522,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos already installed by default
-	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+	for repo_name in $(yum-config-manager | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3548,12 +3538,18 @@ fi
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
 
-# Add support for CentOS CR repository (to allow up-to-date upgrade later)
+# Add support for builtin CentOS CR repository (to allow up-to-date upgrade later)
 # Note: a partially populated CR repo may introduce dependency-related errors - better leave this to post-installation manual choices
 #yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
+# Define proper network source
+hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp"
+# Prefer custom HVP repo URL, if any
+if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
+	hvp_baseurl="${hvp_repo_baseurl['hvp']}"
+fi
+yum -y --nogpgcheck install ${hvp_baseurl}/x86_64/hvp-release-7-5.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 # Note: if explicitly denied, HVP RHGS rebuild must not be enabled anyway on this external support machine (no special software requirements atm)
 if [ "${orthodox_mode}" = "false" ]; then
@@ -3567,16 +3563,101 @@ if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-ansible-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
+	# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+	if [ "${custom_yum_conf}" = "true" ]; then
+		for repofile in /etc/yum.repos.d/*.repo; do
+			if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+				sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+				sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+				sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+			fi
+		done
+		# Allow specifying custom base URLs for repositories and GPG keys
+		# Note: done here to cater for those repos installed above
+		for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
+			repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+			repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+			# Force any custom URLs
+			if [ -n "${repo_baseurl}" ]; then
+				yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+			fi
+			if [ -n "${repo_gpgkey}" ]; then
+				yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+			fi
+		done
+	fi
 fi
 
-# Add upstream repository definitions
+# Add EPEL repository definition
 yum -y install epel-release
-yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[epel.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
+# Add ELRepo repository definition
+# Define proper network source
+elrepo_baseurl="http://www.elrepo.org"
+# Prefer custom ELRepo repo URL, if any
+if [ -n "${hvp_repo_baseurl['elrepo']}" ]; then
+	elrepo_baseurl="${hvp_repo_baseurl['elrepo']}"
+fi
+yum -y install ${elrepo_baseurl}/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[elrepo.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
+# Add oVirt repository definition
 ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
 if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
-yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
+# Define proper network source
+ovirt_baseurl="http://resources.ovirt.org/pub/yum-repo"
+# Prefer custom oVirt repo URL, if any
+if [ -n "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" ]; then
+	hvp_baseurl="${hvp_repo_baseurl[ovirt-${ovirt_version}]}"
+fi
+yum -y install ${ovirt_baseurl}/ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
@@ -3604,27 +3685,7 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	EOF
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
-
-if [ "${nolocalvirt}" != "true" ]; then
-	# Add support for Qemu EV version from CentOS Virt SIG repo
-	yum -y install centos-release-qemu-ev
-	# TODO: find a way to define a repo (missing upstream) for Kimchi packages (to be able to update them regularly)
-else
-	# Add Webmin repo
-	cat <<- EOF > /etc/yum.repos.d/webmin.repo
-	[webmin]
-	name = Webmin Distribution Neutral
-	baseurl = http://download.webmin.com/download/yum
-	gpgcheck = 1
-	enabled = 1
-	gpgkey = http://www.webmin.com/jcameron-key.asc
-	skip_if_unavailable = 1
-	EOF
-	chmod 644 /etc/yum.repos.d/webmin.repo
-fi
-
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
-# Note: repeated here to allow applying to further repos installed above
 if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
 		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
@@ -3634,7 +3695,8 @@ if [ "${custom_yum_conf}" = "true" ]; then
 		fi
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
-	for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[ovirt.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3645,6 +3707,54 @@ if [ "${custom_yum_conf}" = "true" ]; then
 			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
 		fi
 	done
+fi
+
+if [ "${nolocalvirt}" != "true" ]; then
+	# Add support for Qemu EV version from CentOS Virt SIG repo
+	yum -y install centos-release-qemu-ev
+	# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[centos-qemu-ev.*\]' | tr -d '[]'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+else
+	# Add Webmin repo
+	# Define proper network source
+	webmin_baseurl="https://download.webmin.com/download/yum"
+	webmin_gpgkey="http://www.webmin.com/jcameron-key.asc"
+	# Prefer custom Webmin repo URL, if any
+	if [ -n "${hvp_repo_baseurl['webmin']}" ]; then
+		webmin_baseurl="${hvp_repo_baseurl['webmin']}"
+	fi
+	if [ -n "${hvp_repo_gpgkey['webmin']}" ]; then
+		webmin_gpgkey="${hvp_repo_gpgkey['webmin']}"
+	fi
+	cat << EOF > /etc/yum.repos.d/webmin.repo
+	[webmin]
+	name = Webmin Distribution Neutral
+	baseurl = ${webmin_baseurl}
+	gpgcheck = 1
+	enabled = 1
+	gpgkey = ${webmin_gpgkey}
+	skip_if_unavailable = 1
+	EOF
+	chmod 644 /etc/yum.repos.d/webmin.repo
 fi
 
 # Enable use of delta rpms since we are not using a local mirror
@@ -3692,10 +3802,10 @@ yum -y install logcheck
 
 # Install DHCPd, TFTPd, Syslinux and Bind to support PXE
 # Note: using HVP Fedora-rebuild repo to get a newer (6.x) Syslinux
-yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux bind
+yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux syslinux-perl bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
 
 # Install HVP Ansible support files
 yum -y install hvp-ansible
@@ -3758,12 +3868,12 @@ if [ "${nolocalvirt}" != "true" ]; then
 	yum -y install lorax libvirt libvirt-daemon-kvm virt-install libguestfs-tools
 	# Perform a further upgrade to align with Qemu EV repo packages
 	yum -y upgrade
-	# Install Kimchi libvirt web management interface
-	# TODO: find out why Kimchi comes up empty and unusable then correct
-	yum -y install https://github.com/kimchi-project/kimchi/releases/download/2.5.0/wok-2.5.0-0.el7.centos.noarch.rpm https://github.com/kimchi-project/kimchi/releases/download/2.5.0/kimchi-2.5.0-0.el7.centos.noarch.rpm
+	# Install Cockpit web management interface
+	yum -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged
 else
 	# Alternatively install Webmin for generic web management
-	yum -y install webmin
+	# TODO: added perl-Authen-PAM unlisted dependency - remove when fixed upstream
+	yum -y install webmin perl-Authen-PAM
 	# Note: immediately stop webmin started by postinst scriptlet
 	/etc/init.d/webmin stop
 fi
@@ -4076,7 +4186,7 @@ cat << EOF | openssl req -new -sha256 -key /etc/pki/tls/private/localhost.key -x
 IT
 Lombardia
 Bergamo
-FleurFlower
+HVP
 Heretic oVirt Project Demo Infrastructure
 ${HOSTNAME}
 root@${HOSTNAME}
@@ -4196,7 +4306,7 @@ cat << EOF > /var/www/html/index.html
 					<h2>Risorse di pubblico accesso:</h2>
 					<p>Le seguenti risorse web offerte da questa macchina sono liberamente accessibili.
 					<ul>
-						<li>Un archivio pubblico dei pacchetti RPM &egrave; disponibile <a href="/hvp-repos/">qui</a>.</li>
+						<li>Un archivio pubblico &egrave; disponibile <a href="/hvp-repos/">qui</a>.</li>
 					</ul>
 					</p>
 					<h2>Se siete parte del personale tecnico:</h2>
@@ -4215,7 +4325,7 @@ cat << EOF > /var/www/html/index.html
 					<h2>Publicly available resources:</h2>
 					<p>These are the publicly available resources hosted on this machine.
 					<ul>
-						<li>The public RPM repository is available <a href="/hvp-repos/">here</a>.</li>
+						<li>The public repository is available <a href="/hvp-repos/">here</a>.</li>
 					</ul>
 					</p>
 					<h2>If you are a staff member:</h2>
@@ -4237,11 +4347,10 @@ chmod 644 /var/www/html/index.html
 # Prepare network installation area
 mkdir -p /var/www/hvp-repos/el7/{centos,ks}
 # Mirror web contents here using wget
-for subdir in ks centos node-${ovirt_version}; do
-	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" https://dangerous.ovirt.life/hvp-repos/el7/${subdir}/
+mirror_baseurl=$(echo "${hvp_baseurl}" | sed -e 's>/hvp$>>')
+for subdir in ks node-${ovirt_version}; do
+	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${mirror_baseurl}/${subdir}/
 done
-# Note: providing link for compatibility purposes
-ln -s node-${ovirt_version} /var/www/hvp-repos/el7/node
 
 # Enable virtual host configuration
 sed -i -e 's/^#*\s*NameVirtualHost.*$/NameVirtualHost *:80/' /etc/httpd/conf/httpd.conf
@@ -4249,13 +4358,13 @@ sed -i -e 's/^#*\s*NameVirtualHost.*$/NameVirtualHost *:80/' /etc/httpd/conf/htt
 
 # Configure our public repository with listing options
 cat << EOF > /etc/httpd/conf.d/public.conf
-# RPM public repository
+# Public repository
 Alias /hvp-repos /var/www/hvp-repos
 
 <Directory /var/www/hvp-repos>
 	#SSLRequireSSL
 	Options Indexes FollowSymLinks
-	Indexoptions +FoldersFirst -VersionSort
+	Indexoptions +FoldersFirst -VersionSort +FancyIndexing +NameWidth=*
         AllowOverride None
         <IfModule mod_authz_core.c>
           # Apache 2.4
@@ -4272,29 +4381,17 @@ Alias /hvp-repos /var/www/hvp-repos
 EOF
 chmod 644 /etc/httpd/conf.d/public.conf
 
-# Configure either Wok or Webmin
+# Configure either Cockpit or Webmin
 if [ "${nolocalvirt}" != "true" ]; then
-	# TODO: default port 8000 is not available (already assigned by default SELinux policy to soundd_port_t) - adding 500 to all 8000-based ports - remove when fixed upstream
-	cp /usr/lib/firewalld/services/wokd.xml /etc/firewalld/services/
-	sed -i -e 's/800\([01]\)/850\1/g' /etc/firewalld/services/wokd.xml
-	sed -i -e 's/80\([10]\)\([01]\)/85\1\2/g' /etc/nginx/conf.d/wok.conf
-	sed -i -e '/_port\s*=/s/80\([10]\)\([01]\)/85\1\2/g' -e '/_port\s*=/s/^#*//g' -e 's/^\(proxy_port.*\)$/\1\nport = 8500/' /etc/wok/wok.conf
-	# Note: need to allow nginx controlled ports through SELinux
-	semanage port -a -t http_port_t -p tcp 8500
-	semanage port -a -t http_port_t -p tcp 8501
-	semanage port -a -t http_port_t -p tcp 8510
-	semanage port -a -t http_port_t -p tcp 64667
-	# Note: nginx by default would try to bind port 80 (already bound to apache) and fail
-	sed -i -e '/^\s*server/,+19s/^/#/g' /etc/nginx/nginx.conf
-	# Add "/manage/" location with forced redirect to Wok port in Apache configuration
-	cat <<- EOF > /etc/httpd/conf.d/wok.conf
+	# Add "/manage/" location with forced redirect to Cockpit port in Apache configuration
+	cat <<- EOF > /etc/httpd/conf.d/cockpit.conf
 	#
-	#  Apache-based redirection for Wok
+	#  Apache-based redirection for Cockpit
 	#
 	
 	<Location /manage>
 	  RewriteEngine On
-	  RewriteRule ^.*\$ https://%{HTTP_HOST}:8501 [R,L]
+	  RewriteRule ^.*\$ https://%{HTTP_HOST}:9090 [R,L]
 	  <IfModule mod_authz_core.c>
 	    # Apache 2.4
 	    Require all granted
@@ -4308,17 +4405,18 @@ if [ "${nolocalvirt}" != "true" ]; then
 	</Location>
 	
 	EOF
-	chmod 644 /etc/httpd/conf.d/wok.conf
+	chmod 644 /etc/httpd/conf.d/cockpit.conf
 
-	# Configure Wok to use a custom certificate
-	cat /etc/pki/tls/private/localhost.key > /etc/wok/wok-key.pem
-	chmod 600 /etc/wok/wok-key.pem
-	cat /etc/pki/tls/certs/localhost.crt > /etc/wok/wok-cert.pem
-	chmod 644 /etc/wok/wok-cert.pem
+	# Configure Cockpit to use a custom certificate
+	cat /etc/pki/tls/certs/localhost.crt > /etc/cockpit/ws-certs.d/99-custom.cert
+	cat /etc/pki/tls/private/localhost.key >> /etc/cockpit/ws-certs.d/99-custom.cert
+	chmod 600 /etc/cockpit/ws-certs.d/99-custom.cert
 
-	# Enable Wok
-	firewall-offline-cmd --add-service=wokd --zone=external
-	systemctl enable wokd
+	# Enable Cockpit
+	# Note: enabled from internal zone too
+	firewall-offline-cmd --add-service=cockpit--zone=external
+	firewall-offline-cmd --add-service=cockpit--zone=internal
+	systemctl enable cockpit.socket
 else
 	# Add "/manage/" location with forced redirect to Webmin port in Apache configuration
 	cat <<- EOF > /etc/httpd/conf.d/webmin.conf
@@ -4411,7 +4509,9 @@ else
 	chmod 644 /etc/firewalld/services/webmin.xml
 
 	# Enable Webmin
+	# Note: enabled from internal zone too
 	firewall-offline-cmd --add-service=webmin --zone=external
+	firewall-offline-cmd --add-service=webmin --zone=internal
 	systemctl enable webmin
 fi
 
@@ -4476,6 +4576,16 @@ EOF
 systemctl enable named
 firewall-offline-cmd --add-service=dns --zone=internal
 
+# Customize TFTPd
+# Note: blocksize set to (MTU - 32) conservatively assuming MTU 1500
+# Note: increasing verbosity to help in troubleshooting
+mkdir -p /etc/systemd/system/tftpd.service.d
+cat << EOF > /etc/systemd/system/tftpd.service.d/options.conf
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/in.tftpd -v -v -v -v --blocksize 1468 -s /var/lib/tftpboot
+EOF
+
 # Enable TFTPd
 firewall-offline-cmd --add-service=tftp --zone=internal
 systemctl enable tftp.service tftp.socket
@@ -4528,12 +4638,12 @@ mkdir -p /var/lib/tftpboot/{pxelinux.cfg,bios,efi{32,64}}
 cp /usr/share/syslinux/bios/memdisk /var/lib/tftpboot/
 cp /usr/share/syslinux/bios/*.0 /var/lib/tftpboot/
 cp /usr/share/syslinux/bios/ldlinux.c32 /var/lib/tftpboot/
-cp /usr/share/syslinux/bios/*.c32 /var/lib/tftpboot/bios
+cp /usr/share/syslinux/bios/*.c32 /var/lib/tftpboot/bios/
 cp /usr/share/syslinux/efi32/efi32/ldlinux.e32 /var/lib/tftpboot/
-cp /usr/share/syslinux/efi32/efi32/*.c32 /var/lib/tftpboot/efi32
+cp /usr/share/syslinux/efi32/efi32/*.c32 /var/lib/tftpboot/efi32/
 cp /usr/share/syslinux/efi32/efi32/syslinux.efi /var/lib/tftpboot/bootia32.efi
 cp /usr/share/syslinux/efi64/efi64/ldlinux.e64 /var/lib/tftpboot/
-cp /usr/share/syslinux/efi64/efi64/*.c32 /var/lib/tftpboot/efi64
+cp /usr/share/syslinux/efi64/efi64/*.c32 /var/lib/tftpboot/efi64/
 cp /usr/share/syslinux/efi64/efi64/syslinux.efi /var/lib/tftpboot/bootx64.efi
 
 # Create PXELinux menus
@@ -4559,6 +4669,7 @@ EOF
 chmod 644 /var/lib/tftpboot/efi64.cfg
 
 # Create PXELinux non-interactive menus for automated installation of our virtual machines
+# Note: no need for KBDMAP directives here since these are supposed to be non-interactive
 # TODO: find a way to differentiate between BIOS and UEFI
 for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
 	vm_kickstart=$(basename ${vm_kickstart_path})
@@ -4571,20 +4682,26 @@ for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
 	MENU TITLE --== Heretic oVirt Project PXE Menu ==--
 	LABEL AutoInstallVM${vm_role}
 	  kernel linux/centos/vmlinuz
-	  append initrd=linux/centos/initrd.img inst.stage2=http://${HOSTNAME}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${HOSTNAME}/hvp-repos/el7/ks/${vm_kickstart}
+	  append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/${vm_kickstart}
 	EOF
 	ln -s ../${vm_role}.cfg /var/lib/tftpboot/pxelinux.cfg/
 done
 
-# Copy netboot images mirrored above
+# Prepare netboot images subdirs
 mkdir -p /var/lib/tftpboot/linux/{centos,node}
+
+# Generate keymap according to the keyboard_layout global variable
+source_keymap="/lib/kbd/keymaps/legacy/i386/qwerty/us.map.gz"
+target_keymap="$(find /lib/kbd/keymaps/legacy/i386/ -type f -name ${keyboard_layout}.map.gz -print | head -1)"
+if [ -n "${target_keymap}" ]; then
+	keytab-lilo "${source_keymap}" "${target_keymap}" > /var/lib/tftpboot/${keyboard_layout}.ktl
+fi
+
+# Copy netboot images mirrored above
+# Note: CentOS images put in place in second post section below
 pushd /var/lib/tftpboot/linux/node
 cp /var/www/hvp-repos/el7/node/vmlinuz .
 cp /var/www/hvp-repos/el7/node/initrd.img .
-popd
-pushd /var/lib/tftpboot/linux/centos
-cp /var/www/hvp-repos/el7/centos/vmlinuz .
-cp /var/www/hvp-repos/el7/centos/initrd.img .
 popd
 
 # Configure SSH root login with key
@@ -5034,6 +5151,44 @@ pkill -KILL -f havege
 %post --nochroot
 ( # Run the entire post section as a subshell for logging purposes.
 
+# Hardcoded defaults
+
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
+
+# Define associative arrays
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
+
+# Determine custom URLs for repositories and GPG keys
+for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 's/^hvp_//' -e 's/_baseurl$//' -e 's/_gpgkey$//' | sort -u); do
+	# Take URLs from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
+	fi
+done
+# Define CentOS-base URL
+centos_baseurl="http://mirror.centos.org/centos/7/os/x86_64"
+# Prefer custom CentOS-base repo URL, if any
+if [ -n "${hvp_repo_baseurl['base']}" ]; then
+	centos_baseurl="${hvp_repo_baseurl['base']}"
+fi
+
 # Append hosts fragment (generated in pre section above) into installed system
 if [ -s /tmp/hvp-bind-zones/hosts ]; then
 	cat /tmp/hvp-bind-zones/hosts >> ${ANA_INSTALL_PATH}/etc/hosts
@@ -5103,14 +5258,25 @@ done
 chmod 644 ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
 chown root:root ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/ks/hvp_parameters*.sh
 
-# Create local installation source tree to support PXE-based installations
+# Create local installation images to support PXE-based booting
+if [ -d /run/install/repo/images/pxeboot -a -f /run/install/repo/images/pxeboot/vmlinuz -a -f /run/install/repo/images/pxeboot/initrd.img -a -d /run/install/repo/LiveOS ]; then
+	# Copy CentOS images from CD/DVD image when using that as install source
+	cp -r /run/install/repo/images/pxeboot/{vmlinuz,initrd.img} ${ANA_INSTALL_PATH}/var/lib/tftpboot/linux/centos/
+	cp -r /run/install/repo/LiveOS ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
+else
+	# Mirror an external source otherwise
+	wget -P ${ANA_INSTALL_PATH}/var/lib/tftpboot/linux/centos -m -np -nH --cut-dirs=6 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/images/pxeboot
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/LiveOS/
+fi
+
+# Create local installation source tree to support network-based installations
 if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
-	# Copy CentOS repo from DVD image when using that as install source
+	# Copy CentOS repo from CD/DVD image when using that as install source
 	cp -r /run/install/repo/{Packages,repodata} ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external repo otherwise
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/Packages
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" http://mirror.centos.org/centos/7/os/x86_64/repodata
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/Packages
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/repodata
 fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
