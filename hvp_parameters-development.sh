@@ -1,19 +1,7 @@
 # Note: the following are the parameters suggested for testing the HVP development branch
 
-nolocalvirt="true"
-
 orthodox_mode="false"
 ovirt_nightly_mode="true"
-use_vdo="false"
-
-# TODO: disable Gluster-block for the time being
-#gluster_block_size[0]="200"
-#gluster_block_size[1]="300"
-#gluster_block_size[2]="450"
-unset gluster_block_size
-declare -a gluster_block_size
-
-ovirt_version="4.2"
 
 hvp_repo_baseurl['hvp-rhv-rebuild']='https://dangerous.ovirt.life/hvp-repos-development/el$releasever/rhv-rebuild/'
 hvp_repo_gpgkey['hvp-rhv-rebuild']='https://dangerous.ovirt.life/hvp-repos-development/RPM-GPG-KEY-hvp'
