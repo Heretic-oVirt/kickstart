@@ -46,9 +46,7 @@ gluster_vol_size['blockshare']="1024"
 gluster_vol_name['backup']="backup"
 gluster_vol_size['backup']="1024"
 
-gluster_block_size[0]="200"
-gluster_block_size[1]="300"
-gluster_block_size[2]="450"
+gluster_block_size[0]="300"
 
 my_ip_offset="1"
 
@@ -153,12 +151,13 @@ root_password="hvpdemo"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
+system_language="en_US.UTF-8"
 local_timezone="UTC"
 
 notification_sender="root@localhost"
 notification_receiver="monitoring@localhost"
 
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 yum_sleep_time="10"
 yum_retries="10"
