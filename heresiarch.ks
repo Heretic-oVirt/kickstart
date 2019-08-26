@@ -3292,7 +3292,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019082502"
+script_version="2019082601"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3597,12 +3597,12 @@ yum -y install yum-plugin-priorities
 
 # Add HVP custom repo
 # Define proper network source
-hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp"
+hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
 # Prefer custom HVP repo URL, if any
 if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
-	hvp_baseurl="${hvp_repo_baseurl['hvp']}"
+	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
-yum -y --nogpgcheck install ${hvp_baseurl}/x86_64/hvp-release-7-5.noarch.rpm
+yum -y --nogpgcheck install ${hvp_baseurl}x86_64/hvp-release-7-5.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 # Note: if explicitly denied, HVP RHGS rebuild must not be enabled anyway on this external support machine (no special software requirements atm)
 if [ "${orthodox_mode}" = "false" ]; then
@@ -3669,12 +3669,12 @@ fi
 
 # Add ELRepo repository definition
 # Define proper network source
-elrepo_baseurl="http://www.elrepo.org"
+elrepo_baseurl="https://elrepo.org/linux/elrepo/el7/x86_64/"
 # Prefer custom ELRepo repo URL, if any
 if [ -n "${hvp_repo_baseurl['elrepo']}" ]; then
-	elrepo_baseurl="${hvp_repo_baseurl['elrepo']}"
+	elrepo_baseurl=$(echo "${hvp_repo_baseurl['elrepo']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
-yum -y install ${elrepo_baseurl}/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+yum -y install ${elrepo_baseurl}RPMS/elrepo-release-7.0-4.el7.elrepo.noarch.rpm
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
@@ -3705,12 +3705,12 @@ if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
 # Define proper network source
-ovirt_baseurl="http://resources.ovirt.org/pub/yum-repo"
+ovirt_baseurl="http://resources.ovirt.org/pub/yum-repo/"
 # Prefer custom oVirt repo URL, if any
 if [ -n "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" ]; then
-	hvp_baseurl="${hvp_repo_baseurl[ovirt-${ovirt_version}]}"
+	ovirt_baseurl=$(echo "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
-yum -y install ${ovirt_baseurl}/ovirt-release${ovirt_release_package_suffix}.rpm
+yum -y install ${ovirt_baseurl}ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
@@ -3789,14 +3789,14 @@ if [ "${nolocalvirt}" != "true" ]; then
 else
 	# Add Webmin repo
 	# Define proper network source
-	webmin_baseurl="https://download.webmin.com/download/yum"
+	webmin_baseurl="https://download.webmin.com/download/yum/"
 	webmin_gpgkey="http://www.webmin.com/jcameron-key.asc"
 	# Prefer custom Webmin repo URL, if any
 	if [ -n "${hvp_repo_baseurl['webmin']}" ]; then
-		webmin_baseurl="${hvp_repo_baseurl['webmin']}"
+		webmin_baseurl=$(echo "${hvp_repo_baseurl['webmin']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 	fi
 	if [ -n "${hvp_repo_gpgkey['webmin']}" ]; then
-		webmin_gpgkey="${hvp_repo_gpgkey['webmin']}"
+		webmin_gpgkey=$(echo "${hvp_repo_gpgkey['webmin']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 	fi
 	cat <<- EOF > /etc/yum.repos.d/webmin.repo
 	[webmin]
