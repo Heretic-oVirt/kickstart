@@ -3292,7 +3292,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019082501"
+script_version="2019082502"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3336,16 +3336,10 @@ cat /etc/hosts >> /tmp/post.out
 
 # Hardcoded defaults
 
-unset node_name
+unset my_name
+unset domain_name
 unset network
 unset netmask
-unset network_base
-unset bondmode
-unset bondopts
-unset mtu
-unset domain_name
-unset reverse_domain_name
-unset bridge_name
 unset nicmacfix
 unset orthodox_mode
 unset ovirt_nightly_mode
@@ -3356,15 +3350,33 @@ unset yum_retries
 unset custom_yum_conf
 unset hvp_repo_baseurl
 unset hvp_repo_gpgkey
+unset keyboard_layout
 
 # Define associative arrays
-declare -A node_name
-declare -A network netmask network_base bondmode bondopts mtu
+
 declare -A domain_name
-declare -A reverse_domain_name
-declare -A bridge_name
+domain_name['external']="external.private"
+domain_name['mgmt']="mgmt.private"
+domain_name['gluster']="gluster.private"
+domain_name['lan']="lan.private"
+domain_name['internal']="internal.private"
+
+declare -A network netmask
+network['external']="dhcp"
+netmask['external']="dhcp"
+network['mgmt']="172.20.10.0"
+netmask['mgmt']="255.255.255.0"
+network['gluster']="172.20.11.0"
+netmask['gluster']="255.255.255.0"
+network['lan']="172.20.12.0"
+netmask['lan']="255.255.255.0"
+network['internal']="172.20.13.0"
+netmask['internal']="255.255.255.0"
+
 declare -A hvp_repo_baseurl
 declare -A hvp_repo_gpgkey
+
+my_name="twilight"
 
 nicmacfix="false"
 orthodox_mode="false"
@@ -3376,6 +3388,8 @@ yum_sleep_time="10"
 yum_retries="10"
 
 custom_yum_conf="false"
+
+keyboard_layout="us"
 
 # A wrapper for Yum to make it more robust against network/mirror failures
 yum() {
@@ -3417,6 +3431,39 @@ for custom_frag in ${ks_custom_frags} ; do
 done
 popd
 
+# Determine hostname
+given_hostname=$(sed -n -e 's/^.*hvp_myname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_hostname}" | grep -q '^[[:alnum:]]\+$' ; then
+	my_name="${given_hostname}"
+fi
+
+# Determine network segments parameters
+for zone in "${!domain_name[@]}" ; do
+	given_network_domain_name=$(sed -n -e "s/^.*hvp_${zone}_domainname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_network_domain_name}" ]; then
+		domain_name["${zone}"]="${given_network_domain_name}"
+	fi
+	given_network=$(sed -n -e "s/^.*hvp_${zone}=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	unset NETWORK NETMASK
+	eval $(ipcalc -s -n "${given_network}")
+	eval $(ipcalc -s -m "${given_network}")
+	if [ -n "${NETWORK}" -a -n "${NETMASK}" ]; then
+		network["${zone}"]="${NETWORK}"
+		netmask["${zone}"]="${NETMASK}"
+	fi
+done
+
+# Determine network segment identity
+lan_zone="mgmt"
+for ip in $(ip address list | awk '/inet/ {print $2}' | sed -e 's>/.*$>>'); do
+	unset NETWORK
+	eval $(ipcalc -s -n "${ip}" "${netmask['lan']}")
+	if [ "${NETWORK}" = "${network['lan']}" ]; then
+		lan_zone="lan"
+		break
+	fi
+done
+
 # Determine choice of nic MAC fixed assignment
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
 	nicmacfix="true"
@@ -3438,6 +3485,12 @@ if grep -w -q 'hvp_novirt' /proc/cmdline ; then
 fi
 if ! egrep -q '^flags.*(vmx|svm)' /proc/cpuinfo ; then
 	nolocalvirt="true"
+fi
+
+# Determine keyboard layout
+given_keyboard_layout=$(sed -n -e "s/^.*hvp_kblayout=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_keyboard_layout}" ]; then
+	keyboard_layout="${given_keyboard_layout}"
 fi
 
 # Determine oVirt version
@@ -3745,7 +3798,7 @@ else
 	if [ -n "${hvp_repo_gpgkey['webmin']}" ]; then
 		webmin_gpgkey="${hvp_repo_gpgkey['webmin']}"
 	fi
-	cat << EOF > /etc/yum.repos.d/webmin.repo
+	cat <<- EOF > /etc/yum.repos.d/webmin.repo
 	[webmin]
 	name = Webmin Distribution Neutral
 	baseurl = ${webmin_baseurl}
@@ -4690,7 +4743,7 @@ done
 # Prepare netboot images subdirs
 mkdir -p /var/lib/tftpboot/linux/{centos,node}
 
-# Generate keymap according to the keyboard_layout global variable
+# Generate keymap according to the chosen keyboard_layout
 source_keymap="/lib/kbd/keymaps/legacy/i386/qwerty/us.map.gz"
 target_keymap="$(find /lib/kbd/keymaps/legacy/i386/ -type f -name ${keyboard_layout}.map.gz -print | head -1)"
 if [ -n "${target_keymap}" ]; then
