@@ -3292,7 +3292,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019082601"
+script_version="2019082602"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4400,9 +4400,9 @@ chmod 644 /var/www/html/index.html
 # Prepare network installation area
 mkdir -p /var/www/hvp-repos/el7/{centos,ks}
 # Mirror web contents here using wget
-mirror_baseurl=$(echo "${hvp_baseurl}" | sed -e 's>/hvp$>>')
+mirror_baseurl=$(echo "${hvp_baseurl}" | sed -e 's>hvp/$>>')
 for subdir in ks node-${ovirt_version}; do
-	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${mirror_baseurl}/${subdir}/
+	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${mirror_baseurl}${subdir}/
 done
 
 # Enable virtual host configuration
@@ -5236,10 +5236,10 @@ for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 
 	fi
 done
 # Define CentOS-base URL
-centos_baseurl="http://mirror.centos.org/centos/7/os/x86_64"
+centos_baseurl="http://mirror.centos.org/centos/7/os/x86_64/"
 # Prefer custom CentOS-base repo URL, if any
 if [ -n "${hvp_repo_baseurl['base']}" ]; then
-	centos_baseurl="${hvp_repo_baseurl['base']}"
+	centos_baseurl=$(echo "${hvp_repo_baseurl['base']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
 
 # Append hosts fragment (generated in pre section above) into installed system
@@ -5318,8 +5318,8 @@ if [ -d /run/install/repo/images/pxeboot -a -f /run/install/repo/images/pxeboot/
 	cp -r /run/install/repo/LiveOS ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external source otherwise
-	wget -P ${ANA_INSTALL_PATH}/var/lib/tftpboot/linux/centos -m -np -nH --cut-dirs=6 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/images/pxeboot
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/LiveOS/
+	wget -P ${ANA_INSTALL_PATH}/var/lib/tftpboot/linux/centos -m -np -nH --cut-dirs=6 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}images/pxeboot
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}LiveOS/
 fi
 
 # Create local installation source tree to support network-based installations
@@ -5328,8 +5328,8 @@ if [ -d /run/install/repo/Packages -a -d /run/install/repo/repodata ]; then
 	cp -r /run/install/repo/{Packages,repodata} ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos/
 else
 	# Mirror an external repo otherwise
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/Packages
-	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}/repodata
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}Packages
+	wget -P ${ANA_INSTALL_PATH}/var/www/hvp-repos/el7/centos -m -np -nH --cut-dirs=4 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${centos_baseurl}repodata
 fi
 
 # Copy httpd configuration (generated in pre section above) into installed system
