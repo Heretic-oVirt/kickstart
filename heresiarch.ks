@@ -20,7 +20,7 @@
 # Note: to force custom IPs add hvp_{external,mgmt,gluster,lan,internal}_my_ip=t.t.t.t where t.t.t.t is the chosen IP on the given network
 # Note: to force custom node bonding mode add hvp_{mgmt,gluster,lan,internal}_bondmode=vvvv where vvvv is the bonding mode, either activepassive, roundrobin (only for gluster) or lacp
 # Note: to force custom network MTU add hvp_{external,mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
-# Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
+# Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP on the mgmt network
 # Note: to force custom network domain naming add hvp_{external,mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name (if distinct physical networks have conflated domain names, host names will be decorated with a "-zonename" suffix)
 # Note: to force custom network bridge naming add hvp_{mgmt,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom OVN private network naming add hvp_ovn_networks=myovn1,myovn2 where myovn1 and myovn2 are the OVN private network names
@@ -44,6 +44,8 @@
 # Note: to force custom remote desktop server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the remote desktop server
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
+# Note: to force custom NTP server names/IPs add hvp_ntpservers=ntp0,ntp1,ntp2,ntp3 where ntpN are the NTP servers fully qualified domain names or IPs
+# Note: to force custom SMTP relay server name/IP add hvp_smtpserver=smtpname where smtpname is the SMTP server fully qualified domain name or IP (used only on nodes and vms)
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
 # Note: to force custom offset for DHCP-offered IPs add hvp_dhcp_offset=m where m is the offset
 # Note: to force custom range for DHCP-offered IPs add hvp_dhcp_range=p where p is the range
@@ -116,6 +118,8 @@
 # Note: the default remote desktop server naming uses the "My Little Pony" character name grannysmith for the remote desktop server
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
+# Note: the default NTP server names are assumed to be 0.centos.pool.ntp.org 1.centos.pool.ntp.org 2.centos.pool.ntp.org 3.centos.pool.ntp.org
+# Note: the default SMTP server name is assumed to be empty and the mail relaying will happen locally
 # Note: the default gateway is assumed to be the DHCP-provided router address on the external network
 # Note: the default offset for DHCP-offered IPs is 50
 # Note: the default range for DHCP-offered IPs is 20
@@ -414,6 +418,8 @@ unset my_ip_offset
 unset my_name
 unset my_nameserver
 unset my_forwarders
+unset my_ntpservers
+unset my_smtpserver
 unset my_gateway
 unset root_password
 unset admin_username
@@ -609,6 +615,10 @@ vd_name="grannysmith"
 my_nameserver="dhcp"
 
 my_forwarders="8.8.8.8"
+
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
+my_smtpserver=""
 
 my_gateway="dhcp"
 
@@ -1193,6 +1203,18 @@ fi
 given_forwarders=$(sed -n -e "s/^.*hvp_forwarders=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_forwarders}" ]; then
 	my_forwarders="${given_forwarders}"
+fi
+
+# Determine NTP servers addresses
+given_ntpservers=$(sed -n -e "s/^.*hvp_ntpservers=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ntpservers}" ]; then
+	my_ntpservers="${given_ntpservers}"
+fi
+
+# Determine SMTP server address
+given_smtpserver=$(sed -n -e "s/^.*hvp_smtpserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_smtpserver}" ]; then
+	my_smtpserver="${given_smtpserver}"
 fi
 
 # Determine gateway address
@@ -2027,7 +2049,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2035,7 +2057,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2055,28 +2077,28 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
 LABEL installdb
         MENU LABEL Install Database Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Print server installation
 LABEL installpr
         MENU LABEL Install Print Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Remote Desktop server installation
 LABEL installvd
         MENU LABEL Install Remote Desktop Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
 
 EOF
@@ -2168,6 +2190,10 @@ ad_subdomain_prefix="${ad_subdomain_prefix}"
 my_nameserver="${my_ip[${dhcp_zone}]}"
 
 my_forwarders="${my_forwarders}"
+
+my_ntpservers="${my_ntpservers}"
+
+my_smtpserver="${my_smtpserver}"
 
 # The following must be kept undefined to allow virtual machines to choose their gateway according to the available connections
 unset my_gateway
@@ -2367,14 +2393,17 @@ for zone in "${!network[@]}" ; do
 		$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		EOF
 	done
-	# Add reverse resolution for bmcs/nodes/engine/switch names
-	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-	
-	$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-	$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-	$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-	
-	EOF
+	# Add reverse resolution for engine/switch/metrics names
+	if [ "${zone}" = "${dhcp_zone}" ]; then
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+		
+		$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		
+		EOF
+	fi
+	# Add reverse resolution for bmcs/nodes names
 	for ((i=0;i<${node_count};i=i+1)); do
 		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 		$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
@@ -2419,13 +2448,17 @@ for zone in "${!network[@]}" ; do
 		client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
 		EOF
 	done
-	# Add resolution for bmcs/nodes/engine/switch names
-	cat <<- EOF >> ${domain_name[${zone}]}.db
-	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${switch_ip}
-	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${engine_ip}
-	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${metrics_ip}
-	
-	EOF
+	# Add resolution for engine/switch/metrics names
+	if [ "${zone}" = "${dhcp_zone}" ]; then
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		
+		${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${switch_ip}
+		${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${engine_ip}
+		${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${metrics_ip}
+		
+		EOF
+	fi
+	# Add resolution for bmcs/nodes names
 	for ((i=0;i<${node_count};i=i+1)); do
 		cat <<- EOF >> ${domain_name[${zone}]}.db
 		${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} +)
@@ -3292,7 +3325,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019082602"
+script_version="2019082701"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3341,6 +3374,7 @@ unset domain_name
 unset network
 unset netmask
 unset nicmacfix
+unset my_ntpservers
 unset orthodox_mode
 unset ovirt_nightly_mode
 unset nolocalvirt
@@ -3378,6 +3412,8 @@ declare -A hvp_repo_gpgkey
 
 my_name="twilight"
 
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
 nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
@@ -3403,6 +3439,11 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: adding resolution/ping of some well-known public hosts to force wake-up of buggy DNS/gateway implementations (VMware Workstation 12 suspected)
+		for target in www.google.com www.centos.org mirrorlist.centos.org ; do
+			/bin/nslookup "${target}"
+			/bin/ping -c 4 "${target}"
+		done
 		# Note: adding a complete cleanup before retrying
 		/usr/bin/yum clean all
 		/usr/bin/yum "$@"
@@ -3463,6 +3504,12 @@ for ip in $(ip address list | awk '/inet/ {print $2}' | sed -e 's>/.*$>>'); do
 		break
 	fi
 done
+
+# Determine NTP servers addresses
+given_ntpservers=$(sed -n -e "s/^.*hvp_ntpservers=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ntpservers}" ]; then
+	my_ntpservers="${given_ntpservers}"
+fi
 
 # Determine choice of nic MAC fixed assignment
 if grep -w -q 'hvp_nicmacfix' /proc/cmdline ; then
@@ -3837,6 +3884,9 @@ yum -y install socat
 # Note: even in presence of an actual/virtualized hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum -y install haveged
 
+# Install ELrepo Yum plugin
+yum -y install yum-plugin-elrepo
+
 # Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip and ARJ
 yum -y install hping3 p7zip{,-{gui,plugins}} arj pwgen
 yum -y install yum-cron yum-plugin-ps gdisk
@@ -3870,6 +3920,8 @@ yum -y install memtest86+
 yum -y install squid
 
 # Install X2Go
+# TODO: manually installing Perl dependency packages to avoid webmin/usermin packages to erroneously provide them - remove when fixed upstream
+yum -y install perl-File-BaseDir perl-Capture-Tiny perl-Config-Simple perl-DBD-SQLite perl-File-Which perl-Switch perl-Try-Tiny
 yum -y install x2goserver x2goserver-xsession x2godesktopsharing
 yum -y install x2goclient pyhoca-{cli,gui} x2goplugin
 
@@ -4075,9 +4127,16 @@ fi
 # Note: systemd sets clock to UTC by default
 #echo 'UTC' >> /etc/adjtime
 
-# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given server)
+# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
 sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
-echo "0.centos.pool.ntp.org" > /etc/ntp/step-tickers
+cat /dev/null > /etc/ntp/step-tickers
+for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "${server}" >> /etc/ntp/step-tickers
+done
+sed -i -e '/^server/s/^/#/' /etc/chrony.conf
+for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "server ${server} iburst" >> /etc/chrony.conf
+done
 
 # Allow NTPdate hardware clock sync through SELinux
 # Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myntpdate
