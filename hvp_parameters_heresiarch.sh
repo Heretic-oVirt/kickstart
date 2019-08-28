@@ -143,11 +143,13 @@ my_nameserver="dhcp"
 
 my_forwarders="8.8.8.8"
 
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
 my_gateway="dhcp"
 
 my_name="twilight"
 
-root_password="hvpdemo"
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
@@ -174,3 +176,4 @@ yum_retries="10"
 #hvp_repo_baseurl["ovirt-${ovirt_version}-centos-ovirt$(echo ${ovirt_version} | sed -e 's/[.]//g')"]="http://centos.mirror.garr.it/centos/\$releasever/virt/\$basearch/ovirt-${ovirt_version}/"
 #hvp_repo_baseurl['epel']='http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/$releasever/$basearch/'
 #hvp_repo_gpgkey['epel']='http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/RPM-GPG-KEY-EPEL-$releasever'
+#hvp_repo_baseurl['elrepo']='http://elrepo.org/linux/elrepo/el7/$basearch/'
