@@ -2,7 +2,6 @@
 # Note: minimum amount of RAM successfully tested for installation: 1536 MiB (test failed with 1024 MiB)
 
 # Install from PXE with commandline (see below for comments):
-# TODO: check each and every custom "hvp_" parameter below for overlap with default dracut/anaconda parameters and convert to using those instead
 # nomodeset elevator=deadline inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/centos inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=[0123]
 # Note: DHCP is assumed to be available on one and only one network (the mgmt one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface (beware: not honored for bond slaves)
@@ -16,17 +15,20 @@
 # Note: to influence selection of the target disk for node OS installation add hvp_nodeosdisk=AAA where AAA is either the device name (sda, sdb ecc) or a qualifier like first, last, smallest, last-smallest
 # Note: to force static nic name-to-MAC mapping add the option hvp_nicmacfix
 # Note: to force custom node identity add hvp_nodeid=X where X is the node index
-# Note: to force custom addressing add hvp_{mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the node IP or the network address on the given network and yy is the prefix on the given network - other node addresses will count up and down from current node IP
+# Note: to force custom addressing add hvp_{mgmt,gluster,lan,internal}=x.x.x.x/yy where x.x.x.x may either be the machine IP or the network address on the given network and yy is the prefix on the given network (distinct physical networks cannot be logically conflated)
 # Note: to force custom test IPs add hvp_{mgmt,gluster,lan,internal}_test_ip=t.t.t.t where t.t.t.t is the test IP on the given network
 # Note: to force custom node bonding mode add hvp_{mgmt,gluster,lan,internal}_bondmode=vvvv where vvvv is the bonding mode, either activepassive, roundrobin (only for gluster) or lacp
 # Note: to force custom network MTU add hvp_{mgmt,gluster,lan,internal}_mtu=zzzz where zzzz is the MTU value
-# Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP
-# Note: to force custom network domain naming add hvp_{mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name
+# Note: to force custom switch IP add hvp_switch=p.p.p.p where p.p.p.p is the switch IP on the mgmt network
+# Note: to force custom network domain naming add hvp_{mgmt,gluster,lan,internal}_domainname=mynet.name where mynet.name is the domain name (if distinct physical networks have conflated domain names, host names will be decorated with a "-zonename" suffix)
 # Note: to force custom network bridge naming add hvp_{mgmt,gluster,lan,internal}_bridge=bridgename where bridgename is the bridge name
 # Note: to force custom AD subdomain naming add hvp_ad_subdomainname=myprefix where myprefix is the subdomain name
 # Note: to force custom AD DC IP add hvp_ad_dc=u.u.u.u where u.u.u.u is the AD DC IP on the AD network
 # Note: to force custom nameserver IP (during installation) add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
+# Note: to force custom NTP server names/IPs add hvp_ntpservers=ntp0,ntp1,ntp2,ntp3 where ntpN are the NTP servers fully qualified domain names or IPs
+# Note: to force custom SMTP relay server name/IP add hvp_smtpserver=smtpname where smtpname is the SMTP server fully qualified domain name or IP (used only on nodes and vms)
+# Note: to force custom SMTP relay server to use SMTPS add hvp_smtps (used only on nodes and vms)
 # Note: to force custom gateway IP add hvp_gateway=n.n.n.n where n.n.n.n is the gateway IP
 # Note: to force custom node count add hvp_nodecount=N where N is the number of nodes in the cluster
 # Note: to force custom master node identity add hvp_masternodeid=Y where Y is the master node index
@@ -48,7 +50,7 @@
 # Note: to force custom email address for notification receiver add hvp_receiver_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
-# Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2 or master)
+# Note: to force custom oVirt version add hvp_ovirt_version=OO where OO is the version (either 4.1, 4.2, 4.3 or master)
 # Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
 # Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
 # Note: to force custom repo base URL for repo reponame add hvp_reponame_baseurl=HHHHH where HHHHH is the base URL (including variables like $releasever and $basearch)
@@ -70,6 +72,9 @@
 # Note: the default AD DC IP on the AD network is assumed to be the AD network address plus 220
 # Note: the default nameserver IP is assumed to be 8.8.8.8 during installation (afterwards it will be switched to 127.0.0.1 unconditionally)
 # Note: the default forwarder IP is assumed to be 8.8.8.8
+# Note: the default NTP server names are assumed to be 0.centos.pool.ntp.org 1.centos.pool.ntp.org 2.centos.pool.ntp.org 3.centos.pool.ntp.org
+# Note: the default SMTP server name is assumed to be empty and the mail relaying will happen locally
+# Note: the default SMTP server connection is assumed to be plaintext with STARTTLS
 # Note: the default gateway IP is assumed to be equal to the test IP on the mgmt network
 # Note: the default node count is 3
 # Note: the default master node id is assumed to be 0
@@ -91,7 +96,7 @@
 # Note: the default notification email address for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
 # Note: the default local timezone is UTC
-# Note: the default oVirt version is 4.1
+# Note: the default oVirt version is 4.2
 # Note: the default number of retries after a Yum failure is 10
 # Note: the default sleep time between retries after a Yum failure is 10 seconds
 # Note: the default repo base URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
@@ -177,6 +182,7 @@ unix2dos
 screen
 minicom
 telnet
+ftp
 tree
 audit
 iptraf
@@ -314,6 +320,9 @@ unset my_index
 unset my_name
 unset my_nameserver
 unset my_forwarders
+unset my_ntpservers
+unset my_smtpserver
+unset use_smtps
 unset my_gateway
 unset root_password
 unset admin_username
@@ -427,11 +436,8 @@ domain_name['gluster']="gluster.private"
 domain_name['lan']="lan.private"
 domain_name['internal']="internal.private"
 
+# Note: no need to define reverse network domain names since they get automatically defined below
 declare -A reverse_domain_name
-reverse_domain_name['mgmt']="10.20.172.in-addr.arpa"
-reverse_domain_name['gluster']="11.20.172.in-addr.arpa"
-reverse_domain_name['lan']="12.20.172.in-addr.arpa"
-reverse_domain_name['internal']="13.20.172.in-addr.arpa"
 
 declare -A bridge_name
 bridge_name['mgmt']="ovirtmgmt"
@@ -449,6 +455,12 @@ my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
 
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
+my_smtpserver=""
+
+use_smtps="false"
+
 root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
@@ -457,7 +469,7 @@ local_timezone="UTC"
 
 notification_receiver="monitoring@localhost"
 
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 # Detect any configuration fragments and load them into the pre environment
 # Note: incomplete (no device or filename), BIOS based devices, UUID, file and DHCP methods are unsupported
@@ -843,6 +855,23 @@ if [ -n "${given_forwarders}" ]; then
 	my_forwarders="${given_forwarders}"
 fi
 
+# Determine NTP servers addresses
+given_ntpservers=$(sed -n -e "s/^.*hvp_ntpservers=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ntpservers}" ]; then
+	my_ntpservers="${given_ntpservers}"
+fi
+
+# Determine SMTP server address
+given_smtpserver=$(sed -n -e "s/^.*hvp_smtpserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_smtpserver}" ]; then
+	my_smtpserver="${given_smtpserver}"
+fi
+
+# Determine choice of forcing SMTPS
+if grep -w -q 'hvp_smtps' /proc/cmdline ; then
+	use_smtps="true"
+fi
+
 # Determine gateway address
 given_gateway=$(sed -n -e "s/^.*hvp_gateway=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_gateway}" ]; then
@@ -1083,12 +1112,24 @@ if [ -n "${given_dc}" ]; then
 fi
 if [ -z "${ad_dc_ip}" ]; then
 	if [ -n "${nics['lan']}" ]; then
-		ad_zone="lan"
+		ad_domain_name="lan"
 	else
-		ad_zone="mgmt"
+		ad_domain_name="mgmt"
 	fi
-	ad_dc_ip=$(ipmat $(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_index} -) ${node_ip_offset} -) ${ad_dc_ip_offset} +)
+	ad_dc_ip=$(ipmat $(ipmat $(ipmat ${my_ip[${ad_domain_name}]} ${my_index} -) ${node_ip_offset} -) ${ad_dc_ip_offset} +)
 fi
+
+# Perform check to detect conflated domain name spaces
+# Note: in presence even of a couple of conflated domain name spaces we will force hostname suffixes on all subnets
+use_hostname_decoration="false"
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		use_hostname_decoration="true"
+		break
+	fi
+	added_zones="${added_zones} ${domain_name[${zone}]}"
+done
 
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
@@ -1127,7 +1168,7 @@ for zone in $(echo "${!network[@]}" | tr ' ' '\n' | sort -r); do
 		# Add hostname option on the mgmt zone only
 		# Note: oVirt requires the node hostname to be on the ovirtmgmt network
 		if [ "${zone}" = "mgmt" ]; then
-			further_options="${further_options} --hostname=${my_name}.${domain_name[${zone}]}"
+			further_options="${further_options} --hostname=${my_name}"$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)".${domain_name[${zone}]}"
 		fi
 		if [ "${nics_number}" -eq 1 ]; then
 			# Single (plain) interface
@@ -1327,26 +1368,95 @@ fi
 if [ "${my_index}" -eq "${master_index}" ]; then
 	mkdir -p /tmp/hvp-bind-zones/dynamic
 	pushd /tmp/hvp-bind-zones/dynamic
+
+	added_zones=""
 	for zone in "${!network[@]}" ; do
-		cat <<- EOF > ${domain_name[${zone}]}.db
-		\$ORIGIN ${domain_name[${zone}]}.
-		\$TTL 15552000
-		@		IN	SOA	${node_name[${master_index}]}.${domain_name['mgmt']}. root.${node_name[${master_index}]}.${domain_name['mgmt']}. (
-		                         $(date '+%Y%m%d')01 ; serial
-		                         3600 ; refresh
-		                         900 ; retry
-		                         1209600 ; expire
-		                         43200 ; default_ttl
-		                         )
-		@			NS	${node_name[${master_index}]}.${domain_name['mgmt']}.
+		# Perform check to avoid duplicating entries in case of conflated reverse domain name spaces
+		if ! echo "${added_zones}" | grep -q -w $(echo "${reverse_domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+			cat <<- EOF > ${reverse_domain_name[${zone}]}.db
+			\$ORIGIN ${reverse_domain_name[${zone}]}.
+			\$TTL 15552000
+			@		IN	SOA	${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. root.${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. (
+			                         $(date '+%Y%m%d')01 ; serial
+			                         3600 ; refresh
+			                         900 ; retry
+			                         1209600 ; expire
+			                         43200 ; default_ttl
+			                         )
+			@		IN	NS	${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+			
+			; Static addresses assigned to our virtual/physical machines
+			
+			EOF
+			added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
+		fi
+		# Add reverse resolution for installer names
+		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 		
-		; Names for static addresses assigned to our virtual/physical machines
+		$(echo ${test_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${installer_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		
 		EOF
-		# Note: installer, switch, engine, metrics and BMCs are connected only on the MGMT network
+		# Add reverse resolution for bmcs/engine/switch/metrics names
+		# Note: these are connected only on the management zone (do not need name decoration)
+		if [ "${zone}" = "mgmt" ]; then
+			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+			
+			$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
+			$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
+			$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
+			
+			EOF
+			for ((i=0;i<${node_count};i=i+1)); do
+				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+				$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc.${domain_name[${zone}]}.
+				EOF
+			done
+		fi
+		# Add reverse resolution for nodes names
+		for ((i=0;i<${node_count};i=i+1)); do
+			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+			$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+			EOF
+		done
+		# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/mgmt zones (depending on actual network availability)
+		# Note: no name decoration used on LAN zone
+		if [ "${zone}" = "lan" -o "${zone}" = "mgmt" ]; then
+			for ((i=0;i<${active_storage_node_count};i=i+1)); do
+				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+				$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}$(if [ "${use_hostname_decoration}" = "true" -a "${zone}" != "${lan_zone}" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+				EOF
+			done
+		fi
+	
+		# Perform check to avoid duplicating entries in case of conflated domain name spaces
+		if ! echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+			cat <<- EOF > ${domain_name[${zone}]}.db
+			\$ORIGIN ${domain_name[${zone}]}.
+			\$TTL 15552000
+			@		IN	SOA	${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. root.${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}. (
+			                         $(date '+%Y%m%d')01 ; serial
+			                         3600 ; refresh
+			                         900 ; retry
+			                         1209600 ; expire
+			                         43200 ; default_ttl
+			                         )
+			@			NS	${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+			
+			; Names for static addresses assigned to our virtual/physical machines
+			
+			EOF
+			added_zones="${added_zones} ${domain_name[${zone}]}"
+		fi
+		# Add resolution for installer names
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		
+		${installer_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)	A	${test_ip[${zone}]}
+		
+		EOF
+		# Add resolution for bmcs/engine/switch/metrics names
+		# Note: these are connected only on the management zone (do not need name decoration)
 		if [ "${zone}" = "mgmt" ]; then
 			cat <<- EOF >> ${domain_name[${zone}]}.db
-			${installer_name}	A	${test_ip[${zone}]}
 			${switch_name}		A	${switch_ip}
 			${engine_name}		A	${engine_ip}
 			${metrics_name}		A	${metrics_ip}
@@ -1357,59 +1467,19 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 				EOF
 			done
 		fi
+		# Add resolution for nodes names
 		for ((i=0;i<${node_count};i=i+1)); do
 			cat <<- EOF >> ${domain_name[${zone}]}.db
-			${node_name[${i}]}		A	$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} +)
+			${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} +)
 			EOF
 		done
-		# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
+		# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services on lan/mgmt zones (depending on actual network availability)
+		# Note: no name decoration used on LAN zone
 		# Note: registered with a TTL of 1 to enhance round-robin load balancing
 		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
 				cat <<- EOF >> ${domain_name[${zone}]}.db
-				${storage_name}	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
-				EOF
-			done
-		fi
-		cat <<- EOF > ${reverse_domain_name[${zone}]}.db
-		\$ORIGIN ${reverse_domain_name[${zone}]}.
-		\$TTL 15552000
-		@		IN	SOA	${node_name[${master_index}]}.${domain_name['mgmt']}. root.${node_name[${master_index}]}.${domain_name['mgmt']}. (
-		                         $(date '+%Y%m%d')01 ; serial
-		                         3600 ; refresh
-		                         900 ; retry
-		                         1209600 ; expire
-		                         43200 ; default_ttl
-		                         )
-		@		IN	NS	${node_name[${master_index}]}.${domain_name['mgmt']}.
-		
-		; Static addresses assigned to our virtual/physical machines
-		
-		EOF
-		# Note: installer, switch, engine, metrics and BMCs are connected only on the MGMT network
-		if [ "${zone}" = "mgmt" ]; then
-			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-			$(echo ${test_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${installer_name}.${domain_name[${zone}]}.
-			$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
-			$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
-			$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
-			EOF
-			for ((i=0;i<${node_count};i=i+1)); do
-				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-				$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc.${domain_name[${zone}]}.
-				EOF
-			done
-		fi
-		for ((i=0;i<${node_count};i=i+1)); do
-			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-			$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}.${domain_name[${zone}]}.
-			EOF
-		done
-		# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
-			for ((i=0;i<${active_storage_node_count};i=i+1)); do
-				cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-				$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}.${domain_name[${zone}]}.
+				${storage_name}$(if [ "${use_hostname_decoration}" = "true" -a "${zone}" != "${lan_zone}" ]; then echo "-${zone}" ; fi)	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
 				EOF
 			done
 		fi
@@ -1424,11 +1494,14 @@ else
 	my_options="masters { ${master_ip}; };"
 	file_location="slaves"
 fi
+
+# Define AD subdomain name
 if [ -n "${nics['lan']}" ]; then
-	ad_zone="${ad_subdomain_prefix}.${domain_name['lan']}"
+	ad_domain_name="${ad_subdomain_prefix}.${domain_name['lan']}"
 else
-	ad_zone="${ad_subdomain_prefix}.${domain_name['mgmt']}"
+	ad_domain_name="${ad_subdomain_prefix}.${domain_name['mgmt']}"
 fi
+
 # Use information gathered above to create bind configuration file
 mkdir -p /tmp/hvp-bind-zones
 pushd /tmp/hvp-bind-zones
@@ -1444,6 +1517,7 @@ cat << EOF > named.conf
 options
 {
         version none;
+        check-names master ignore;
         /* make named use port 53 for the source of all queries, to allow
          * firewalls to block all ports except 53:
          */
@@ -1566,32 +1640,42 @@ view "localhost_resolver"
 
         // These are your "authoritative" internal zones :
 
-        zone "${ad_zone}" IN {
+        zone "${ad_domain_name}" IN {
                 type static-stub;
                 server-addresses { ${ad_dc_ip}; };
                 forwarders {};
         };
 
 EOF
+added_zones=""
 for zone in "${!network[@]}" ; do
-	cat <<- EOF >> named.conf
-	        zone "${domain_name[${zone}]}" { 
-	                type ${my_role};
-	                ${my_options}
-	                // put dynamically updateable zones in the dynamic/ directory so named can update them
-	                file "${file_location}/${domain_name[${zone}]}.db";
-	        };
-	
-	        zone "${reverse_domain_name[${zone}]}" { 
-	                type ${my_role};
-	                ${my_options}
-	                // put dynamically updateable zones in the dynamic/ directory so named can update them
-	                file "${file_location}/${reverse_domain_name[${zone}]}.db";
-	        };
-	EOF
+	# Perform check to avoid duplicating entries in case of conflated reverse domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${reverse_domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${reverse_domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+		        };
+		EOF
+		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
+	fi
+	# Perform check to avoid duplicating entries in case of conflated domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${domain_name[${zone}]}.db";
+		        };
+		
+		EOF
+		added_zones="${added_zones} ${domain_name[${zone}]}"
+	fi
 done
 cat << EOF >> named.conf
-
 };
 
 view "internal"
@@ -1618,32 +1702,42 @@ view "internal"
         // These are your "authoritative" internal zones, and would probably
         // also be included in the "localhost_resolver" view above :
 
-        zone "${ad_zone}" IN {
+        zone "${ad_domain_name}" IN {
                 type static-stub;
                 server-addresses { ${ad_dc_ip}; };
                 forwarders {};
         };
 
 EOF
+added_zones=""
 for zone in "${!network[@]}" ; do
-	cat <<- EOF >> named.conf
-	        zone "${domain_name[${zone}]}" { 
-	                type ${my_role};
-	                ${my_options}
-	                // put dynamically updateable zones in the dynamic/ directory so named can update them
-	                file "${file_location}/${domain_name[${zone}]}.db";
-	        };
-	
-	        zone "${reverse_domain_name[${zone}]}" { 
-	                type ${my_role};
-	                ${my_options}
-	                // put dynamically updateable zones in the dynamic/ directory so named can update them
-	                file "${file_location}/${reverse_domain_name[${zone}]}.db";
-	        };
-	EOF
+	# Perform check to avoid duplicating entries in case of conflated reverse domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${reverse_domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${reverse_domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+		        };
+		EOF
+		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
+	fi
+	# Perform check to avoid duplicating entries in case of conflated domain name spaces
+	if ! echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${domain_name[${zone}]}.db";
+		        };
+		
+		EOF
+		added_zones="${added_zones} ${domain_name[${zone}]}"
+	fi
 done
 cat << EOF >> named.conf
-
 };
 
 view "external"
@@ -1696,7 +1790,7 @@ for zone in "${!network[@]}" ; do
 	fi
 	for ((i=0;i<${node_count};i=i+1)); do
 		cat <<- EOF >> hosts
-		$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} +)	${node_name[${i}]}.${domain_name[${zone}]}
+		$(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${i} +)	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}
 		EOF
 	done
 done
@@ -1946,7 +2040,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019032003"
+script_version="2019083001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1990,19 +2084,12 @@ cat /etc/hosts >> /tmp/post.out
 
 # Hardcoded defaults
 
-unset node_name
-unset network
-unset netmask
-unset network_base
-unset bondopts
-unset mtu
-unset domain_name
-unset reverse_domain_name
-unset test_ip
-unset bridge_name
 unset my_index
 unset master_index
 unset nicmacfix
+unset my_ntpservers
+unset my_smtpserver
+unset use_smtps
 unset orthodox_mode
 unset ovirt_nightly_mode
 unset use_vdo
@@ -2010,28 +2097,33 @@ unset ovirt_version
 unset notification_receiver
 unset yum_sleep_time
 unset yum_retries
+unset custom_yum_conf
 unset hvp_repo_baseurl
 unset hvp_repo_gpgkey
 
 # Define associative arrays
-declare -A node_name
-declare -A network netmask network_base bondopts mtu
-declare -A domain_name
-declare -A reverse_domain_name
-declare -A test_ip
-declare -A bridge_name
+
 declare -A hvp_repo_baseurl
 declare -A hvp_repo_gpgkey
 
 master_index="0"
+
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
+my_smtpserver=""
+
+use_smtps="false"
+
 nicmacfix="false"
 orthodox_mode="false"
 ovirt_nightly_mode="false"
 use_vdo="false"
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 yum_sleep_time="10"
 yum_retries="10"
+
+custom_yum_conf="false"
 
 notification_receiver="monitoring@localhost"
 
@@ -2047,6 +2139,11 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: adding resolution/ping of some well-known public hosts to force wake-up of buggy DNS/gateway implementations (VMware Workstation 12 suspected)
+		for target in www.google.com www.centos.org mirrorlist.centos.org ; do
+			/bin/nslookup "${target}"
+			/bin/ping -c 4 "${target}"
+		done
 		# Note: adding a complete cleanup before retrying
 		/usr/bin/yum clean all
 		/usr/bin/yum "$@"
@@ -2125,10 +2222,57 @@ if echo "${given_yum_sleep_time}" | grep -q '^[[:digit:]]\+$' ; then
 	yum_sleep_time="${given_yum_sleep_time}"
 fi
 
+# Determine custom URLs for repositories and GPG keys
+for repo_name in $(egrep -o 'hvp_[^=]*_(baseurl|gpgkey)' /proc/cmdline | sed -e 's/^hvp_//' -e 's/_baseurl$//' -e 's/_gpgkey$//' | sort -u); do
+	# Take URLs from kernel commandline
+	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_baseurl}" ]; then
+		# Correctly detect an empty (disabled) repo URL
+		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
+			unset hvp_repo_baseurl[${repo_name}]
+		else
+			hvp_repo_baseurl[${repo_name}]="${given_repo_baseurl}"
+		fi
+	fi
+	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+	if [ -n "${given_repo_gpgkey}" ]; then
+		# Correctly detect an empty (disabled) gpgkey URL
+		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
+			unset hvp_repo_gpgkey[${repo_name}]
+		else
+			hvp_repo_gpgkey[${repo_name}]="${given_repo_gpgkey}"
+		fi
+	fi
+done
+# Verify whether a custom conf has been established (either from commandline parsing or from parameter configuration files)
+url_count="${#hvp_repo_baseurl[@]}"
+key_count="${#hvp_repo_gpgkey[@]}"
+ref_count=$((url_count + key_count))
+if [ "${ref_count}" -gt 1 ]; then
+	custom_yum_conf="true"
+fi
+
 # Determine notification receiver email address
 given_receiver_email=$(sed -n -e "s/^.*hvp_receiver_email=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_receiver_email}" ]; then
 	notification_receiver="${given_receiver_email}"
+fi
+
+# Determine NTP servers addresses
+given_ntpservers=$(sed -n -e "s/^.*hvp_ntpservers=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ntpservers}" ]; then
+	my_ntpservers="${given_ntpservers}"
+fi
+
+# Determine SMTP server address
+given_smtpserver=$(sed -n -e "s/^.*hvp_smtpserver=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_smtpserver}" ]; then
+	my_smtpserver="${given_smtpserver}"
+fi
+
+# Determine choice of forcing SMTPS
+if grep -w -q 'hvp_smtps' /proc/cmdline ; then
+	use_smtps="true"
 fi
 
 # Create /dev/root symlink for grubby (must differentiate for use of LVM or MD based "/")
@@ -2151,51 +2295,32 @@ ln -sf $rootdisk /dev/root
 rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
-# Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 # Note: done here to cater for those repos already installed by default
-for repofile in /etc/yum.repos.d/*.repo; do
-	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
-		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
-		sed -i -e 's/^metalink/#metalink/g' "${repofile}"
-		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
-	fi
-done
-# Disable fastestmirror yum plugin too
-sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
-
-# Allow specifying custom base URLs for repositories and GPG keys
-# Note: done here to cater for those repos already installed by default
-for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
-	# Take URLs from parameters files or hardcoded defaults
-	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
-	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-	# Take URLs from kernel commandline
-	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_baseurl}" ]; then
-		# Correctly detect an empty (disabled) repo URL
-		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
-			unset repo_baseurl
-		else
-			repo_baseurl="${given_repo_baseurl}"
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
 		fi
-	fi
-	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_gpgkey}" ]; then
-		# Correctly detect an empty (disabled) gpgkey URL
-		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
-			unset repo_gpgkey
-		else
-			repo_gpgkey="${given_repo_gpgkey}"
+	done
+	# Disable fastestmirror yum plugin too
+	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos already installed by default
+	for repo_name in $(yum-config-manager | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
 		fi
-	fi
-	# Force any custom URLs
-	if [ -n "${repo_baseurl}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
-	fi
-	if [ -n "${repo_gpgkey}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
-	fi
-done
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
 
 # Add YUM priorities plugin
 yum -y install yum-plugin-priorities
@@ -2205,7 +2330,13 @@ yum -y install yum-plugin-priorities
 #yum-config-manager --enable cr > /dev/null
 
 # Add HVP custom repo
-yum -y --nogpgcheck install https://dangerous.ovirt.life/hvp-repos/el7/hvp/x86_64/hvp-release-7-5.noarch.rpm
+# Define proper network source
+hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
+# Prefer custom HVP repo URL, if any
+if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
+	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+fi
+yum -y --nogpgcheck install ${hvp_baseurl}x86_64/hvp-release-7-5.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
@@ -2222,26 +2353,78 @@ else
 	# Note: HVP RHGS rebuild must be enabled anyway to allow access to slightly newer/tweaked (but compatible with community Gluster) versions of other packages
 	yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
 fi
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
 
-# Add upstream repository definitions
-yum -y install http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+# Add ELRepo repository definition
+# Define proper network source
+elrepo_baseurl="https://elrepo.org/linux/elrepo/el7/x86_64/"
+# Prefer custom ELRepo repo URL, if any
+if [ -n "${hvp_repo_baseurl['elrepo']}" ]; then
+	elrepo_baseurl=$(echo "${hvp_repo_baseurl['elrepo']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+fi
+yum -y install ${elrepo_baseurl}RPMS/elrepo-release-7.0-4.el7.elrepo.noarch.rpm
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[elrepo.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
+# Add oVirt repository definition
 ovirt_release_package_suffix=$(echo "${ovirt_version}" | sed -e 's/[.]//g')
 if [ "${ovirt_release_package_suffix}" = "master" ]; then
 	ovirt_release_package_suffix="-master"
 fi
-yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release${ovirt_release_package_suffix}.rpm
-# Marking CentOS-hosted oVirt repositories as higher priority than others (mainly to prevent EPEL from replacing oVirt-specific packages) but less than our own (when not in orthodox mode)
-for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
-	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
-done
-# Marking CentOS Base repositories as higher priority than others (mainly to prevent CentOS-hosted oVirt repositories from masking newer packages in base/updates/extras) but less than our own (when not in orthodox mode)
-for repo_name in base updates extras; do
-	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
-done
+# Define proper network source
+ovirt_baseurl="http://resources.ovirt.org/pub/yum-repo/"
+# Prefer custom oVirt repo URL, if any
+if [ -n "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" ]; then
+	ovirt_baseurl=$(echo "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+fi
+yum -y install ${ovirt_baseurl}ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
-	# Marking CentOS-hosted oVirt repositories as skip_if_unavailable
+	# Marking CentOS-hosted repositories as skip_if_unavailable
 	for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
 		yum-config-manager --save --setopt="${repo_name}.skip_if_unavailable=1" > /dev/null
 	done
@@ -2265,64 +2448,40 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	EOF
 	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
 fi
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[ovirt.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
+# Marking CentOS-hosted oVirt repositories as higher priority than others (mainly to prevent EPEL from replacing oVirt-specific packages) but less than our own (when not in orthodox mode)
+for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
+done
+# Marking CentOS Base repositories as higher priority than others (mainly to prevent CentOS-hosted oVirt repositories from masking newer packages in base/updates/extras) but less than our own (when not in orthodox mode)
+for repo_name in base updates extras; do
+	yum-config-manager --save --setopt="${repo_name}.priority=75" > /dev/null
+done
+
 # Note: disabling includes below in all yum install invocations which involve EPEL to work around includepkgs restrictions on EPEL repo (oVirt dependencies repo)
-
-# Add Webmin repo
-# TODO: adapt Cockpit like in NGN and switch to using that instead
-cat << EOF > /etc/yum.repos.d/webmin.repo
-[webmin]
-name = Webmin Distribution Neutral
-baseurl = http://download.webmin.com/download/yum
-gpgcheck = 1
-enabled = 1
-gpgkey = http://www.webmin.com/jcameron-key.asc
-skip_if_unavailable = 1
-EOF
-chmod 644 /etc/yum.repos.d/webmin.repo
-
-# Comment out mirrorlist directives and uncomment the baseurl ones to make better use of proxy caches
-# Note: repeated here to allow applying to further repos installed above
-for repofile in /etc/yum.repos.d/*.repo; do
-	if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
-		sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
-		sed -i -e 's/^metalink/#metalink/g' "${repofile}"
-		sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
-	fi
-done
-
-# Allow specifying custom base URLs for repositories and GPG keys
-# Note: repeated here to allow applying to further repos installed above
-for repo_name in $(yum repolist all -v 2>/dev/null | awk '/Repo-id/ {print $3}' | sed -e 's>/.*$>>g'); do
-	# Take URLs from parameters files or hardcoded defaults
-	repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
-	repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-	# Take URLs from kernel commandline
-	given_repo_baseurl=$(sed -n -e "s/^.*hvp_${repo_name}_baseurl=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_baseurl}" ]; then
-		# Correctly detect an empty (disabled) repo URL
-		if [ "${given_repo_baseurl}" = '""' -o "${given_repo_baseurl}" = "''" ]; then
-			unset repo_baseurl
-		else
-			repo_baseurl="${given_repo_baseurl}"
-		fi
-	fi
-	given_repo_gpgkey=$(sed -n -e "s/^.*hvp_${repo_name}_gpgkey=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
-	if [ -n "${given_repo_gpgkey}" ]; then
-		# Correctly detect an empty (disabled) gpgkey URL
-		if [ "${given_repo_gpgkey}" = '""' -o "${given_repo_gpgkey}" = "''" ]; then
-			unset repo_gpgkey
-		else
-			repo_gpgkey="${given_repo_gpgkey}"
-		fi
-	fi
-	# Force any custom URLs
-	if [ -n "${repo_baseurl}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
-	fi
-	if [ -n "${repo_gpgkey}" ]; then
-		yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
-	fi
-done
 
 # Enable use of delta rpms since we are not using a local mirror
 # Note: this may introduce HTTP 416 errors - better leave this to post-installation manual choices
@@ -2349,6 +2508,9 @@ grubby --set-default=/boot/vmlinuz-$(rpm -q --last kernel | head -1 | cut -f 1 -
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
 yum --disableincludes=all -y install haveged
+
+# Install ELrepo Yum plugin
+yum --disableincludes=all -y install yum-plugin-elrepo
 
 # Install YUM-cron, YUM-plugin-ps, Gdisk, PWGen, HPing, 7Zip and ARJ
 yum --disableincludes=all -y install hping3 p7zip{,-plugins} arj pwgen
@@ -2433,13 +2595,10 @@ yum --disableincludes=all -y install bind
 yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
-yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python ovirt-ansible-roles NetworkManager-glib python-passlib
+yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
 
-# Install Webmin for generic web management
-# TODO: adapt Cockpit like in NGN and switch to using that instead
-yum --disableincludes=all -y install webmin
-# Note: immediately stop webmin started by postinst scriptlet
-/etc/init.d/webmin stop
+# Install Cockpit web management interface
+yum --disableincludes=all -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -2534,9 +2693,16 @@ chmod 644 /etc/sysctl.d/panic.conf
 # Note: systemd sets clock to UTC by default
 #echo 'UTC' >> /etc/adjtime
 
-# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given server)
+# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
 sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
-echo "0.centos.pool.ntp.org" > /etc/ntp/step-tickers
+cat /dev/null > /etc/ntp/step-tickers
+for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "${server}" >> /etc/ntp/step-tickers
+done
+sed -i -e '/^server/s/^/#/' /etc/chrony.conf
+for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "server ${server} iburst" >> /etc/chrony.conf
+done
 
 # Allow NTPdate hardware clock sync through SELinux
 # Note: obtained by means of: cat /var/log/audit/audit.log | audit2allow -M myntpdate
@@ -2634,6 +2800,55 @@ Continued use of this computer implies acceptance of the above conditions.
 EOF
 chmod 644 /etc/{issue*,motd}
 
+# Configure SMTP relay
+if [ -n "${my_smtpserver}" ]; then
+	if [ "${use_smtps}" = "true" ]; then
+		# Configure SMTPS smart host by means of systemd-controlled stunnel service
+		# Note: no service section is allowed in inetd mode
+		cat <<- EOF > /etc/stunnel/relay-smtps.conf
+		setuid = nobody
+		setgid = nobody
+		pid =
+		client = yes
+		connect = ${my_smtpserver}:465
+		fips = no
+		EOF
+		chmod 644 /etc/stunnel/relay-smtps.conf
+		# Configure relay-smtps as a systemd-controlled socket-activated service
+		# Note: Accept=yes (inetd-style) forces us to create a template service below
+		cat <<- EOF > /etc/systemd/system/relay-smtps.socket
+		[Socket]
+		ListenStream=127.0.0.1:11125
+		Accept=yes
+		
+		[Install]
+		WantedBy=sockets.target
+		EOF
+		chmod 644 /etc/systemd/system/relay-smtps.socket
+		# Note: inetd-style means that stdin/stdout must go through socket
+		# TODO: modify to run unprivileged (use nobody here and remove setuid/setgid from stunnel configuration above)
+		cat <<- EOF > /etc/systemd/system/relay-smtps@.service
+		[Service]
+		ExecStart=/usr/bin/stunnel /etc/stunnel/relay-smtps.conf
+		StandardInput=socket
+		Type=forking
+		User=root
+		PrivateTmp=true
+		EOF
+		chmod 644 /etc/systemd/system/relay-smtps@.service
+		
+		# Enable relay-smtps as a systemd-controlled socket-activated service
+		systemctl enable relay-smtps.socket
+		
+		# Relay Postfix client connections through stunnel
+		postconf -e 'smtp_use_tls = no'
+		postconf -e 'relayhost = [127.0.0.1]:11125'
+	else
+		# Directly relay through the specified server
+		postconf -e "relayhost = ${my_smtpserver}"
+	fi
+fi
+
 # Enable persistent Journal logs
 mkdir -p /var/log/journal
 
@@ -2697,7 +2912,7 @@ cat << EOF | openssl req -new -sha256 -key /etc/pki/tls/private/localhost.key -x
 IT
 Lombardia
 Bergamo
-FleurFlower
+HVP
 Heretic oVirt Project Demo Infrastructure
 ${HOSTNAME}
 root@${HOSTNAME}
@@ -2845,17 +3060,15 @@ cat << EOF > /var/www/html/index.html
 EOF
 chmod 644 /var/www/html/index.html
 
-# Configure Webmin
-# TODO: adapt Cockpit like in NGN and switch to using that instead
-# Add "/manage/" location with forced redirect to Webmin port in Apache configuration
-cat << EOF > /etc/httpd/conf.d/webmin.conf
+# Add "/manage/" location with forced redirect to Cockpit port in Apache configuration
+cat <<- EOF > /etc/httpd/conf.d/cockpit.conf
 #
-#  Apache-based redirection for Webmin
+#  Apache-based redirection for Cockpit
 #
 
 <Location /manage>
   RewriteEngine On
-  RewriteRule ^.*\$ https://%{HTTP_HOST}:10000 [R,L]
+  RewriteRule ^.*\$ https://%{HTTP_HOST}:9090 [R,L]
   <IfModule mod_authz_core.c>
     # Apache 2.4
     Require all granted
@@ -2869,77 +3082,17 @@ cat << EOF > /etc/httpd/conf.d/webmin.conf
 </Location>
 
 EOF
-chmod 644 /etc/httpd/conf.d/webmin.conf
+chmod 644 /etc/httpd/conf.d/cockpit.conf
 
-# Configure Webmin to use a custom certificate
-cat /etc/pki/tls/private/localhost.key > /etc/webmin/miniserv.pem
-cat /etc/pki/tls/certs/localhost.crt >> /etc/webmin/miniserv.pem
+# Configure Cockpit to use a custom certificate
+cat /etc/pki/tls/certs/localhost.crt > /etc/cockpit/ws-certs.d/99-custom.cert
+cat /etc/pki/tls/private/localhost.key >> /etc/cockpit/ws-certs.d/99-custom.cert
+chmod 600 /etc/cockpit/ws-certs.d/99-custom.cert
 
-# Modify default setup
-cat << EOF >> /etc/webmin/config
-logfiles=1
-logfullfiles=1
-logtime=21900
-logperms=
-logsyslog=0
-logusers=
-logmodules=
-logclear=1
-hostnamemode=0
-help_width=
-dateformat=dd/mon/yyyy
-showhost=0
-nofeedbackcc=0
-hostnamedisplay=
-feedback_to=
-sysinfo=0
-texttitles=1
-showlogin=0
-help_height=
-acceptlang=0
-gotoone=1
-gotomodule=
-deftab=webmin
-nohostname=0
-notabs=0
-realname=
-noremember=1
-EOF
-sed -i -e 's/^logtime=.*$/logtime=21900/' /etc/webmin/miniserv.conf
-cat << EOF >> /etc/webmin/miniserv.conf
-no_resolv_myname=1
-sockets=
-login_script=/etc/webmin/login.pl
-logout_script=/etc/webmin/logout.pl
-logclf=0
-logclear=1
-loghost=0
-pam_conv=
-blockuser_time=
-blocklock=
-blockuser_failures=
-no_pam=0
-logouttime=10
-utmp=
-extracas=
-certfile=
-ssl_redirect=1
-EOF
-
-# Add firewalld configuration for Webmin
-cat << EOF > /etc/firewalld/services/webmin.xml
-<?xml version="1.0" encoding="utf-8"?>
-<service>
-  <short>webmin</short>
-  <description>webmin is a web-based interface for system administration for unix.</description>
-  <port protocol="tcp" port="10000"/>
-</service>
-EOF
-chmod 644 /etc/firewalld/services/webmin.xml
-
-# Enable Webmin
-firewall-offline-cmd --add-service=webmin
-systemctl enable webmin
+# Enable Cockpit
+# Note: enabled from internal zone too
+firewall-offline-cmd --add-service=cockpit
+systemctl enable cockpit.socket
 
 # Configure Webalizer (allow access from everywhere)
 # Note: webalizer initialization demanded to post-install rc.ks1stboot script
