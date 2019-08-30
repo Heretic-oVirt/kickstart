@@ -1481,17 +1481,17 @@ done
 
 # Determine network segment identity and parameters
 if [ -n "${nics['mgmt']}" ]; then
-	dhcp_zone="mgmt"
-	dhcp_gateway="${my_ip[${dhcp_zone}]}"
+	mgmt_zone="mgmt"
+	dhcp_gateway="${my_ip[${mgmt_zone}]}"
 else
-	dhcp_zone="external"
+	mgmt_zone="external"
 	dhcp_gateway="${my_gateway}"
 fi
 if [ -n "${nics['gluster']}" ]; then
 	gluster_zone="gluster"
 	gluster_network="true"
 else
-	gluster_zone="${dhcp_zone}"
+	gluster_zone="${mgmt_zone}"
 	gluster_network="false"
 fi
 if [ -n "${nics['lan']}" ]; then
@@ -1513,7 +1513,7 @@ if [ -n "${given_switch}" ]; then
 	switch_ip="${given_switch}"
 fi
 if [ -z "${switch_ip}" ]; then
-	switch_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${switch_ip_offset} +)
+	switch_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${switch_ip_offset} +)
 fi
 
 # Determine engine IP
@@ -1522,7 +1522,7 @@ if [ -n "${given_engine}" ]; then
 	engine_ip="${given_engine}"
 fi
 if [ -z "${engine_ip}" ]; then
-	engine_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
+	engine_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${engine_ip_offset} +)
 fi
 
 # Determine web server IP
@@ -1531,7 +1531,7 @@ if [ -n "${given_web}" ]; then
 	web_ip="${given_web}"
 fi
 if [ -z "${web_ip}" ]; then
-	web_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${web_ip_offset} +)
+	web_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${web_ip_offset} +)
 fi
 
 # Determine metrics server IP
@@ -1540,7 +1540,7 @@ if [ -n "${given_metrics}" ]; then
 	metrics_ip="${given_metrics}"
 fi
 if [ -z "${metrics_ip}" ]; then
-	metrics_ip=$(ipmat $(ipmat ${my_ip[${dhcp_zone}]} ${my_ip_offset} -) ${metrics_ip_offset} +)
+	metrics_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${metrics_ip_offset} +)
 fi
 
 # Determine AD DC IP
@@ -1551,7 +1551,7 @@ fi
 if [ "${lan_network}" = "true" ]; then
 	ad_zone="lan"
 else
-	ad_zone="${dhcp_zone}"
+	ad_zone="${mgmt_zone}"
 fi
 if [ -z "${ad_dc_ip}" ]; then
 	ad_dc_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${ad_dc_ip_offset} +)
@@ -1595,6 +1595,21 @@ realm_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk '{prin
 # Define NetBIOS machine name for storage services
 netbios_storage_name=$(echo "${storage_name}" | awk '{print toupper($0)}')
 
+# Perform check to detect conflated domain name spaces
+# Note: in presence even of a couple of conflated domain name spaces we will force hostname suffixes on all subnets
+use_hostname_decoration="false"
+added_zones=""
+for zone in "${!network[@]}" ; do
+	if [ "${zone}" = "external" ]; then
+		continue
+	fi
+	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		use_hostname_decoration="true"
+		break
+	fi
+	added_zones="${added_zones} ${domain_name[${zone}]}"
+done
+
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
 # Note: listing interfaces using network priority order
@@ -1632,8 +1647,8 @@ for (( i=0; i<${#network_priority[*]}; i=i+1 )); do
 			echo 'DEFROUTE="no"' >> ifcfg-${nic_names}
 		fi
 		# Add hostname option on the DHCP-offering zone only
-		if [ "${zone}" = "${dhcp_zone}" ]; then
-			further_options="${further_options} --hostname=${my_name}.${domain_name[${zone}]}"
+		if [ "${zone}" = "${mgmt_zone}" ]; then
+			further_options="${further_options} --hostname=${my_name}"$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)".${domain_name[${zone}]}"
 		fi
 		if [ "${network[${zone}]}" = "dhcp" ]; then
 			# DHCP configuration
@@ -1816,21 +1831,6 @@ else
 	EOF
 fi
 
-# Perform check to detect duplicated entries in case of conflated domain name spaces
-# Note: in presence even of a couple of conflated domain name spaces we will force hostname suffixes on all subnets
-use_hostname_decoration="false"
-added_zones=""
-for zone in "${!network[@]}" ; do
-	if [ "${zone}" = "external" ]; then
-		continue
-	fi
-	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
-		use_hostname_decoration="true"
-		break
-	fi
-	added_zones="${added_zones} ${domain_name[${zone}]}"
-done
-
 # Determine configuration for DHCP and related services
 # Note: enabling masquerading in firewalld if mgmt and external are separate networks
 # Note: in.tftpd connections must be allowed with IPv4-in-IPv6 notation
@@ -1865,11 +1865,11 @@ if [ -n "${nics['mgmt']}" ]; then
 	firewall-cmd --reload
 	EOF
 else
-	if [ "${network[${dhcp_zone}]}" != "dhcp" -a "${netmask[${dhcp_zone}]}" != "dhcp" ]; then
-		allowed_addr="${allowed_addr} ${network[${dhcp_zone}]}/${netmask[${dhcp_zone}]}"
+	if [ "${network[${mgmt_zone}]}" != "dhcp" -a "${netmask[${mgmt_zone}]}" != "dhcp" ]; then
+		allowed_addr="${allowed_addr} ${network[${mgmt_zone}]}/${netmask[${mgmt_zone}]}"
 		unset PREFIX
-		eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
-		allowed_4in6_addr="${allowed_4in6_addr} [::ffff:${network[${dhcp_zone}]}/$((${PREFIX} + 96))]"
+		eval $(ipcalc -s -p "${network[${mgmt_zone}]}" "${netmask[${mgmt_zone}]}")
+		allowed_4in6_addr="${allowed_4in6_addr} [::ffff:${network[${mgmt_zone}]}/$((${PREFIX} + 96))]"
 	else
 		echo "External DHCP not allowed for single network setup." 1>&2
 	fi
@@ -2059,7 +2059,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2067,7 +2067,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2087,7 +2087,7 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${dhcp_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
@@ -2142,13 +2142,13 @@ multi_instance_max="${multi_instance_max}"
 
 # Note: for the following values, either the IP or the offset is enough, but we will list here both as an example
 switch_ip="${switch_ip}"
-switch_ip_offset="$(ipdiff ${switch_ip} ${network[${dhcp_zone}]})"
+switch_ip_offset="$(ipdiff ${switch_ip} ${network[${mgmt_zone}]})"
 engine_ip="${engine_ip}"
-engine_ip_offset="$(ipdiff ${engine_ip} ${network[${dhcp_zone}]})"
+engine_ip_offset="$(ipdiff ${engine_ip} ${network[${mgmt_zone}]})"
 metrics_ip="${metrics_ip}"
-metrics_ip_offset="$(ipdiff ${metrics_ip} ${network[${dhcp_zone}]})"
+metrics_ip_offset="$(ipdiff ${metrics_ip} ${network[${mgmt_zone}]})"
 
-test_ip_offset="$(ipdiff ${my_ip[${dhcp_zone}]} ${network[${dhcp_zone}]})"
+test_ip_offset="$(ipdiff ${my_ip[${mgmt_zone}]} ${network[${mgmt_zone}]})"
 EOF
 for zone in "${!my_ip[@]}" ; do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
@@ -2197,7 +2197,7 @@ cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 ad_subdomain_prefix="${ad_subdomain_prefix}"
 
-my_nameserver="${my_ip[${dhcp_zone}]}"
+my_nameserver="${my_ip[${mgmt_zone}]}"
 
 my_forwarders="${my_forwarders}"
 
@@ -2400,36 +2400,46 @@ for zone in "${!network[@]}" ; do
 	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 	$(echo ${my_ip[${zone}]} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 	EOF
-	for ((i=0;i<${dhcp_count};i=i+1)); do
-		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-		$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-		EOF
-	done
-	# Add reverse resolution for engine/switch/metrics names
-	if [ "${zone}" = "${dhcp_zone}" ]; then
+	# Add reverse resolution for bmcs/engine/switch/metrics names
+	# Note: these are connected only on the management zone (do not need name decoration)
+	if [ "${zone}" = "${mgmt_zone}" ]; then
 		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 		
-		$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-		$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-		$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		$(echo ${switch_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${switch_name}.${domain_name[${zone}]}.
+		$(echo ${engine_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${engine_name}.${domain_name[${zone}]}.
+		$(echo ${metrics_ip} | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${metrics_name}.${domain_name[${zone}]}.
 		
 		EOF
+		for ((i=0;i<${node_count};i=i+1)); do
+			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+			$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc.${domain_name[${zone}]}.
+			EOF
+		done
 	fi
-	# Add reverse resolution for bmcs/nodes names
-	for ((i=0;i<${node_count};i=i+1)); do
-		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-		$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
-		EOF
-	done
+	# Add reverse resolution for nodes names
 	for ((i=0;i<${node_count};i=i+1)); do
 		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
 		$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		EOF
 	done
-	# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services
-	for ((i=0;i<${active_storage_node_count};i=i+1)); do
+	# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/mgmt zones (depending on actual network availability)
+	# Note: no name decoration used on LAN zone
+	if [ "${zone}" = "lan" -o "${zone}" = "mgmt" ]; then
+		for ((i=0;i<${active_storage_node_count};i=i+1)); do
+			cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+			$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}$(if [ "${use_hostname_decoration}" = "true" -a "${zone}" != "${lan_zone}" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+			EOF
+		done
+	fi
+	# Add reverse resolution for dynamic client names
+	cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
+	
+	; Dynamic addresses assigned to our ephemeral connections
+	
+	EOF
+	for ((i=0;i<${dhcp_count};i=i+1)); do
 		cat <<- EOF >> ${reverse_domain_name[${zone}]}.db
-		$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	${storage_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
+		$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} + | sed -e "s/^$(echo ${network_base[${zone}]} | sed -e 's/[.]/\\./g')[.]//")		IN	PTR	client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}.
 		EOF
 	done
 	
@@ -2460,34 +2470,38 @@ for zone in "${!network[@]}" ; do
 		client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
 		EOF
 	done
-	# Add resolution for engine/switch/metrics names
-	if [ "${zone}" = "${dhcp_zone}" ]; then
+	# Add resolution for bmcs/engine/switch/metrics names
+	# Note: these are connected only on the management zone (do not need name decoration)
+	if [ "${zone}" = "${mgmt_zone}" ]; then
 		cat <<- EOF >> ${domain_name[${zone}]}.db
 		
-		${switch_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${switch_ip}
-		${engine_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${engine_ip}
-		${metrics_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	${metrics_ip}
+		${switch_name}		A	${switch_ip}
+		${engine_name}		A	${engine_ip}
+		${metrics_name}		A	${metrics_ip}
 		
 		EOF
+		for ((i=0;i<${node_count};i=i+1)); do
+			cat <<- EOF >> ${domain_name[${zone}]}.db
+			${node_name[${i}]}bmc		A	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} +)
+			EOF
+		done
 	fi
-	# Add resolution for bmcs/nodes names
-	for ((i=0;i<${node_count};i=i+1)); do
-		cat <<- EOF >> ${domain_name[${zone}]}.db
-		${node_name[${i}]}bmc$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${bmc_ip_offset} +) ${i} +)
-		EOF
-	done
+	# Add resolution for nodes names
 	for ((i=0;i<${node_count};i=i+1)); do
 		cat <<- EOF >> ${domain_name[${zone}]}.db
 		${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${node_ip_offset} +) ${i} +)
 		EOF
 	done
-	# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services
+	# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services on lan/mgmt zones (depending on actual network availability)
+	# Note: no name decoration used on LAN zone
 	# Note: registered with a TTL of 1 to enhance round-robin load balancing
-	for ((i=0;i<${active_storage_node_count};i=i+1)); do
-		cat <<- EOF >> ${domain_name[${zone}]}.db
-		${storage_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)	1 IN	A	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} +)
-		EOF
-	done
+	if [ "${zone}" = "lan" -o "${zone}" = "mgmt" ]; then
+		for ((i=0;i<${active_storage_node_count};i=i+1)); do
+			cat <<- EOF >> ${domain_name[${zone}]}.db
+			${storage_name}$(if [ "${use_hostname_decoration}" = "true" -a "${zone}" != "${lan_zone}" ]; then echo "-${zone}" ; fi)	1 IN	A	$(ipmat $(ipmat ${network[${zone}]} ${storage_ip_offset} +) ${i} +)
+			EOF
+		done
+	fi
 done
 
 popd
@@ -2654,19 +2668,18 @@ for zone in "${!network[@]}" ; do
 		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
 	fi
 	# Perform check to avoid duplicating entries in case of conflated domain name spaces
-	if echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
-		continue
+	if ! echo "${added_zones}" | grep -q -w $(echo "${domain_name[${zone}]}" | sed -e 's/[.]/\\./g') ; then
+		cat <<- EOF >> named.conf
+		        zone "${domain_name[${zone}]}" { 
+		                type ${my_role};
+		                ${my_options}
+		                // put dynamically updateable zones in the dynamic/ directory so named can update them
+		                file "${file_location}/${domain_name[${zone}]}.db";
+		        };
+		
+		EOF
+		added_zones="${added_zones} ${domain_name[${zone}]}"
 	fi
-	cat <<- EOF >> named.conf
-	        zone "${domain_name[${zone}]}" { 
-	                type ${my_role};
-	                ${my_options}
-	                // put dynamically updateable zones in the dynamic/ directory so named can update them
-	                file "${file_location}/${domain_name[${zone}]}.db";
-	        };
-	
-	EOF
-	added_zones="${added_zones} ${domain_name[${zone}]}"
 done
 cat << EOF >> named.conf
 };
@@ -2767,7 +2780,7 @@ pushd /tmp/hvp-bind-zones
 cat << EOF > hosts
 
 # Static hostname
-${my_ip[${dhcp_zone}]}		${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${dhcp_zone}" ; fi).${domain_name[${dhcp_zone}]}
+${my_ip[${mgmt_zone}]}		${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${mgmt_zone}" ; fi).${domain_name[${mgmt_zone}]}
 EOF
 popd
 
@@ -2887,19 +2900,19 @@ class "pxeclients" {
 }
 
 # A subnet declaration for our main network
-subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
+subnet ${network[${mgmt_zone}]} netmask ${netmask[${mgmt_zone}]} {
         authoritative;
-        interface ${nics[${dhcp_zone}]};
+        interface ${nics[${mgmt_zone}]};
         allow unknown-clients;
 
 # --- default gateway
         option routers			${dhcp_gateway};
-        option subnet-mask		${netmask[${dhcp_zone}]};
-        option interface-mtu		${mtu[${dhcp_zone}]};
+        option subnet-mask		${netmask[${mgmt_zone}]};
+        option interface-mtu		${mtu[${mgmt_zone}]};
 
-        option domain-name		"${domain_name[${dhcp_zone}]}";
-        option domain-name-servers	${my_ip[${dhcp_zone}]};
-        option ntp-servers		${my_ip[${dhcp_zone}]};
+        option domain-name		"${domain_name[${mgmt_zone}]}";
+        option domain-name-servers	${my_ip[${mgmt_zone}]};
+        option ntp-servers		${my_ip[${mgmt_zone}]};
         option time-offset		3600;	# Central European Time
 
         option ip-forwarding		off;
@@ -2913,7 +2926,7 @@ subnet ${network[${dhcp_zone}]} netmask ${netmask[${dhcp_zone}]} {
 #       get-lease-hostnames true;
 
         pool {
-                range dynamic-bootp $(ipmat ${network[${dhcp_zone}]} ${dhcp_offset} +) $(ipmat $(ipmat $(ipmat ${network[${dhcp_zone}]} ${dhcp_offset} +) ${dhcp_count} +) 1 -);
+                range dynamic-bootp $(ipmat ${network[${mgmt_zone}]} ${dhcp_offset} +) $(ipmat $(ipmat $(ipmat ${network[${mgmt_zone}]} ${dhcp_offset} +) ${dhcp_count} +) 1 -);
         }
 }
 
@@ -2968,8 +2981,8 @@ cat << EOF > httpd.conf
 
 <VirtualHost *:80>
     DocumentRoot /var/www/html
-    ServerName ${my_ip[${dhcp_zone}]}
-    ServerAlias ${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${dhcp_zone}" ; fi).${domain_name[${dhcp_zone}]}
+    ServerName ${my_ip[${mgmt_zone}]}
+    ServerAlias ${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${mgmt_zone}" ; fi).${domain_name[${mgmt_zone}]}
 </VirtualHost>
 
 EOF
@@ -2997,7 +3010,7 @@ cat << EOF > hosts
 EOF
 for ((i=0;i<${node_count};i=i+1)); do
 	cat <<- EOF >> hosts
-	${node_name[${i}]}.${domain_name[${dhcp_zone}]}
+	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${mgmt_zone}" ; fi).${domain_name[${mgmt_zone}]}
 	EOF
 done
 cat << EOF >> hosts
@@ -3010,28 +3023,28 @@ for ((i=0;i<${node_count};i=i+1)); do
 		continue
 	fi
 	cat <<- EOF >> hosts
-	${node_name[${i}]}.${domain_name[${dhcp_zone}]}
+	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${mgmt_zone}" ; fi).${domain_name[${mgmt_zone}]}
 	EOF
 done
 cat << EOF >> hosts
 
 # Our oVirt cluster master
 [ovirt_master]
-${node_name[${master_index}]}.${domain_name[${dhcp_zone}]}
+${node_name[${master_index}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${mgmt_zone}" ; fi).${domain_name[${mgmt_zone}]}
 
 # Our oVirt Nodes BMCs
 [ovirtbmcs]
 EOF
 for ((i=0;i<${node_count};i=i+1)); do
 	cat <<- EOF >> hosts
-	${node_name[${i}]}bmc.${domain_name[${dhcp_zone}]}
+	${node_name[${i}]}bmc.${domain_name[${mgmt_zone}]}
 	EOF
 done
 cat << EOF >> hosts
 
 # Our oVirt Engine
 [ovirtengine]
-${engine_name}.${domain_name[${dhcp_zone}]}
+${engine_name}.${domain_name[${mgmt_zone}]}
 
 # Our GlusterFS Nodes
 [glusternodes]
@@ -3039,11 +3052,11 @@ EOF
 if [ -n "${nics['gluster']}" ]; then
 	zone="gluster"
 else
-	zone="${dhcp_zone}"
+	zone="${mgmt_zone}"
 fi
 for ((i=0;i<${node_count};i=i+1)); do
 	cat <<- EOF >> hosts
-	${node_name[${i}]}.${domain_name[${zone}]}
+	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}
 	EOF
 done
 cat << EOF >> hosts
@@ -3056,7 +3069,7 @@ for ((i=0;i<${node_count};i=i+1)); do
 		continue
 	fi
 	cat <<- EOF >> hosts
-	${node_name[${i}]}.${domain_name[${zone}]}
+	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}
 	EOF
 done
 cat << EOF >> hosts
@@ -3070,7 +3083,7 @@ ${node_name[${master_index}]}.${domain_name[${zone}]}
 EOF
 for ((i=0;i<${active_storage_node_count};i=i+1)); do
 	cat <<- EOF >> hosts
-	${node_name[${i}]}.${domain_name[${ad_zone}]}
+	${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${ad_zone}" ; fi).${domain_name[${ad_zone}]}
 	EOF
 done
 
@@ -3085,7 +3098,7 @@ done
 # Prepare oVirt defaults
 # Note: Ansible oVirt variable definitions thanks to Simone Tiraboschi
 unset PREFIX
-eval $(ipcalc -s -p "${network[${dhcp_zone}]}" "${netmask[${dhcp_zone}]}")
+eval $(ipcalc -s -p "${network[${mgmt_zone}]}" "${netmask[${mgmt_zone}]}")
 if [ -n "${bmc_type}" -a "${bmc_confirmed}" = "true" ]; then
 	bmc_vars_comment=''
 else
@@ -3095,7 +3108,7 @@ cat << EOF > hvp.yaml
 # Global variables for HVP Ansible playbooks
 
 ## HVP local conventions
-hvp_management_domainname: ${domain_name[${dhcp_zone}]}
+hvp_management_domainname: ${domain_name[${mgmt_zone}]}
 hvp_gluster_domainname: ${domain_name[${gluster_zone}]}
 hvp_lan_domainname: ${domain_name[${lan_zone}]}
 hvp_storage_name: ${storage_name}
@@ -3116,7 +3129,7 @@ hvp_engine_domainname: "{{ hvp_management_domainname }}"
 hvp_engine_ip: "{{ lookup('dig', hvp_engine_name + '.' + hvp_engine_domainname + '.') }}"
 hvp_engine_netprefix: "${PREFIX}"
 # TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
-hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${dhcp_zone}]} ${node_ip_offset} +) ${i} +)"; done)
+hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${mgmt_zone}]} ${node_ip_offset} +) ${i} +)"; done)
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
 # Note: when missing an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
 hvp_switch_ip: "${switch_ip}"
@@ -3133,6 +3146,8 @@ hvp_admin_username: ${admin_username}
 hvp_admin_password: '${admin_password}'
 hvp_email_sender: ${notification_sender}
 hvp_email_receiver: ${notification_receiver}
+hvp_email_relay: "${hvp_smtpserver}"
+hvp_email_relay_use_smtps: ${use_smtps}
 
 ## HVP OVN settings
 EOF
@@ -3254,7 +3269,7 @@ hvp_static_address_block_start: $((${dhcp_offset} + ${dhcp_count}))
 
 got_mgmt_network: true
 mgmt_network: "$(unset PREFIX ; eval $(ipcalc -s -p "${network['mgmt']}" "${netmask['mgmt']}"); echo "${network['mgmt']}/${PREFIX}")"
-hvp_mgmt_bridge_name: ${bridge_name[${dhcp_zone}]}
+hvp_mgmt_bridge_name: ${bridge_name[${mgmt_zone}]}
 
 got_gluster_network: ${gluster_network}
 $(if [ -n "${nics['gluster']}" ]; then unset PREFIX ; eval $(ipcalc -s -p "${network['gluster']}" "${netmask['gluster']}"); echo "gluster_network: ${network['gluster']}/${PREFIX}" ; else echo 'gluster_network: ""' ; fi)
@@ -3675,30 +3690,31 @@ if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
 	yum-config-manager --enable hvp-ansible-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
-	# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
-	if [ "${custom_yum_conf}" = "true" ]; then
-		for repofile in /etc/yum.repos.d/*.repo; do
-			if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
-				sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
-				sed -i -e 's/^metalink/#metalink/g' "${repofile}"
-				sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
-			fi
-		done
-		# Allow specifying custom base URLs for repositories and GPG keys
-		# Note: done here to cater for those repos installed above
-		for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
-			repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
-			repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
-			# Force any custom URLs
-			if [ -n "${repo_baseurl}" ]; then
-				yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
-			fi
-			if [ -n "${repo_gpgkey}" ]; then
-				yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
-			fi
-		done
-	fi
 fi
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos installed above
+	for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
+
 
 # Add EPEL repository definition
 yum -y install epel-release
@@ -4538,8 +4554,8 @@ if [ "${nolocalvirt}" != "true" ]; then
 
 	# Enable Cockpit
 	# Note: enabled from internal zone too
-	firewall-offline-cmd --add-service=cockpit--zone=external
-	firewall-offline-cmd --add-service=cockpit--zone=internal
+	firewall-offline-cmd --add-service=cockpit --zone=external
+	firewall-offline-cmd --add-service=cockpit --zone=internal
 	systemctl enable cockpit.socket
 else
 	# Add "/manage/" location with forced redirect to Webmin port in Apache configuration
