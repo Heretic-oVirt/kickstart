@@ -145,6 +145,10 @@ my_forwarders="8.8.8.8"
 
 my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
 
+my_smtpservers=""
+
+use_smtps="false"
+
 my_gateway="dhcp"
 
 my_name="twilight"
