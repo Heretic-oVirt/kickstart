@@ -94,7 +94,13 @@ my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
 
-root_password="hvpdemo"
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
+my_smtpservers=""
+
+use_smtps="false"
+
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
@@ -104,3 +110,14 @@ notification_receiver="monitoring@localhost"
 
 yum_sleep_time="10"
 yum_retries="10"
+
+# Note: default base and GPG-key values for repos are those inside .repo files - reported here as an example
+#hvp_repo_baseurl['base']='http://centos.mirror.garr.it/centos/$releasever/os/$basearch/'
+#hvp_repo_baseurl['updates']='http://centos.mirror.garr.it/centos/$releasever/updates/$basearch/'
+#hvp_repo_baseurl['extras']='http://centos.mirror.garr.it/centos/$releasever/extras/$basearch/'
+#hvp_repo_baseurl["ovirt-${ovirt_version}-epel"]='http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/$releasever/$basearch/'
+#hvp_repo_gpgkey["ovirt-${ovirt_version}-epel"]='http://www.nic.funet.fi/pub/mirrors/fedora.redhat.com/pub/epel/RPM-GPG-KEY-EPEL-$releasever'
+#hvp_repo_baseurl["ovirt-${ovirt_version}-centos-qemu-ev"]='http://centos.mirror.garr.it/centos/$releasever/virt/$basearch/kvm-common/'
+#hvp_repo_baseurl["ovirt-${ovirt_version}-centos-opstools"]='http://centos.mirror.garr.it/centos/$releasever/opstools/$basearch/'
+#hvp_repo_baseurl['centos-sclo-rh-release']='http://centos.mirror.garr.it/centos/$releasever/sclo/$basearch/rh/'
+#hvp_repo_baseurl["ovirt-${ovirt_version}-centos-ovirt$(echo ${ovirt_version} | sed -e 's/[.]//g')"]="http://centos.mirror.garr.it/centos/\$releasever/virt/\$basearch/ovirt-${ovirt_version}/"
