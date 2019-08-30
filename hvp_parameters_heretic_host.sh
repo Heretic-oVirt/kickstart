@@ -94,7 +94,13 @@ my_nameserver="8.8.8.8"
 
 my_forwarders="8.8.8.8"
 
-root_password="hvpdemo"
+my_ntpservers="0.centos.pool.ntp.org,1.centos.pool.ntp.org,2.centos.pool.ntp.org,3.centos.pool.ntp.org"
+
+my_smtpservers=""
+
+use_smtps="false"
+
+root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 keyboard_layout="us"
@@ -102,7 +108,7 @@ local_timezone="UTC"
 
 notification_receiver="monitoring@localhost"
 
-ovirt_version="4.1"
+ovirt_version="4.2"
 
 yum_sleep_time="10"
 yum_retries="10"
@@ -117,3 +123,4 @@ yum_retries="10"
 #hvp_repo_baseurl["ovirt-${ovirt_version}-centos-opstools"]='http://centos.mirror.garr.it/centos/$releasever/opstools/$basearch/'
 #hvp_repo_baseurl['centos-sclo-rh-release']='http://centos.mirror.garr.it/centos/$releasever/sclo/$basearch/rh/'
 #hvp_repo_baseurl["ovirt-${ovirt_version}-centos-ovirt$(echo ${ovirt_version} | sed -e 's/[.]//g')"]="http://centos.mirror.garr.it/centos/\$releasever/virt/\$basearch/ovirt-${ovirt_version}/"
+#hvp_repo_baseurl['elrepo']='http://elrepo.org/linux/elrepo/el7/$basearch/'
