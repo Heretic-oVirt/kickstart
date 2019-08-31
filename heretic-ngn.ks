@@ -2,7 +2,7 @@
 # Note: minimum amount of RAM successfully tested for installation: 1536 MiB (test failed with 1024 MiB)
 
 # Install from PXE with commandline (see below for comments):
-# nomodeset elevator=deadline inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
+# nomodeset elevator=deadline inst.stage2=https://dangerous.ovirt.life/hvp-repos/el7/node-x.y inst.ks=https://dangerous.ovirt.life/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=[0123]
 # Note: DHCP is assumed to be available on one and only one network (the mgmt one, which will be autodetected, albeit with a noticeable delay) otherwise the ip=nicname:dhcp option must be added, where nicname is the name of the network interface to be used for installation (eg: ens32)
 # Note: to force custom/fixed nic names add ifname=netN:AA:BB:CC:DD:EE:FF where netN is the desired nic name and AA:BB:CC:DD:EE:FF is the MAC address of the corresponding network interface (beware: not honored for bond slaves)
 # Note: alternatively, to force legacy nic names (ethN), add biosdevname=0 net.ifnames=0
@@ -1894,7 +1894,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083001"
+script_version="2019083101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
