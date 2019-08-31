@@ -2040,7 +2040,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083001"
+script_version="2019083101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2598,7 +2598,7 @@ yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemo
 yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
 
 # Install Cockpit web management interface
-yum --disableincludes=all -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged
+yum --disableincludes=all -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged setroubleshoot-server
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
