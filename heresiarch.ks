@@ -2058,9 +2058,9 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/ngn.cfg
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
-	        kernel linux/node/vmlinuz
-	        # append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
-	        append initrd=linux/node/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
+	        kernel linux/node-${ovirt_version}/vmlinuz
+	        # append initrd=linux/node-${ovirt_version}/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        append initrd=linux/node-${ovirt_version}/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
 	cat <<- EOF >> /tmp/hvp-syslinux-conf/host.cfg
@@ -2465,11 +2465,6 @@ for zone in "${!network[@]}" ; do
 	cat <<- EOF >> ${domain_name[${zone}]}.db
 	${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)	A	${my_ip[${zone}]}
 	EOF
-	for ((i=0;i<${dhcp_count};i=i+1)); do
-		cat <<- EOF >> ${domain_name[${zone}]}.db
-		client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
-		EOF
-	done
 	# Add resolution for bmcs/engine/switch/metrics names
 	# Note: these are connected only on the management zone (do not need name decoration)
 	if [ "${zone}" = "${mgmt_zone}" ]; then
@@ -2502,6 +2497,17 @@ for zone in "${!network[@]}" ; do
 			EOF
 		done
 	fi
+	# Add resolution for dynamic client names
+	cat <<- EOF >> ${domain_name[${zone}]}.db
+	
+	; Dynamic addresses assigned to our ephemeral connections
+	
+	EOF
+	for ((i=0;i<${dhcp_count};i=i+1)); do
+		cat <<- EOF >> ${domain_name[${zone}]}.db
+		client${i}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)		A	$(ipmat $(ipmat ${network[${zone}]} ${dhcp_offset} +) ${i} +)
+		EOF
+	done
 done
 
 popd
@@ -3352,7 +3358,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083001"
+script_version="2019083002"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4840,8 +4846,8 @@ fi
 # Copy netboot images mirrored above
 # Note: CentOS images put in place in second post section below
 pushd /var/lib/tftpboot/linux/node
-cp /var/www/hvp-repos/el7/node/vmlinuz .
-cp /var/www/hvp-repos/el7/node/initrd.img .
+cp /var/www/hvp-repos/el7/node-${ovirt_version}/vmlinuz .
+cp /var/www/hvp-repos/el7/node-${ovirt_version}/initrd.img .
 popd
 
 # Configure SSH root login with key
