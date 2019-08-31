@@ -3358,7 +3358,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083002"
+script_version="2019083101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4008,7 +4008,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	# Perform a further upgrade to align with Qemu EV repo packages
 	yum -y upgrade
 	# Install Cockpit web management interface
-	yum -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged
+	yum -y install cockpit cockpit-machines cockpit-packagekit cockpit-dashboard cockpit-storaged setroubleshoot-server
 else
 	# Alternatively install Webmin for generic web management
 	# TODO: added perl-Authen-PAM unlisted dependency - remove when fixed upstream
@@ -4834,7 +4834,7 @@ for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
 done
 
 # Prepare netboot images subdirs
-mkdir -p /var/lib/tftpboot/linux/{centos,node}
+mkdir -p /var/lib/tftpboot/linux/{centos,node-${ovirt_version}}
 
 # Generate keymap according to the chosen keyboard_layout
 source_keymap="/lib/kbd/keymaps/legacy/i386/qwerty/us.map.gz"
@@ -4845,7 +4845,7 @@ fi
 
 # Copy netboot images mirrored above
 # Note: CentOS images put in place in second post section below
-pushd /var/lib/tftpboot/linux/node
+pushd /var/lib/tftpboot/linux/node-${ovirt_version}
 cp /var/www/hvp-repos/el7/node-${ovirt_version}/vmlinuz .
 cp /var/www/hvp-repos/el7/node-${ovirt_version}/initrd.img .
 popd
