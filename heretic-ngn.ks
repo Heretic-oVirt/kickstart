@@ -1897,7 +1897,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019090102"
+script_version="2019090103"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2854,7 +2854,7 @@ chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
 # TODO: determine whether Samba/Ganesha should start on inactive nodes
 # TODO: enable Winbind when switching to AD domain member mode
 sed -i -e '/^\s*recovery\s*lock\s*/s>=.*$>= /gluster/lock/lockfile>' /etc/ctdb/ctdb.conf
-sed -i -e 's/^\(\s*\)#*\s*location\s*/\1location = syslog/' /etc/ctdb/ctdb.conf
+sed -i -e 's/^\(\s*\)#*\s*location\s*.*$/\1location = syslog/' /etc/ctdb/ctdb.conf
 cat << EOF >> /etc/sysconfig/ctdb
 #CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
@@ -3085,11 +3085,12 @@ setsebool -P -N samba_share_fusefs on
 mkdir -p /etc/selinux/local
 cat << EOF > /etc/selinux/local/myglustersmb.te
 
-module myglustersmb 12.0;
+module myglustersmb 13.0;
 
 require {
 	type fusefs_t;
 	type samba_net_t;
+	type samba_var_t;
 	type smbcontrol_t;
 	type ctdbd_var_lib_t;
 	type cert_t;
@@ -3097,7 +3098,7 @@ require {
 	type ctdbd_t;
 	class sock_file { unlink create write };
 	class dir { add_name getattr search write };
-	class file { getattr lock open read setattr write };
+	class file { create getattr lock open read setattr write };
 	class process { noatsecure rlimitinh siginh };
 	class unix_stream_socket { read write };
 }
@@ -3116,6 +3117,9 @@ allow smbcontrol_t ctdbd_var_lib_t:file { read write open lock getattr setattr }
 
 #============= ctdbd_t ==============
 allow ctdbd_t samba_net_t:process { noatsecure rlimitinh siginh };
+allow ctdbd_t samba_var_t:dir { add_name write};
+allow ctdbd_t samba_var_t:file create;
+allow ctdbd_t fusefs_t:sock_file create;
 
 #============= samba_net_t ==============
 allow samba_net_t ctdbd_t:unix_stream_socket { read write };
