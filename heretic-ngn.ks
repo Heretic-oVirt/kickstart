@@ -1897,7 +1897,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019090101"
+script_version="2019090102"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2290,8 +2290,8 @@ done
 # Note: a Node image should be upgraded as a whole and not package-by-package
 # TODO: verify how to upgrade custom additional packages when upgrading the Node image
 
-# Install Stunnel, Rsync, Wget, patch, expect, setserial, ntpdate and core LSB support
-yum --disableincludes=all -y --enablerepo base --enablerepo updates install stunnel rsync wget patch expect setserial ntpdate redhat-lsb-core
+# Install Stunnel, Rsync, Wget, patch, expect, setserial, ntpdate, SEtroubleshoot and core LSB support
+yum --disableincludes=all -y --enablerepo base --enablerepo updates install stunnel rsync wget patch expect setserial ntpdate redhat-lsb-core setroubleshoot-server
 
 # Install HAVEGEd
 # Note: even in presence of an actual hardware random number generator (managed by rngd) we install haveged as a safety measure
@@ -3051,16 +3051,7 @@ chmod 644 /etc/systemd/system/cgroup-rt-bandwidth.service
 # TODO: enable after initializing GlusterFS
 systemctl disable cgroup-rt-bandwidth.service
 
-# Add firewalld configuration for CTDB
-cat << EOF > /etc/firewalld/services/ctdb.xml
-<?xml version="1.0" encoding="utf-8"?>
-<service>
-  <short>ctdb</short>
-  <description>Clustered TDB.</description>
-  <port protocol="tcp" port="4379"/>
-</service>
-EOF
-chmod 644 /etc/firewalld/services/ctdb.xml
+# Note: firewalld configuration for CTDB is included in CTDB packages > 4.8
 
 # TODO: Enable CTDB
 # TODO: enable after initializing GlusterFS
@@ -3271,6 +3262,30 @@ systemctl enable ovn-controller
 
 # TODO: Debug - enable verbose logging in firewalld - maybe disable for production use?
 firewall-offline-cmd --set-log-denied=all
+
+# Allow OpenVswitch broadcast communications through SELinux
+# Note: obtained by means of: ausearch -c 'ovs-vswitchd' --raw | audit2allow -M myovsvswitchd
+# TODO: remove when SELinux policy fixed upstream
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myovsvswitchd.te
+
+module myovsvswitchd 1.0;
+
+require {
+        type openvswitch_t;
+        class capability net_broadcast;
+}
+
+#============= openvswitch_t ==============
+allow openvswitch_t self:capability net_broadcast;
+EOF
+chmod 644 /etc/selinux/local/myovsvswitchd.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myovsvswitchd.mod myovsvswitchd.te
+semodule_package -o myovsvswitchd.pp -m myovsvswitchd.mod
+semodule -i myovsvswitchd.pp
+popd
 
 # Enable Postfix
 systemctl enable postfix
