@@ -294,6 +294,9 @@ gluster_vol_name['winshare']="winshare"
 gluster_vol_name['blockshare']="blockshare"
 gluster_vol_name['backup']="backup"
 
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
+
 # Note: IP offsets below get used to automatically derive IP addresses
 # Note: no need to allow offset overriding from commandline if the IP address itself can be specified
 
@@ -1894,7 +1897,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083101"
+script_version="2019090101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2122,6 +2125,21 @@ yum --enablerepo '*' clean all
 
 # Note: disabling includes in all yum commandline invocations to work around includepkgs lines - they are meant to avoid accidental upgrades inside NGN according to https://bugzilla.redhat.com/show_bug.cgi?id=1552929
 
+# Extract oVirt version from installed packages
+# Note: oVirt release package is already installed inside the node image
+ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
+ovirt_major=$(echo "${ovirt_release_package_suffix}" | sed -e 's/^\([[:digit:]]\).*$/\1/')
+ovirt_minor=$(echo "${ovirt_release_package_suffix}" | sed -e 's/^.\([[:digit:]]\).*$/\1/')
+ovirt_version="${ovirt_major}.${ovirt_minor}"
+
+# TODO: it seems that in the extended nightly-only phase the EPEL dependency repo may miss the baseurl property; making sure that it gets specified - remove when fixed upstream
+if [ "${ovirt_nightly_mode}" = "true" ]; then
+	if [ -z "${hvp_repo_baseurl[ovirt-${ovirt_version}-epel]}" ]; then
+		hvp_repo_baseurl["ovirt-${ovirt_version}-epel"]='http://download.fedoraproject.org/pub/epel/$releasever/$basearch/'
+	fi		
+fi
+
+
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 # Note: done here to cater for those repos already installed by default
 if [ "${custom_yum_conf}" = "true" ]; then
@@ -2206,9 +2224,6 @@ fi
 
 # TODO: verify how to manage ELRepo packages inside a Node image
 
-# Extract oVirt version from installed packages
-# Note: oVirt release package is already installed inside the node image
-ovirt_release_package_suffix=$(rpm -qf /etc/yum.repos.d/ovirt-*-dependencies.repo | sed -e 's/^.*-release\([^-]*\)-.*$/\1/')
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
 # Note: when nightly mode gets enabled we assume that we are late in the selected-oVirt-version lifecycle and some repositories and release packages may have disappeared - working around here
 if [ "${ovirt_nightly_mode}" = "true" ]; then
@@ -2219,22 +2234,25 @@ if [ "${ovirt_nightly_mode}" = "true" ]; then
 	# Manually add snapshot repositories
 	# Note: adding these manually since the release package may have disappeared
 	# Note: adding skip_if_unavailable since the repos too seem to disappear after a while
-	cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
-	[ovirt-${ovirt_version}-snapshot]
-	name=oVirt ${ovirt_version} - Nightly snapshot
-	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
-	gpgcheck=0
-	enabled=1
-	skip_if_unavailable=1
-
-	[ovirt-${ovirt_version}-snapshot-static]
-	name=oVirt ${ovirt_version} - Nightly snapshot static
-	baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
-	gpgcheck=0
-	enabled=1
-	skip_if_unavailable=1
-	EOF
-	chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
+	# Note: checking presence since late NGN images seem to already contain only snapshot repos
+	if [ ! -f "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo" ]; then
+		cat <<- EOF > "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
+		[ovirt-${ovirt_version}-snapshot]
+		name=oVirt ${ovirt_version} - Nightly snapshot
+		baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot/rpm/el\$releasever/
+		gpgcheck=0
+		enabled=1
+		skip_if_unavailable=1
+	
+		[ovirt-${ovirt_version}-snapshot-static]
+		name=oVirt ${ovirt_version} - Nightly snapshot static
+		baseurl=https://resources.ovirt.org/pub/ovirt-${ovirt_version}-snapshot-static/rpm/el\$releasever/
+		gpgcheck=0
+		enabled=1
+		skip_if_unavailable=1
+		EOF
+		chmod 644 "/etc/yum.repos.d/ovirt-${ovirt_version}-snapshot.repo"
+	fi
 fi
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 if [ "${custom_yum_conf}" = "true" ]; then
@@ -2331,7 +2349,7 @@ yum --disableincludes=all -y install ovirt-hosted-engine-setup virt-v2v tuned qe
 # Install GlusterFS
 if [ "${orthodox_mode}" = "false" ]; then
 	# Rebase to GlusterFS packages from HVP repo (RHGS version rebuilt)
-	yum --disableincludes=all -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization 'glusterfs*' userspace-rcu 'nfs-ganesha*' libntirpc
+	yum --disableincludes=all -y --disablerepo '*' --enablerepo hvp-rhgs-rebuild distribution-synchronization '*gluster*' userspace-rcu 'nfs-ganesha*' libntirpc
 fi
 # Note: the following packages should already be present on a Node image
 # Note: rpm post scriptlet for glusterfs-server fails - errors can be safely ignored
@@ -2358,8 +2376,7 @@ yum --disableincludes=all -y --enablerepo base --enablerepo updates install bind
 yum --disableincludes=all -y install bareos-tools bareos-client bareos-filedaemon-glusterfs-plugin bareos-storage bareos-storage-glusterfs
 
 # Install further packages for additional functions: Ansible automation
-# TODO: package ovirt-ansible-roles is masked out by means of exclude directive on ovirt-4.1 repo - fix upstream
-yum --disableincludes=all -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
+yum --disableincludes=all -y --enablerepo base --enablerepo updates --enablerepo extras install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
 
 # Clean up after all installations
 yum --enablerepo '*' clean all
@@ -2832,19 +2849,18 @@ chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
 # Configure CTDB
 # Note: CTDB is needed for HA NFS/CIFS storage domain
 # Note: /gluster/lock gets created/mounted by Gluster hook scripts - we disable those but keep using the standard path
+# Note: ctdb > 4.8 uses a different configuration strategy
+# Note: option to skip CTDB check of paths (not valid/needed with GlusterFS) is in /etc/ctdb/script.options
 # TODO: determine whether Samba/Ganesha should start on inactive nodes
 # TODO: enable Winbind when switching to AD domain member mode
-sed -i -e 's>^#*\s*CTDB_RECOVERY_LOCK=.*$>CTDB_RECOVERY_LOCK=/gluster/lock/lockfile>' /etc/sysconfig/ctdb
-#sed -i -e 's/^#*\s*CTDB_MANAGES_SAMBA=.*$/CTDB_MANAGES_SAMBA=yes\nCTDB_MANAGES_WINBIND=yes/' /etc/sysconfig/ctdb
-# Skip CTDB check of paths (not valid/needed with GlusterFS)
-sed -i -e 's/^#*\s*CTDB_SAMBA_SKIP_SHARE_CHECK=.*$/CTDB_SAMBA_SKIP_SHARE_CHECK=yes/' /etc/sysconfig/ctdb
+sed -i -e '/^\s*recovery\s*lock\s*/s>=.*$>= /gluster/lock/lockfile>' /etc/ctdb/ctdb.conf
+sed -i -e 's/^\(\s*\)#*\s*location\s*/\1location = syslog/' /etc/ctdb/ctdb.conf
 cat << EOF >> /etc/sysconfig/ctdb
 #CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
 CTDB_SET_TraverseTimeout=60
 CTDB_STARTUP_TIMEOUT=30
 CTDB_SHUTDOWN_TIMEOUT=30
-CTDB_LOGGING=syslog
 # Set CTDB socket location
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
@@ -2855,7 +2871,7 @@ EOF
 # Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
 # Note: tracked upstream in https://bugzilla.redhat.com/show_bug.cgi?id=1371178
 # TODO: remove when included upstream and/or switching to NFS-Ganesha
-cat << EOF > /etc/ctdb/events.d/60.glusternfs
+cat << EOF > /etc/ctdb/events/legacy/60.glusternfs
 #!/bin/sh
 # Event script to monitor GlusterFS NFS in a cluster environment
 # Source: https://xrsa.net
@@ -2928,7 +2944,7 @@ esac
  
 exit 0
 EOF
-chmod 755 /etc/ctdb/events.d/60.glusternfs
+chmod 755 /etc/ctdb/events/legacy/60.glusternfs
 
 # Add SELinux support for monitoring script for GlusterFS-based NFS
 # Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
