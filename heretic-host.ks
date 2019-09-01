@@ -2040,7 +2040,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083101"
+script_version="2019090101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3276,19 +3276,18 @@ chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
 # Configure CTDB
 # Note: CTDB is needed for HA NFS/CIFS storage domain
 # Note: /gluster/lock gets created/mounted by Gluster hook scripts - we disable those but keep using the standard path
+# Note: ctdb > 4.8 uses a different configuration strategy
+# Note: option to skip CTDB check of paths (not valid/needed with GlusterFS) is in /etc/ctdb/script.options
 # TODO: determine whether Samba/Ganesha should start on inactive nodes
 # TODO: enable Winbind when switching to AD domain member mode
-sed -i -e 's>^#*\s*CTDB_RECOVERY_LOCK=.*$>CTDB_RECOVERY_LOCK=/gluster/lock/lockfile>' /etc/sysconfig/ctdb
-#sed -i -e 's/^#*\s*CTDB_MANAGES_SAMBA=.*$/CTDB_MANAGES_SAMBA=yes\nCTDB_MANAGES_WINBIND=yes/' /etc/sysconfig/ctdb
-# Skip CTDB check of paths (not valid/needed with GlusterFS)
-sed -i -e 's/^#*\s*CTDB_SAMBA_SKIP_SHARE_CHECK=.*$/CTDB_SAMBA_SKIP_SHARE_CHECK=yes/' /etc/sysconfig/ctdb
+sed -i -e '/^\s*recovery\s*lock\s*/s>=.*$>= /gluster/lock/lockfile>' /etc/ctdb/ctdb.conf
+sed -i -e 's/^\(\s*\)#*\s*location\s*/\1location = syslog/' /etc/ctdb/ctdb.conf
 cat << EOF >> /etc/sysconfig/ctdb
 #CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
 CTDB_SET_TraverseTimeout=60
 CTDB_STARTUP_TIMEOUT=30
 CTDB_SHUTDOWN_TIMEOUT=30
-CTDB_LOGGING=syslog
 # Set CTDB socket location
 CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
@@ -3299,7 +3298,7 @@ EOF
 # Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
 # Note: tracked upstream in https://bugzilla.redhat.com/show_bug.cgi?id=1371178
 # TODO: remove when included upstream and/or switching to NFS-Ganesha
-cat << EOF > /etc/ctdb/events.d/60.glusternfs
+cat << EOF > /etc/ctdb/events/legacy/60.glusternfs
 #!/bin/sh
 # Event script to monitor GlusterFS NFS in a cluster environment
 # Source: https://xrsa.net
@@ -3372,7 +3371,7 @@ esac
  
 exit 0
 EOF
-chmod 755 /etc/ctdb/events.d/60.glusternfs
+chmod 755 /etc/ctdb/events/legacy/60.glusternfs
 
 # Add SELinux support for monitoring script for GlusterFS-based NFS
 # Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
