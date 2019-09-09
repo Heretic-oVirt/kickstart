@@ -3358,7 +3358,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019083102"
+script_version="2019090901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -5166,10 +5166,11 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 	rm -f xe-guest-utilities*.rpm
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
+	# Note: adding nofail to avoid making it fail the remote-fs.target if unavailable
 	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
 	mkdir -p /mnt/hgfs
 	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,nofail,x-systemd.requires=vmtoolsd.service,defaults	0 0
 	EOM
 	mount /mnt/hgfs
 	need_reboot="no"
