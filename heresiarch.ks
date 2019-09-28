@@ -3136,6 +3136,7 @@ hvp_engine_ip: "{{ lookup('dig', hvp_engine_name + '.' + hvp_engine_domainname +
 hvp_engine_netprefix: "${PREFIX}"
 # TODO: derive the following by means of Ansible DNS lookup on ovirtnodes names
 hvp_engine_dnslist: $(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${mgmt_zone}]} ${node_ip_offset} +) ${i} +)"; done)
+hvp_engine_ntp_sources: "{{ groups['ovirtnodes'] }}"
 # Note: generally, we try to use an independent pingable IP (central managed switch console interface) as "gateway" for oVirt setup
 # Note: when missing an independent pingable IP (apart from the default gateway) repeat the default gateway IP here
 hvp_switch_ip: "${switch_ip}"
@@ -3358,7 +3359,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092801"
+script_version="2019092802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
