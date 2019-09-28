@@ -1897,7 +1897,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019090901"
+script_version="2019092801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1993,6 +1993,12 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: it seems tha NetworkManager may break down if updated inside chroot - attempting workaround here
+		nmcli dev
+		nmcli connection
+		nmcli connection reload
+		nmcli dev
+		nmcli connection
 		# Note: adding resolution/ping of some well-known public hosts to force wake-up of buggy DNS/gateway implementations (VMware Workstation 12 suspected)
 		for target in www.google.com www.centos.org mirrorlist.centos.org ; do
 			/bin/nslookup "${target}"
@@ -3085,7 +3091,7 @@ setsebool -P -N samba_share_fusefs on
 mkdir -p /etc/selinux/local
 cat << EOF > /etc/selinux/local/myglustersmb.te
 
-module myglustersmb 13.0;
+module myglustersmb 14.0;
 
 require {
 	type fusefs_t;
@@ -3119,7 +3125,7 @@ allow smbcontrol_t ctdbd_var_lib_t:file { read write open lock getattr setattr }
 allow ctdbd_t samba_net_t:process { noatsecure rlimitinh siginh };
 allow ctdbd_t samba_var_t:dir { add_name write};
 allow ctdbd_t samba_var_t:file create;
-allow ctdbd_t fusefs_t:sock_file create;
+allow ctdbd_t fusefs_t:sock_file { create unlink };
 
 #============= samba_net_t ==============
 allow samba_net_t ctdbd_t:unix_stream_socket { read write };
