@@ -1897,7 +1897,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092801"
+script_version="2019092802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -1993,7 +1993,7 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
-		# Note: it seems tha NetworkManager may break down if updated inside chroot - attempting workaround here
+		# Note: it seems that NetworkManager may break down if updated inside chroot - attempting workaround here
 		nmcli dev
 		nmcli connection
 		nmcli connection reload
@@ -2187,7 +2187,7 @@ hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
 if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
 	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
-yum --disableincludes=all -y --nogpgcheck install ${hvp_baseurl}x86_64/hvp-release-7-5.noarch.rpm
+yum --disableincludes=all -y --nogpgcheck install ${hvp_baseurl}/hvp-release-latest.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-rhv-rebuild > /dev/null
