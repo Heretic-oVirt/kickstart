@@ -3359,7 +3359,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092803"
+script_version="2019092804"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3949,7 +3949,7 @@ yum -y install logcheck
 yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux syslinux-perl bind
 
 # Install Ansible and gDeploy
-yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib
+yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib ansible-lint
 
 # Install HVP Ansible support files
 yum -y install hvp-ansible
