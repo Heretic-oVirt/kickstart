@@ -3358,7 +3358,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019090901"
+script_version="2019092801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3472,6 +3472,12 @@ yum() {
 	while [ ${result} -ne 0 -a ${retries_left} -gt 0 ]; do
 		sleep ${yum_sleep_time}
 		echo "Retrying yum operation (${retries_left} retries left at $(date '+%Y-%m-%d %H:%M:%S')) after failure (exit code ${result})" 1>&2
+		# Note: it seems that NetworkManager may break down if updated inside chroot - attempting workaround here
+		nmcli dev
+		nmcli connection
+		nmcli connection reload
+		nmcli dev
+		nmcli connection
 		# Note: adding resolution/ping of some well-known public hosts to force wake-up of buggy DNS/gateway implementations (VMware Workstation 12 suspected)
 		for target in www.google.com www.centos.org mirrorlist.centos.org ; do
 			/bin/nslookup "${target}"
