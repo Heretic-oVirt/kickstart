@@ -3359,7 +3359,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092802"
+script_version="2019092803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3689,7 +3689,7 @@ hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
 if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
 	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
 fi
-yum -y --nogpgcheck install ${hvp_baseurl}x86_64/hvp-release-7-5.noarch.rpm
+yum -y --nogpgcheck install ${hvp_baseurl}/hvp-release-latest.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
 # Note: if explicitly denied, HVP RHGS rebuild must not be enabled anyway on this external support machine (no special software requirements atm)
 if [ "${orthodox_mode}" = "false" ]; then
