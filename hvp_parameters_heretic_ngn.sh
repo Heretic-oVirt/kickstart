@@ -34,6 +34,7 @@ gluster_vol_name['unixshare']="unixshare"
 gluster_vol_name['winshare']="winshare"
 gluster_vol_name['blockshare']="blockshare"
 gluster_vol_name['backup']="backup"
+gluster_vol_name['sharedstorage']="gluster_shared_storage"
 
 # Note: for the following values, either the IPs or the offset is enough, but we will list here both as an example
 test_ip_offset="1"
