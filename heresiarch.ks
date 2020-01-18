@@ -32,10 +32,12 @@
 # Note: to force custom AD DC naming add hvp_dcname=mydcname where mydcname is the unqualified (ie without domain name part) hostname of the AD DC
 # Note: to force custom database type add hvp_dbtype=dddd where dddd is the database type (either postgresql, mysql, firebird, mongodb or sqlserver)
 # Note: to force custom database version add hvp_dbversion=a.b where a.b is the database version number
+# Note: to force custom database superuser password add hvp_dbpwd=mydbpassword where mydbpassword is the database superuser password
 # Note: to force custom desktop type add hvp_detype=eeee where eeee is the desktop type (either gnome, kde, xfce or lxde)
 # Note: to force custom desktop DB type add hvp_dedbtype=uuuu where uuuu is the desktop DB type (either sqlite or postgresql)
 # Note: to force custom DB server IP add hvp_db=u.u.u.u where u.u.u.u is the DB server IP on the vm main network
 # Note: to force custom DB server naming add hvp_dbname=mydbname where mydbname is the unqualified (ie without domain name part) hostname of the DB server
+# Note: to force custom Nextcloud version add hvp_ncversion=XX where XX is the Nextcloud version number
 # Note: to force custom Web server IP add hvp_web=w.w.w.w where w.w.w.w is the Web server IP on the vm main network
 # Note: to force custom Web server naming add hvp_webname=mywebname where mywebname is the unqualified (ie without domain name part) hostname of the Web server
 # Note: to force custom print server IP add hvp_pr=u.u.u.u where u.u.u.u is the print server IP on the vm main network
@@ -59,8 +61,10 @@
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
 # Note: to force custom datacenter naming add hvp_dcname=mydcname where mydcname is the name of the oVirt DataCenter
 # Note: to force custom cluster naming add hvp_clname=myclname where myclname is the name of the oVirt Cluster
-# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumename=myvolumename where myvolumename is the volume name
-# Note: to force custom Gluster volume size add hvp_{vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumesize=S where S is the volume size in GB
+# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,sharedstorage}_volumename=myvolumename where myvolumename is the volume name
+# Note: to force custom Gluster volume size add hvp_{vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,sharedstorage}_volumesize=S where S is the volume size in GB
+# Note: to force custom Gluster volumes max snapshot number add hvp_max_snapnum=U where U is the maximum number of allowed Gluster volume snapshots
+# Note: to force custom Gluster share volumes automatic snapshot schedule add hvp_share_snapschedule="a b c d e" where "a b c d e" is the cron-style schedule string for automatic Gluster share volume snapshots
 # Note: to force custom Gluster-block LUN sizes add hvp_block_luns=A,B where A and B are the Gluster-block LUN sizes in GiB
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
 # Note: to force custom node BMC type add hvp_bmcs_type=bmctype where bmctype is the BMC type
@@ -75,6 +79,17 @@
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
 # Note: to force custom AD further admin username add hvp_winadminname=mywinadmin where mywinadmin is the further AD admin username
 # Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
+# Note: to force custom AD LDAP bind username add hvp_adbindname=mybinduser where mybinduser is the AD LDAP bind username
+# Note: to force custom AD LDAP bind password add hvp_adbindpwd=mybindpassword where mybindpassword is the AD LDAP bind user password
+# Note: to force custom Nextcloud admin username add hvp_ncadminname=myncadmin where myncadmin is the Nextcloud admin username
+# Note: to force custom Nextcloud admin password add hvp_ncadminpwd=myncadminpassword where myncadminpassword is the Nextcloud admin user password
+# Note: to force custom Nextcloud DB type add hvp_ncdbtype=vvvv where vvvv is the Nextcloud DB type (either sqlite, postgresql or mysql)
+# Note: to force custom Nextcloud DB username add hvp_ncdbname=myncdbuser where myncdbuser is the Nextcloud DB username
+# Note: to force custom Nextcloud DB password add hvp_ncdbpwd=myncdbpassword where myncdbpassword is the Nextcloud DB user password
+# Note: to force custom Online Office type add hvp_ootype=vvvv where vvvv is the Online Office type (either none, onlyoffice or libreoffice)
+# Note: to force custom Online Office DB username add hvp_oodbname=myoodbuser where myoodbuser is the Online Office DB username
+# Note: to force custom Online Office DB password add hvp_oodbpwd=myoodbpassword where myoodbpassword is the Online Office DB user password
+# Note: to force custom Online Office DB type add hvp_oodbtype=vvvv where vvvv is the Online Office DB type (either postgresql or mysql)
 # Note: to force custom email addresses for notification sender and receiver add hvp_{sender,receiver}_email=name@domain where name@domain is the email address
 # Note: to force custom keyboard layout add hvp_kblayout=cc where cc is the country code
 # Note: to force custom system language add hvp_language=ii where ii is the language code (enacted only for heresiarch and virtual desktop installations)
@@ -106,11 +121,13 @@
 # Note: the default AD DC IP on the vm main network is assumed to be the vm main network address plus 220
 # Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
 # Note: the default database type is postgresql
-# Note: the default database version is 9.6 (postgresql), 5.7 (mysql), 2.5 (firebird), 3.6 (mongodb) and 2017.CU (sqlserver)
-# Note: the default desktop type is gnome
+# Note: the default database version is 11 (postgresql), 5.7 (mysql), 2.5 (firebird), 3.6 (mongodb) and 2017.CU (sqlserver)
+# Note: the default database superuser password is HVP_dem0
+# Note: the default desktop type is xfce
 # Note: the default desktop DB type is sqlite
 # Note: the default DB server IP on the vm main network is assumed to be the vm main network address plus 230
 # Note: the default DB server naming uses the "My Little Pony" character name bigmcintosh for the DB server
+# Note: the default Nextcloud version is 17.0.1
 # Note: the default Web server IP on the vm main network is assumed to be the vm main network address plus 210
 # Note: the default Web server naming uses the "My Little Pony" character name cheerilee for the Web server
 # Note: the default print server IP on the vm main network is assumed to be the vm main network address plus 190
@@ -134,8 +151,10 @@
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
 # Note: the default datacenter naming uses the name HVPDataCenter for the oVirt DataCenter
 # Note: the default cluster naming uses the name HVPCluster for the oVirt Cluster
-# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
-# Note: the default Gluster volume sizing uses the sizes {500,30,1,1024,1024,1024,1024} GB for volumes {vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
+# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,gluster_shared_storage}
+# Note: the default Gluster volume sizing uses the sizes {500,30,1,1024,1024,1024,1024,1} GB for volumes {vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,sharedstorage}
+# Note: the default Gluster volumes max snapshot number is 60
+# Note: the default Gluster share volumes automatic snapshot schedule is "15 * * * *" (meaning on every day on every hour at 15 minutes past the hour)
 # Note: the default Gluster-block LUN sizes are assumed to be of only 1 LUN of 300 Gib
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes BMC type is ipmilan
@@ -150,6 +169,17 @@
 # Note: the default admin user password is hvpdemo
 # Note: the default AD further admin username is the same as the admin username with the string "ad" prefixed
 # Note: the default AD further admin user password is HVP_dem0
+# Note: the default AD LDAP bind username is binduser
+# Note: the default AD LDAP bind user password is BindPassw0rd
+# Note: the default Nextcloud admin username is admin
+# Note: the default Nextcloud admin password is HVP_dem0
+# Note: the default Nextcloud DB username is nextcloud
+# Note: the default Nextcloud DB password is HVP_dem0
+# Note: the default Nextcloud DB type is sqlite
+# Note: the default Online Office type is onlyoffice 
+# Note: the default Online Office DB username is onlyoffice
+# Note: the default Online Office DB password is HVP_dem0
+# Note: the default Online Office DB type is the same as the Nextcloud DB type (if not sqlite) or postgresql
 # Note: the default notification email address for sender is root@localhost and for receiver is monitoring@localhost
 # Note: the default keyboard layout is us
 # Note: the default system language is en_US.UTF-8
@@ -224,6 +254,8 @@ selinux --enforcing
 @performance
 @network-file-system-client
 @gnome-desktop
+# TODO: removing gvfs-smb since it seems to require a strange updated libsmbclient - find out why and remove the exclusion
+-gvfs-smb
 @x11
 @development
 xorg-x11-server-Xorg
@@ -379,9 +411,13 @@ unset db_ip_offset
 unset db_name
 unset dbtype
 unset dbversion
+unset dbpwd
 unset web_ip
 unset web_ip_offset
 unset web_name
+unset tmpl_ip
+unset tmpl_ip_offset
+unset tmpl_name
 unset detype
 unset dedbtype
 unset pr_ip
@@ -410,6 +446,8 @@ unset datacenter_name
 unset cluster_name
 unset gluster_vol_name
 unset gluster_vol_size
+unset gluster_max_snapshots
+unset gluster_share_snapshots_schedule
 unset gluster_block_size
 unset engine_ip
 unset engine_ip_offset
@@ -423,12 +461,24 @@ unset my_forwarders
 unset my_ntpservers
 unset my_smtpserver
 unset use_smtps
+unset nextcloud_version
 unset my_gateway
 unset root_password
 unset admin_username
 unset admin_password
 unset winadmin_username
 unset winadmin_password
+unset adbind_username
+unset adbind_password
+unset ncadmin_username
+unset ncadmin_password
+unset ncdb_username
+unset ncdb_password
+unset ncdbtype
+unset ootype
+unset oodb_username
+unset oodb_password
+unset oodbtype
 unset notification_sender
 unset notification_receiver
 unset keyboard_layout
@@ -491,6 +541,11 @@ gluster_vol_name['blockshare']="blockshare"
 gluster_vol_size['blockshare']="1024"
 gluster_vol_name['backup']="backup"
 gluster_vol_size['backup']="1024"
+gluster_vol_name['sharedstorage']="gluster_shared_storage"
+gluster_vol_size['sharedstorage']="1"
+
+gluster_max_snapshots="60"
+gluster_share_snapshots_schedule="15 * * * *"
 
 gluster_block_size[0]="300"
 
@@ -540,30 +595,26 @@ network_priority[4]="internal"
 
 multi_instance_max="9"
 
+# Note: no need to define network_base values since they get automatically defined below
 declare -A network netmask network_base bondmode bondopts mtu
 network['external']="dhcp"
 netmask['external']="dhcp"
-network_base['external']="dhcp"
 bondmode['external']="N/A"
 mtu['external']="dhcp"
 network['mgmt']="172.20.10.0"
 netmask['mgmt']="255.255.255.0"
-network_base['mgmt']="172.20.10"
 bondmode['mgmt']="activepassive"
 mtu['mgmt']="1500"
 network['gluster']="172.20.11.0"
 netmask['gluster']="255.255.255.0"
-network_base['gluster']="172.20.11"
 bondmode['gluster']="activepassive"
 mtu['gluster']="1500"
 network['lan']="172.20.12.0"
 netmask['lan']="255.255.255.0"
-network_base['lan']="172.20.12"
 bondmode['lan']="activepassive"
 mtu['lan']="1500"
 network['internal']="172.20.13.0"
 netmask['internal']="255.255.255.0"
-network_base['internal']="172.20.13"
 bondmode['internal']="activepassive"
 mtu['internal']="1500"
 
@@ -598,13 +649,18 @@ db_ip_offset="230"
 db_name="bigmcintosh"
 
 dbtype="postgresql"
-dbversion="9.6"
+dbversion="11"
+dbpwd="HVP_dem0"
 
 web_ip_offset="210"
 
 web_name="cheerilee"
 
-detype="gnome"
+tmpl_ip_offset="180"
+
+tmpl_name="featherweight"
+
+detype="xfce"
 dedbtype="sqlite"
 
 pr_ip_offset="190"
@@ -625,6 +681,8 @@ my_smtpserver=""
 
 use_smtps="false"
 
+nextcloud_version="17.0.1"
+
 my_gateway="dhcp"
 
 my_name="twilight"
@@ -633,6 +691,17 @@ root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
 winadmin_password="HVP_dem0"
+adbind_username="binduser"
+adbind_password="BindPassw0rd"
+ncadmin_username="admin"
+ncadmin_password="HVP_dem0"
+ncdb_username="nextcloud"
+ncdb_password="HVP_dem0"
+ncdbtype="sqlite"
+ootype="onlyoffice"
+oodb_username="onlyoffice"
+oodb_password="HVP_dem0"
+oodbtype="postgresql"
 keyboard_layout="us"
 system_language="en_US.UTF-8"
 local_timezone="UTC"
@@ -940,6 +1009,81 @@ if [ -n "${given_winadmin_password}" ]; then
 	winadmin_password="${given_winadmin_password}"
 fi
 
+# Determine AD LDAP bind username
+given_adbind_username=$(sed -n -e "s/^.*hvp_adbindname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_adbind_username}" ]; then
+	adbind_username="${given_adbind_username}"
+fi
+
+# Determine AD LDAP bind password
+given_adbind_password=$(sed -n -e "s/^.*hvp_adbindpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_adbind_password}" ]; then
+	adbind_password="${given_adbind_password}"
+fi
+
+# Determine Nextcloud admin username
+given_ncadmin_username=$(sed -n -e "s/^.*hvp_ncadminname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ncadmin_username}" ]; then
+	ncadmin_username="${given_ncadmin_username}"
+fi
+
+# Determine Nextcloud admin password
+given_ncadmin_password=$(sed -n -e "s/^.*hvp_ncadminpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ncadmin_password}" ]; then
+	ncadmin_password="${given_ncadmin_password}"
+fi
+
+# Determine Nextcloud DB username
+given_ncdb_username=$(sed -n -e "s/^.*hvp_ncdbname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ncdb_username}" ]; then
+	ncdb_username="${given_ncdb_username}"
+fi
+
+# Determine Nextcloud DB password
+given_ncdb_password=$(sed -n -e "s/^.*hvp_ncdbpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_ncdb_password}" ]; then
+	ncdb_password="${given_ncdb_password}"
+fi
+
+# Determine Nextcloud DB type
+given_ncdbtype=$(sed -n -e 's/^.*hvp_ncdbtype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_ncdbtype}" in
+	postgresql|mysql|sqlite)
+		ncdbtype="${given_ncdbtype}"
+		;;
+esac
+
+# Determine Online Office type
+given_ootype=$(sed -n -e 's/^.*hvp_ootype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_oodype}" in
+	none|onlyoffice|libreoffice)
+		ootype="${given_ootype}"
+		;;
+esac
+
+# Determine Online Office DB username
+given_oodb_username=$(sed -n -e "s/^.*hvp_oodbname=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_oodb_username}" ]; then
+	oodb_username="${given_oodb_username}"
+fi
+
+# Determine Online Office DB password
+given_oodb_password=$(sed -n -e "s/^.*hvp_oodbpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_oodb_password}" ]; then
+	oodb_password="${given_oodb_password}"
+fi
+
+# Determine Online Office DB type
+given_oodbtype=$(sed -n -e 's/^.*hvp_oodbtype=\(\S*\).*$/\1/p' /proc/cmdline)
+case "${given_oodbtype}" in
+	postgresql|mysql)
+		oodbtype="${given_oodbtype}"
+		;;
+esac
+if [ -z "${given_oodbtype}" -a "${ncdbtype}" != "sqlite" ]; then
+	oodbtype="${ncdbtype}"
+fi
+
 # Determine keyboard layout
 given_keyboard_layout=$(sed -n -e "s/^.*hvp_kblayout=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_keyboard_layout}" ]; then
@@ -1117,6 +1261,12 @@ if echo "${given_vdname}" | grep -q '^[[:alnum:]]\+$' ; then
 	vd_name="${given_vdname}"
 fi
 
+# Determine Template server name
+given_tmplname=$(sed -n -e 's/^.*hvp_tmplname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_tmplname}" | grep -q '^[[:alnum:]]\+$' ; then
+	tmpl_name="${given_tmplname}"
+fi
+
 # Determine database type
 given_dbtype=$(sed -n -e 's/^.*hvp_dbtype=\(\S*\).*$/\1/p' /proc/cmdline)
 case "${given_dbtype}" in
@@ -1130,10 +1280,10 @@ given_dbversion=$(sed -n -e 's/^.*hvp_dbversion=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_dbversion}" ]; then
 	dbversion="${given_dbversion}"
 fi
-if [ -z "${dbversion}" -o "${dbtype}" != "postgresql" -a "${dbversion}" = "9.6" ]; then
+if [ -z "${dbversion}" -o "${dbtype}" != "postgresql" -a "${dbversion}" = "11" ]; then
 	case "${dbtype}" in
 		postgresql)
-			dbversion="9.6"
+			dbversion="11"
 			;;
 		mysql)
 			dbversion="5.7"
@@ -1148,6 +1298,12 @@ if [ -z "${dbversion}" -o "${dbtype}" != "postgresql" -a "${dbversion}" = "9.6" 
 			dbversion="2017.CU"
 			;;
 	esac
+fi
+
+# Determine database superuser password
+given_dbpwd=$(sed -n -e "s/^.*hvp_dbpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_dbpwd}" ]; then
+	dbpwd="${given_dbpwd}"
 fi
 
 # Determine desktop type
@@ -1167,7 +1323,7 @@ case "${given_dedbtype}" in
 esac
 
 # Determine Gluster volume names and sizes
-for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
+for volume in engine vmstore iso ctdb unixshare winshare blockshare backup sharedstorage; do
 	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_volume_name}" ]; then
 		gluster_vol_name["${volume}"]="${given_volume_name}"
@@ -1181,6 +1337,26 @@ for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
 		gluster_vol_size["${volume}"]="${given_volume_size}"
 	fi
 done
+
+# Determine maximum number of Gluster volume snapshot
+given_max_snapshots=$(sed -n -e "s/^.*hvp_max_snapnum=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_max_snapshots}" ]; then
+	if [ "${given_max_snapshots}" = '""' -o "${given_max_snapshots}" = "''" ]; then
+		gluster_max_snapshots=""
+	else
+		gluster_max_snapshots="${given_max_snapshots}"
+	fi
+fi
+
+# Determine schedule for automatic Gluster share volumes snapshots
+given_share_snapschedule=$(sed -n -e "s/^.*hvp_max_snapnum=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_share_snapschedule}" ]; then
+	if [ "${given_share_snapschedule}" = '""' -o "${given_share_snapschedule}" = "''" ]; then
+		gluster_share_snapshots_schedule=""
+	else
+		gluster_share_snapshots_schedule=$(echo "${given_share_snapschedule}" | sed -e s/[\'\"]\*//g )
+	fi
+fi
 
 # Determine Gluster-block LUN sizes
 given_block_sizes=$(sed -n -e "s/^.*hvp_block_luns=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
@@ -1225,6 +1401,12 @@ fi
 # Determine choice of forcing SMTPS
 if grep -w -q 'hvp_smtps' /proc/cmdline ; then
 	use_smtps="true"
+fi
+
+# Determine Nextcloud version
+given_ncversion=$(sed -n -e 's/^.*hvp_ncversion=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_ncversion}" ]; then
+	nextcloud_version="${given_ncversion}"
 fi
 
 # Determine gateway address
@@ -1534,6 +1716,15 @@ if [ -z "${web_ip}" ]; then
 	web_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${web_ip_offset} +)
 fi
 
+# Determine tmpl server IP
+given_tmpl=$(sed -n -e 's/^.*hvp_tmpl=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_tmpl}" ]; then
+	tmpl_ip="${given_tmpl}"
+fi
+if [ -z "${tmpl_ip}" ]; then
+	tmpl_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${tmpl_ip_offset} +)
+fi
+
 # Determine metrics server IP
 given_metrics=$(sed -n -e 's/^.*hvp_metrics=\(\S*\).*$/\1/p' /proc/cmdline)
 if [ -n "${given_metrics}" ]; then
@@ -1613,7 +1804,7 @@ done
 # Create network setup fragment
 # Note: dynamically created here to make use of full autodiscovery above
 # Note: listing interfaces using network priority order
-# TODO: Anaconda/NetworkManager do not add DEFROUTE="no" and MTU="xxx" parameters - adding workarounds here - remove when fixed upstream
+# TODO: Anaconda/NetworkManager do not add DEFROUTE="no" and MTU="xxxx" parameters - adding workarounds here - remove when fixed upstream
 mkdir -p /tmp/hvp-networkmanager-conf
 pushd /tmp/hvp-networkmanager-conf
 cat << EOF > /tmp/full-network
@@ -1648,7 +1839,7 @@ for (( i=0; i<${#network_priority[*]}; i=i+1 )); do
 		fi
 		# Add hostname option on the DHCP-offering zone only
 		if [ "${zone}" = "${mgmt_zone}" ]; then
-			further_options="${further_options} --hostname=${my_name}"$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)".${domain_name[${zone}]}"
+			further_options="${further_options} --hostname=${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}"
 		fi
 		if [ "${network[${zone}]}" = "dhcp" ]; then
 			# DHCP configuration
@@ -1882,6 +2073,12 @@ sshd: ALL
 EOF
 
 # Define common network parameters to be added on PXE menu as kernel commandline parameters during installation
+external_ntpservers="${my_ntpservers}"
+my_ntpservers=""
+for ((i=0;i<${node_count};i=i+1)); do
+	my_ntpservers="${my_ntpservers},${node_name[${i}]}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}"
+done
+my_ntpservers=$(echo "${my_ntpservers}" | sed -e 's/^,//')
 common_network_params=""
 vm_network_params=""
 essential_network_params=""
@@ -2059,7 +2256,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvpngn${i}
 	        MENU LABEL Install Heretic oVirt Project NGN ${i}
 	        kernel linux/node-${ovirt_version}/vmlinuz
-	        # append initrd=linux/node-${ovirt_version}/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node-${ovirt_version} quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/node-${ovirt_version}/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node-${ovirt_version} quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${external_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/node-${ovirt_version}/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/node-${ovirt_version} quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-ngn.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2067,7 +2264,7 @@ for (( i=0; i<${node_count}; i=i+1 )); do
 	LABEL hvphost${i}
 	        MENU LABEL Install Heretic oVirt Project Host ${i}
 	        kernel linux/centos/vmlinuz
-	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
+	        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ovirt_version=${ovirt_version} hvp_nodeosdisk=${given_nodeosdisk} hvp_nodecount=${node_count} hvp_masternodeid=${master_index} hvp_nodeid=${i} hvp_nodename=${given_names} hvp_installername=${my_name} hvp_switchname=${switch_name} hvp_enginename=${engine_name} hvp_metricsname=${metrics_name} hvp_storagename=${storage_name} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_ad_dc=${ad_dc_ip} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_ntpservers=${external_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_switch=${switch_ip} hvp_engine=${engine_ip} hvp_metrics=${metrics_ip} hvp_bmcs_offset=${bmc_ip_offset} hvp_nodes_offset=${node_ip_offset} hvp_storage_offset=${storage_ip_offset} ${common_network_params} ${common_storage_params}
 	        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/heretic-host.ks hvp_nodeid=${i} ${essential_network_params}
 	
 	EOF
@@ -2087,14 +2284,14 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_adbindname=${adbind_username} hvp_adbindpwd=${adbind_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
 LABEL installdb
         MENU LABEL Install Database Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbtype=${dbtype} hvp_dbversion=${dbversion} hvp_dbpwd=${dbpwd} hvp_joindomain=true hvp_myname=${db_name} hvp_${ad_zone}_my_ip=${db_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-db-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP Print server installation
@@ -2104,12 +2301,26 @@ LABEL installpr
         # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${pr_name} hvp_${ad_zone}_my_ip=${pr_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-pr-c7.ks ${essential_network_params}
 
+# Start kickstart-based HVP Web server installation
+LABEL installweb
+        MENU LABEL Install Web Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-web-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_adbindname=${adbind_username} hvp_adbindpwd=${adbind_password} hvp_ncadminname=${ncadmin_username} hvp_ncadminpwd=${ncadmin_password} hvp_ncdbname=${ncdb_username} hvp_ncdbpwd=${ncdb_password} hvp_ncdbtype=${ncdbtype} hvp_ootype=${ootype} hvp_oodbtype=${oodbtype} hvp_oodbname=${oodb_username} hvp_oodbpwd=${oodb_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_ncversion=${nextcloud_version} hvp_dbname=${db_name} hvp_dbtype=${dbtype} hvp_dbpwd=${dbpwd} hvp_vdname=${vd_name} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${web_name} hvp_${ad_zone}_my_ip=${web_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-web-c7.ks ${essential_network_params}
+
 # Start kickstart-based HVP Remote Desktop server installation
 LABEL installvd
         MENU LABEL Install Remote Desktop Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_dbname=${db_name} hvp_detype=${detype} hvp_dedbtype=${dedbtype} hvp_dbpwd=${dbpwd} hvp_joindomain=true hvp_myname=${vd_name} hvp_${ad_zone}_my_ip=${vd_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-vd-c7.ks ${essential_network_params}
+
+# Start kickstart-based HVP Template server installation
+LABEL installtmpl
+        MENU LABEL Install Template Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-tmpl-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${tmpl_name} hvp_${ad_zone}_my_ip=${tmpl_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-tmpl-c7.ks ${essential_network_params}
 
 EOF
 # Create common configuration parameters fragment
@@ -2196,6 +2407,7 @@ done
 cat << EOF >> /tmp/hvp-syslinux-conf/hvp_parameters.sh
 
 ad_subdomain_prefix="${ad_subdomain_prefix}"
+netbios_domain_name="${netbios_domain_name}"
 
 my_nameserver="${my_ip[${mgmt_zone}]}"
 
@@ -2213,6 +2425,8 @@ unset my_gateway
 root_password='${root_password}'
 admin_username="${admin_username}"
 admin_password='${admin_password}'
+winadmin_username="${winadmin_username}"
+winadmin_password='${winadmin_password}'
 keyboard_layout="${keyboard_layout}"
 system_language="${system_language}"
 local_timezone="${local_timezone}"
@@ -2281,6 +2495,8 @@ ad_dc_name="${ad_dc_name}"
 
 my_gateway="${dhcp_gateway}"
 
+my_ntpservers="${external_ntpservers}"
+
 EOF
 
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_heretic_host.sh
@@ -2301,11 +2517,19 @@ my_name="${ad_dc_name}"
 
 my_forwarders="$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${ad_zone}]} ${node_ip_offset} +) ${i} +)"; done)"
 
-# Note: when installing further AD DCs you must change the following option to true
+# Note: when installing further AD DCs you must change the following option to true or set the proper commandline option
 domain_join="false"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
 
 if [ "\${domain_join}" = "true" ]; then
 	my_nameserver="${ad_dc_ip}"
+else
+	adbind_username="${adbind_username}"
+	adbind_password='${adbind_password}'
 fi
 
 gluster_vol_name['unixshare']="${gluster_vol_name['unixshare']}"
@@ -2319,10 +2543,16 @@ my_ip_offset="${db_ip_offset}"
 
 dbtype="${dbtype}"
 dbversion="${dbversion}"
+dbpwd="${dbpwd}"
 
 my_name="${db_name}"
 
 domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
 
 if [ "\${domain_join}" = "true" ]; then
 	my_nameserver="${ad_dc_ip}"
@@ -2338,6 +2568,11 @@ my_ip_offset="${pr_ip_offset}"
 my_name="${pr_name}"
 
 domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
 
 if [ "\${domain_join}" = "true" ]; then
 	my_nameserver="${ad_dc_ip}"
@@ -2356,12 +2591,78 @@ web_name="${web_name}"
 
 detype="${detype}"
 dedbtype="${dedbtype}"
-
-ad_dc_name="${ad_dc_name}"
+dbpwd="${dbpwd}"
 
 my_name="${vd_name}"
 
 domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
+
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+fi
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_web.sh
+# Custom defaults for web server installation
+
+my_ip_offset="${web_ip_offset}"
+
+db_name="${db_name}"
+
+vd_name="${vd_name}"
+
+dbpwd="${dbpwd}"
+
+nextcloud_version="${nextcloud_version}"
+
+ncadmin_username="${ncadmin_username}"
+ncadmin_password="${ncadmin_password}"
+ncdb_username="${ncdb_username}"
+ncdb_password="${ncdb_password}"
+ncdbtype="${ncdbtype}"
+ootype="${ootype}"
+oodb_username="${oodb_username}"
+oodb_password="${oodb_password}"
+oodbtype="${oodbtype}"
+
+ad_dc_name="${ad_dc_name}"
+
+my_name="${web_name}"
+
+domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
+
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+	adbind_username="${adbind_username}"
+	adbind_password='${adbind_password}'
+fi
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_tmpl.sh
+# Custom defaults for template server installation
+
+my_ip_offset="${tmpl_ip_offset}"
+
+my_name="${tmpl_name}"
+
+domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
 
 if [ "\${domain_join}" = "true" ]; then
 	my_nameserver="${ad_dc_ip}"
@@ -2688,6 +2989,12 @@ for zone in "${!network[@]}" ; do
 	fi
 done
 cat << EOF >> named.conf
+        zone "${ad_subdomain_prefix}.${domain_name[${ad_zone}]}" IN {
+                type static-stub;
+                server-addresses { ${ad_dc_ip}; };
+                forwarders {};
+        };
+
 };
 
 view "internal"
@@ -2746,6 +3053,12 @@ for zone in "${!network[@]}" ; do
 	added_zones="${added_zones} ${domain_name[${zone}]}"
 done
 cat << EOF >> named.conf
+        zone "${ad_subdomain_prefix}.${domain_name[${ad_zone}]}" IN {
+                type static-stub;
+                server-addresses { ${ad_dc_ip}; };
+                forwarders {};
+        };
+
 };
 
 view "external"
@@ -3110,6 +3423,23 @@ if [ -n "${bmc_type}" -a "${bmc_confirmed}" = "true" ]; then
 else
 	bmc_vars_comment='#'
 fi
+case "${dbtype}" in
+	postgresql)
+		dbport="5432"
+		;;
+	mysql)
+		dbport="3306"
+		;;
+	firebird)
+		dbport="3050"
+		;;
+	mongodb)
+		dbport="27017"
+		;;
+	sqlserver)
+		dbport="1433"
+		;;
+esac
 cat << EOF > hvp.yaml
 # Global variables for HVP Ansible playbooks
 
@@ -3206,7 +3536,11 @@ hvp_blockshare_arbitersize: "10GB"
 hvp_backup_volume_name: ${gluster_vol_name['backup']}
 hvp_backup_size: "${gluster_vol_size['backup']}GB"
 hvp_backup_arbitersize: "10GB"
+hvp_shared_storage_volume_name: ${gluster_vol_name['sharedstorage']}
+hvp_shared_storage_size: "${gluster_vol_size['sharedstorage']}GB"
 hvp_thinpool_chunksize: "1536k"
+hvp_share_snapshot_max: "${gluster_max_snapshots}"
+hvp_share_snapshot_schedule: "${gluster_share_snapshots_schedule}"
 
 ## HVP Gluster-block settings
 EOF
@@ -3238,6 +3572,7 @@ ${bmc_vars_comment}host_bmc_user: ${bmc_username}
 ${bmc_vars_comment}host_bmc_password: '${bmc_password}'
 
 # Env:
+engine_name: "HostedEngine"
 ## Datacenter:
 # TODO: forcing default name since any personalization does not get into appliance cloudinit and causes mismatch - open Bugzilla ticket and revert
 hvp_dc_name: ${datacenter_name}
@@ -3293,9 +3628,11 @@ vms_network_name: "{{ got_lan_network | ternary(hvp_lan_bridge_name, hvp_mgmt_br
 vms_network_domainname: "{{ hvp_lan_domainname }}"
 vms_network: "{{ got_lan_network | ternary(lan_network, mgmt_network) }}"
 # TODO: dynamically extract the following from mirrored kickstart files
+# Note: always skip template server since it must be installed on its own (must be stopped and sealed afterwards)
 guest_vms:
-  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'DomainController', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 60GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
-  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'DatabaseServer', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: 80 }
+  - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'DomainController', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
+  - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'DatabaseServer', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: ${dbport} }
+  - { vm_kickstart_file: 'hvp-web-c7.ks', vm_name: 'WebServer', vm_comment: 'Web Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('210') | ipaddr('address') }}", vm_service_port: 80 }
   - { vm_kickstart_file: 'hvp-pr-c7.ks', vm_name: 'PrintServer', vm_comment: 'Print Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('190') | ipaddr('address') }}", vm_service_port: 445 }
   - { vm_kickstart_file: 'hvp-vd-c7.ks', vm_name: 'TerminalServer', vm_comment: 'Remote Desktop Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 8GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('240') | ipaddr('address') }}", vm_service_port: 22 }
 
@@ -3359,7 +3696,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092804"
+script_version="2020011801"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -3662,7 +3999,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos already installed by default
-	for repo_name in $(yum-config-manager | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3684,10 +4021,10 @@ yum -y install yum-plugin-priorities
 
 # Add HVP custom repo
 # Define proper network source
-hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
+hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/hvp/"
 # Prefer custom HVP repo URL, if any
 if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
-	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 fi
 yum -y --nogpgcheck install ${hvp_baseurl}/hvp-release-latest.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
@@ -3715,7 +4052,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3742,7 +4079,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[epel.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3757,12 +4094,12 @@ fi
 
 # Add ELRepo repository definition
 # Define proper network source
-elrepo_baseurl="https://elrepo.org/linux/elrepo/el7/x86_64/"
+elrepo_baseurl="https://elrepo.org/linux/elrepo/el$(rpm -q --queryformat '%{version}' centos-release)/$(uname -m)/"
 # Prefer custom ELRepo repo URL, if any
 if [ -n "${hvp_repo_baseurl['elrepo']}" ]; then
-	elrepo_baseurl=$(echo "${hvp_repo_baseurl['elrepo']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+	elrepo_baseurl=$(echo "${hvp_repo_baseurl['elrepo']}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 fi
-yum -y install ${elrepo_baseurl}RPMS/elrepo-release-7.0-4.el7.elrepo.noarch.rpm
+yum -y install ${elrepo_baseurl}RPMS/elrepo-release-7.0-4.el$(rpm -q --queryformat '%{version}' centos-release).elrepo.noarch.rpm
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
@@ -3774,7 +4111,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[elrepo.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3796,7 +4133,7 @@ fi
 ovirt_baseurl="http://resources.ovirt.org/pub/yum-repo/"
 # Prefer custom oVirt repo URL, if any
 if [ -n "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" ]; then
-	ovirt_baseurl=$(echo "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+	ovirt_baseurl=$(echo "${hvp_repo_baseurl[ovirt-${ovirt_version}]}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 fi
 yum -y install ${ovirt_baseurl}ovirt-release${ovirt_release_package_suffix}.rpm
 # If explicitly allowed, make sure that we use oVirt snapshot/nightly repos
@@ -3837,7 +4174,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[ovirt.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3863,7 +4200,7 @@ if [ "${nolocalvirt}" != "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[centos-qemu-ev.*\]' | tr -d '[]'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -3881,10 +4218,10 @@ else
 	webmin_gpgkey="http://www.webmin.com/jcameron-key.asc"
 	# Prefer custom Webmin repo URL, if any
 	if [ -n "${hvp_repo_baseurl['webmin']}" ]; then
-		webmin_baseurl=$(echo "${hvp_repo_baseurl['webmin']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+		webmin_baseurl=$(echo "${hvp_repo_baseurl['webmin']}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 	fi
 	if [ -n "${hvp_repo_gpgkey['webmin']}" ]; then
-		webmin_gpgkey=$(echo "${hvp_repo_gpgkey['webmin']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+		webmin_gpgkey=$(echo "${hvp_repo_gpgkey['webmin']}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 	fi
 	cat <<- EOF > /etc/yum.repos.d/webmin.repo
 	[webmin]
@@ -3909,6 +4246,7 @@ rm -rf /var/cache/yum/*
 yum --enablerepo '*' clean all
 
 # Update OS (with "upgrade" to allow package obsoletion) non-interactively ("-y" yum option)
+# Note: any repo file involved in release package upgrades would be in .rpmnew so no need to reapply customizations now
 yum -y upgrade
 
 # TODO: Make sure that the latest installed kernel is the default
@@ -4030,6 +4368,51 @@ yum --enablerepo '*' clean all
 # Remove package update leftovers
 find /etc -type f -name '*.rpmnew' -exec rename .rpmnew "" '{}' ';'
 find /etc -type f -name '*.rpmsave' -exec rm -f '{}' ';'
+
+# Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
+# Note: done here to cater for modified repos from the upgrade above
+if [ "${custom_yum_conf}" = "true" ]; then
+	for repofile in /etc/yum.repos.d/*.repo; do
+		if egrep -q '^(mirrorlist|metalink)' "${repofile}"; then
+			sed -i -e 's/^mirrorlist/#mirrorlist/g' "${repofile}"
+			sed -i -e 's/^metalink/#metalink/g' "${repofile}"
+			sed -i -e 's/^#baseurl/baseurl/g' "${repofile}"
+		fi
+	done
+	# Reapply all yum settings
+	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+	yum-config-manager --save --setopt='deltarpm=0' > /dev/null
+	if [ "${ovirt_nightly_mode}" = "true" ]; then
+		for repo_name in $(grep -o '\[ovirt-.*centos.*\]' /etc/yum.repos.d/ovirt-*-dependencies.repo  | tr -d '[]'); do
+			yum-config-manager --save --setopt="${repo_name}.skip_if_unavailable=1" > /dev/null
+		done
+	fi
+	if [ "${orthodox_mode}" = "false" ]; then
+		yum-config-manager --enable hvp-rhv-rebuild > /dev/null
+		yum-config-manager --save --setopt='hvp-rhv-rebuild.priority=50' > /dev/null
+		yum-config-manager --enable hvp-rhgs-rebuild > /dev/null
+		yum-config-manager --save --setopt='hvp-rhgs-rebuild.priority=50' > /dev/null
+		yum-config-manager --enable hvp-openvswitch-rebuild > /dev/null
+		yum-config-manager --save --setopt='hvp-openvswitch-rebuild.priority=50' > /dev/null
+		yum-config-manager --enable hvp-rhsat-rebuild > /dev/null
+		yum-config-manager --save --setopt='hvp-rhsat-rebuild.priority=50' > /dev/null
+		yum-config-manager --enable hvp-ansible-rebuild > /dev/null
+		yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
+	fi
+	# Allow specifying custom base URLs for repositories and GPG keys
+	# Note: done here to cater for those repos already installed by default
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
+		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
+		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
+		# Force any custom URLs
+		if [ -n "${repo_baseurl}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.baseurl=${repo_baseurl}" > /dev/null
+		fi
+		if [ -n "${repo_gpgkey}" ]; then
+			yum-config-manager --save --setopt="${repo_name}.gpgkey=${repo_gpgkey}" > /dev/null
+		fi
+	done
+fi
 
 # Now configure the base OS
 
@@ -4168,14 +4551,12 @@ fi
 # Note: systemd sets clock to UTC by default
 #echo 'UTC' >> /etc/adjtime
 
-# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
+# Configure NTPd/NTPdate time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
 sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
 cat /dev/null > /etc/ntp/step-tickers
-for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
-		echo "${server}" >> /etc/ntp/step-tickers
-done
 sed -i -e '/^server/s/^/#/' /etc/chrony.conf
 for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "${server}" >> /etc/ntp/step-tickers
 		echo "server ${server} iburst" >> /etc/chrony.conf
 done
 
@@ -4295,7 +4676,7 @@ chmod 640 /var/log/{messages,secure,cron,maillog,spooler}
 # Keep crash info even for non-rpm-packaged programs but exclude users writable paths
 sed -i -e 's/^ProcessUnpackaged.*$/ProcessUnpackaged = yes/' -e 's%\(BlackListedPaths.*\)$%\1, /home*, /tmp/*, /var/tmp/*%' /etc/abrt/abrt-action-save-package-data.conf
 # Allow reports for signed packages from 3rd-party repos by adding their keys under /etc/pki/rpm-gpg/
-for repokeyurl in $(grep -h '^gpgkey' /etc/yum.repos.d/*.repo | grep -v 'file:///' | sed -e 's/^gpgkey\s*=\s*//' -e 's/\s*$//' -e 's/\$releasever/'$(rpm -q --queryformat '%{version}\n' centos-release)'/g' | sort | uniq); do
+for repokeyurl in $(grep -h '^gpgkey' /etc/yum.repos.d/*.repo | grep -v 'file:///' | sed -e 's/^gpgkey\s*=\s*//' -e 's/\s*$//' -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' | sort | uniq); do
 	key_file="$(echo ${repokeyurl} | sed -e 's%^.*/\([^/]*\)$%\1%')"
 	if [ ! -f "/etc/pki/rpm-gpg/${key_file}" ]; then
 		wget -P /etc/pki/rpm-gpg/ "${repokeyurl}"
@@ -4498,11 +4879,11 @@ EOF
 chmod 644 /var/www/html/index.html
 
 # Prepare network installation area
-mkdir -p /var/www/hvp-repos/el7/{centos,ks}
+mkdir -p /var/www/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/{centos,ks}
 # Mirror web contents here using wget
 mirror_baseurl=$(echo "${hvp_baseurl}" | sed -e 's>hvp/$>>')
 for subdir in ks node-${ovirt_version}; do
-	wget -P /var/www/hvp-repos/el7 -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${mirror_baseurl}${subdir}/
+	wget -P /var/www/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release) -m -np -nH --cut-dirs=2 --retry-connrefused --waitretry=5 --read-timeout=20 -T 15 -c --reject "index.html*" ${mirror_baseurl}${subdir}/
 done
 
 # Enable virtual host configuration
@@ -4824,7 +5205,7 @@ chmod 644 /var/lib/tftpboot/efi64.cfg
 # Create PXELinux non-interactive menus for automated installation of our virtual machines
 # Note: no need for KBDMAP directives here since these are supposed to be non-interactive
 # TODO: find a way to differentiate between BIOS and UEFI
-for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
+for vm_kickstart_path in /var/www/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/ks/hvp-*.ks ; do
 	vm_kickstart=$(basename ${vm_kickstart_path})
 	vm_role=$(echo "${vm_kickstart}" | sed -e 's/^hvp-\([^-]*\)-.*$/\1/')
 	cat <<- EOF > "/var/lib/tftpboot/${vm_role}.cfg"
@@ -4835,7 +5216,7 @@ for vm_kickstart_path in /var/www/hvp-repos/el7/ks/hvp-*.ks ; do
 	MENU TITLE --== Heretic oVirt Project PXE Menu ==--
 	LABEL AutoInstallVM${vm_role}
 	  kernel linux/centos/vmlinuz
-	  append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/${vm_kickstart}
+	  append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/ks/${vm_kickstart}
 	EOF
 	ln -s ../${vm_role}.cfg /var/lib/tftpboot/pxelinux.cfg/
 done
@@ -4853,8 +5234,8 @@ fi
 # Copy netboot images mirrored above
 # Note: CentOS images put in place in second post section below
 pushd /var/lib/tftpboot/linux/node-${ovirt_version}
-cp /var/www/hvp-repos/el7/node-${ovirt_version}/vmlinuz .
-cp /var/www/hvp-repos/el7/node-${ovirt_version}/initrd.img .
+cp /var/www/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/node-${ovirt_version}/vmlinuz .
+cp /var/www/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/node-${ovirt_version}/initrd.img .
 popd
 
 # Configure SSH root login with key
@@ -5130,6 +5511,7 @@ pushd /etc/selinux/local
 checkmodule -M -m -o myks1stboot.mod myks1stboot.te
 semodule_package -o myks1stboot.pp -m myks1stboot.mod
 semodule -i myks1stboot.pp
+popd
 
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
@@ -5174,12 +5556,28 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
 	# Note: adding nofail to avoid making it fail the remote-fs.target if unavailable
-	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
-	mkdir -p /mnt/hgfs
-	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,nofail,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	# TODO: adding network dependency to break possible systemd ordering cycle - investigate further and remove it
+	cat <<- EOM > /etc/systemd/system/mnt-hgfs.mount
+	[Unit]
+	Description=VMware shared folders
+	After=network.target network-online.target vmtoolsd.service
+	Requires=network.target network-online.target vmtoolsd.service
+	Before=multi-user.target
+	Conflicts=umount.target
+	
+	[Mount]
+	What=.host:/
+	Where=/mnt/hgfs
+	Type=fuse.vmhgfs-fuse
+	Options=allow_other,auto_unmount,nofail
+	TimeoutSec=50s
+	
+	[Install]
+	WantedBy=multi-user.target
 	EOM
-	mount /mnt/hgfs
+	chmod 644 /etc/systemd/system/mnt-hgfs.mount
+	systemctl daemon-reload
+	systemctl start mnt-hgfs.mount
 	need_reboot="no"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
 	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
