@@ -45,6 +45,11 @@ gluster_vol_name['blockshare']="blockshare"
 gluster_vol_size['blockshare']="1024"
 gluster_vol_name['backup']="backup"
 gluster_vol_size['backup']="1024"
+gluster_vol_name['sharedstorage']="gluster_shared_storage"
+gluster_vol_size['sharedstorage']="1"
+
+gluster_max_snapshots="60"
+gluster_share_snapshots_schedule="15 * * * *"
 
 gluster_block_size[0]="300"
 
@@ -122,7 +127,8 @@ db_ip_offset="230"
 db_name="bigmcintosh"
 
 dbtype="postgresql"
-dbversion="9.6"
+dbversion="11"
+dbpwd="HVP_dem0"
 
 web_ip_offset="210"
 
@@ -136,7 +142,11 @@ vd_ip_offset="240"
 
 vd_name="grannysmith"
 
-detype="gnome"
+tmpl_ip_offset="180"
+
+tmpl_name="featherweight"
+
+detype="xfce"
 dedbtype="sqlite"
 
 my_nameserver="dhcp"
@@ -149,6 +159,8 @@ my_smtpservers=""
 
 use_smtps="false"
 
+nextcloud_version="17.0.1"
+
 my_gateway="dhcp"
 
 my_name="twilight"
@@ -156,6 +168,17 @@ my_name="twilight"
 root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
+adbind_username="binduser"
+adbind_password="BindPassw0rd"
+ncadmin_username="admin"
+ncadmin_password="HVP_dem0"
+ncdb_username="nextcloud"
+ncdb_password="HVP_dem0"
+ncdbtype="sqlite"
+ootype="onlyoffice"
+oodb_username="onlyoffice"
+oodb_password="HVP_dem0"
+oodbtype="postgresql"
 keyboard_layout="us"
 system_language="en_US.UTF-8"
 local_timezone="UTC"
