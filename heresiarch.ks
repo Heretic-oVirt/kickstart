@@ -121,7 +121,7 @@
 # Note: the default AD DC IP on the vm main network is assumed to be the vm main network address plus 220
 # Note: the default AD DC naming uses the "My Little Pony" character name spike for the AD DC
 # Note: the default database type is postgresql
-# Note: the default database version is 11 (postgresql), 5.7 (mysql), 2.5 (firebird), 3.6 (mongodb) and 2017.CU (sqlserver)
+# Note: the default database version is 11 (postgresql), 5.7 (mysql), 2.5 (firebird), 4.1 (mongodb) and 2017.CU (sqlserver)
 # Note: the default database superuser password is HVP_dem0
 # Note: the default desktop type is xfce
 # Note: the default desktop DB type is sqlite
@@ -1292,7 +1292,7 @@ if [ -z "${dbversion}" -o "${dbtype}" != "postgresql" -a "${dbversion}" = "11" ]
 			dbversion="2.5"
 			;;
 		mongodb)
-			dbversion="3.6"
+			dbversion="4.1"
 			;;
 		sqlserver)
 			dbversion="2017.CU"
@@ -3696,7 +3696,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020011801"
+script_version="2020011802"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
