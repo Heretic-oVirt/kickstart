@@ -38,7 +38,7 @@
 # Note: to force custom engine naming add hvp_enginename=myenginename where myenginename is the unqualified (ie without domain name part) hostname of the Engine
 # Note: to force custom metrics server naming add hvp_metricsname=mymetricsname where mymetricsname is the unqualified (ie without domain name part) hostname of the metrics server
 # Note: to force custom storage naming add hvp_storagename=mystoragename where mystoragename is the unqualified (ie without domain name part) hostname of the storage
-# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}_volumename=myvolumename where myvolumename is the volume name
+# Note: to force custom Gluster volume naming add hvp_{engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,sharedstorage}_volumename=myvolumename where myvolumename is the volume name
 # Note: to force custom node BMC IP offsets add hvp_bmcs_offset=M where M is the offset
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
@@ -52,6 +52,8 @@
 # Note: to force custom local timezone add hvp_timezone=VV where VV is the timezone specification
 # Note: to force custom Yum retries on failures add hvp_yum_retries=RR where RR is the number of retries
 # Note: to force custom Yum sleep time on failures add hvp_yum_sleep_time=SS where SS is the number of seconds between retries after each failure
+# Note: to force custom repo base URL for repo reponame add hvp_reponame_baseurl=HHHHH where HHHHH is the base URL (including variables like $releasever and $basearch)
+# Note: to force custom repo GPG key URL for repo reponame add hvp_reponame_gpgkey=GGGGG where GGGGG is the GPG key URL
 # Note: the default behaviour involves installing custom versions of Gluster-related/OVN packages
 # Note: the default behaviour involves ignoring snapshot/nightly versions of oVirt packages
 # Note: the default behaviour involves ignoring use of VDO on nodes
@@ -81,7 +83,7 @@
 # Note: the default engine naming uses the "My Little Pony" character name celestia for the Engine
 # Note: the default metrics server naming uses the "My Little Pony" character name luna for the metrics server
 # Note: the default storage naming uses the "My Little Pony" character name discord for the storage service
-# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup}
+# Note: the default Gluster volume naming uses the names {engine,vmstore,iso,ctdb,unixshare,winshare,blockshare,backup,gluster_shared_storage}
 # Note: the default nodes BMC IP offset is 100
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
@@ -95,6 +97,8 @@
 # Note: the default local timezone is UTC
 # Note: the default number of retries after a Yum failure is 10
 # Note: the default sleep time between retries after a Yum failure is 10 seconds
+# Note: the default repo base URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
+# Note: the default repo GPG key URL for each required repo is that which is included into the default .repo file from the latest release package for each repo
 # Note: to work around a known kernel commandline length limitation, all hvp_* parameters above can be omitted and proper default values (overriding the hardcoded ones) can be placed in Bash-syntax variables-definition files placed alongside the kickstart file - the name of the files retrieved and sourced (in the exact order) is: hvp_parameters.sh hvp_parameters_heretic_ngn.sh hvp_parameters_hh:hh:hh:hh:hh:hh.sh (where hh:hh:hh:hh:hh:hh is the MAC address of the nic used to retrieve the kickstart file)
 
 # Perform an installation (as opposed to an "upgrade")
@@ -253,6 +257,8 @@ unset admin_password
 unset notification_receiver
 unset keyboard_layout
 unset local_timezone
+unset hvp_repo_baseurl
+unset hvp_repo_gpgkey
 
 # Hardcoded defaults
 
@@ -284,6 +290,9 @@ metrics_name="luna"
 
 storage_name="discord"
 
+declare -A hvp_repo_baseurl
+declare -A hvp_repo_gpgkey
+
 declare -A gluster_vol_name
 gluster_vol_name['engine']="engine"
 gluster_vol_name['vmstore']="vmstore"
@@ -293,9 +302,7 @@ gluster_vol_name['unixshare']="unixshare"
 gluster_vol_name['winshare']="winshare"
 gluster_vol_name['blockshare']="blockshare"
 gluster_vol_name['backup']="backup"
-
-declare -A hvp_repo_baseurl
-declare -A hvp_repo_gpgkey
+gluster_vol_name['sharedstorage']="gluster_shared_storage"
 
 # Note: IP offsets below get used to automatically derive IP addresses
 # Note: no need to allow offset overriding from commandline if the IP address itself can be specified
@@ -328,25 +335,22 @@ storage_ip_offset="30"
 # Note: the following can be overridden from commandline
 master_index="0"
 
+# Note: no need to define network_base values since they get automatically defined below
 declare -A network netmask network_base bondopts mtu
 network['mgmt']="172.20.10.0"
 netmask['mgmt']="255.255.255.0"
-network_base['mgmt']="172.20.10"
 bondopts['mgmt']="mode=active-backup;miimon=100"
 mtu['mgmt']="1500"
 network['gluster']="172.20.11.0"
 netmask['gluster']="255.255.255.0"
-network_base['gluster']="172.20.11"
 bondopts['gluster']="mode=active-backup;miimon=100"
 mtu['gluster']="1500"
 network['lan']="172.20.12.0"
 netmask['lan']="255.255.255.0"
-network_base['lan']="172.20.12"
 bondopts['lan']="mode=active-backup;miimon=100"
 mtu['lan']="1500"
 network['internal']="172.20.13.0"
 netmask['internal']="255.255.255.0"
-network_base['internal']="172.20.13"
 bondopts['internal']="mode=active-backup;miimon=100"
 mtu['internal']="1500"
 
@@ -748,7 +752,7 @@ if [ -n "${given_ad_subdomainname}" ]; then
 fi
 
 # Determine Gluster volume names
-for volume in engine vmstore iso ctdb unixshare winshare blockshare backup; do
+for volume in engine vmstore iso ctdb unixshare winshare blockshare backup sharedstorage; do
 	given_volume_name=$(sed -n -e "s/^.*hvp_${volume}_volumename=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 	if [ -n "${given_volume_name}" ]; then
 		gluster_vol_name["${volume}"]="${given_volume_name}"
@@ -1080,7 +1084,7 @@ for zone in $(echo "${!network[@]}" | tr ' ' '\n' | sort -r); do
 		# Add hostname option on the mgmt zone only
 		# Note: oVirt requires the node hostname to be on the ovirtmgmt network
 		if [ "${zone}" = "mgmt" ]; then
-			further_options="${further_options} --hostname=${my_name}"$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi)".${domain_name[${zone}]}"
+			further_options="${further_options} --hostname=${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${zone}" ; fi).${domain_name[${zone}]}"
 		fi
 		if [ "${nics_number}" -eq 1 ]; then
 			# Single (plain) interface
@@ -1708,7 +1712,7 @@ TimeoutSec=50s
 WantedBy=ctdb.service multi-user.target
 EOF
 
-# Create glusterd-wait-online service to avoid random failures on global cluster reboot
+# Create glusterd-wait-online service for CTDB volume to avoid random failures on global cluster reboot
 # Note: alternatively we could configure /var/lib/glusterd/hooks/1/{start/post/S29CTDBsetup.sh,stop/pre/S29CTDB-teardown.sh}
 cat << EOF > gluster-ctdb-wait-online.service
 [Unit]
@@ -1724,6 +1728,47 @@ TimeoutStartSec=50s
 
 [Install]
 WantedBy=gluster-lock.mount
+EOF
+
+# Create mount systemd unit to add mountpoint for shared storage area
+# Note: systemd does not recognize the directives Restart, RestartSec and TimeoutStartSec in Mount units
+# Note: alternatively we could use builtin shared storage support and glusterfssharedstorage.service but single node setup would be unsupported
+# TODO: verify whether the selinux option is actually supported - https://bugzilla.redhat.com/show_bug.cgi?id=1272868
+cat << EOF > var-run-gluster-shared_storage.mount
+[Unit]
+Description=Shared storage area
+After=glusterd.service
+Requires=glusterd.service
+Before=ctdb.service multi-user.target
+Conflicts=umount.target
+
+[Mount]
+What=${node_name[${my_index}]}.${domain_name[${gluster_zone}]}:${gluster_vol_name['sharedstorage']}
+Where=/var/run/gluster/shared_storage
+Type=glusterfs
+Options=acl,selinux,_netdev,xlator-option=*client*.ping-timeout=10
+TimeoutSec=50s
+
+[Install]
+WantedBy=ctdb.service multi-user.target
+EOF
+
+# Create glusterd-wait-online service for shared storage volume to avoid random failures on global cluster reboot
+# Note: alternatively we could use builtin shared storage support and glusterfssharedstorage.service but single node setup would be unsupported
+cat << EOF > gluster-shared-storage-wait-online.service
+[Unit]
+Description=Gluster shared storage Volume Wait Online
+Requires=glusterd.service
+After=glusterd.service
+Before=var-run-gluster-shared_storage.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gluster-volume-wait ${gluster_vol_name['sharedstorage']}
+TimeoutStartSec=50s
+
+[Install]
+WantedBy=var-run-gluster-shared_storage.mount
 EOF
 
 popd
@@ -1751,7 +1796,7 @@ cat << EOF > smb.conf
    private dir = /gluster/lock
 
    passdb backend = tdbsam
-   # Note: when joining Active Directory add the following:
+   # Note: when joining Active Directory replace the line above with the following:
    #idmap config * : backend = autorid
    #idmap config * : range = 2000000000-3999999999
    #idmap config * : rangesize = 1000000
@@ -1759,6 +1804,7 @@ cat << EOF > smb.conf
    #idmap config NETBIOSDOMAINNAME : range = 9999-1999999999
    #idmap config NETBIOSDOMAINNAME : schema_mode = rfc2307
    #idmap config NETBIOSDOMAINNAME : unix_nss_info = yes
+   #winbind nss info = rfc2307
    #winbind nested groups = yes
    #winbind expand groups = 2
 
@@ -1897,7 +1943,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2019092802"
+script_version="2020010602"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -2160,7 +2206,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	sed -i -e 's/^enabled.*/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos already installed by default
-	for repo_name in $(yum-config-manager | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -2182,10 +2228,10 @@ yum --disableincludes=all -y --enablerepo base --enablerepo updates install yum-
 
 # Add HVP custom repo
 # Define proper network source
-hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el7/hvp/"
+hvp_baseurl="https://dangerous.ovirt.life/hvp-repos/el$(rpm -q --queryformat '%{version}' centos-release)/hvp/"
 # Prefer custom HVP repo URL, if any
 if [ -n "${hvp_repo_baseurl['hvp']}" ]; then
-	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/7/g' -e 's/\$basearch/x86_64/g')
+	hvp_baseurl=$(echo "${hvp_repo_baseurl['hvp']}" | sed -e 's/\$releasever/'$(rpm -q --queryformat '%{version}' centos-release)'/g' -e 's/\$basearch/'$(uname -m)'/g')
 fi
 yum --disableincludes=all -y --nogpgcheck install ${hvp_baseurl}/hvp-release-latest.noarch.rpm
 # If not explicitly denied, make sure that we prefer HVP own rebuild repos
@@ -2215,7 +2261,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[hvp.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -2271,7 +2317,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 	done
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos installed above
-	for repo_name in $(yum-config-manager | grep '\[ovirt.*\]' | tr -d '[]' | grep -v -w 'main'); do
+	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
 		repo_baseurl="${hvp_repo_baseurl[${repo_name}]}"
 		repo_gpgkey="${hvp_repo_gpgkey[${repo_name}]}"
 		# Force any custom URLs
@@ -2440,6 +2486,11 @@ cat << EOF | patch -p2
 EOF
 popd
 
+# Enable thin LVM autoextension
+sed -i -e '/^\s*thin_pool_autoextend_threshold/s/100/70/' /etc/lvm/lvm.conf
+# Rebuild initramfs image to include newly modified lvm.conf
+dracut -f /boot/initramfs-$(rpm -q --last kernel | head -1 | cut -f 1 -d ' ' | sed -e 's/kernel-//').img $(rpm -q --last kernel | head -1 | cut -f 1 -d ' ' | sed -e 's/kernel-//')
+
 # Autodetecting BIOS/UEFI
 # Note: the following identifies the symlink under /etc to abstract from BIOS/UEFI actual file placement
 if [ -d /sys/firmware/efi ]; then
@@ -2501,10 +2552,12 @@ kernel.printk = 1
 EOF
 chmod 644 /etc/sysctl.d/console-log.conf
 
-# Reboot on panic
+# Panic settings
 cat << EOF > /etc/sysctl.d/panic.conf
 # Controls the timeout for automatic reboot on panic
 kernel.panic = 5
+# Do not panic on oops
+kernel.panic_on_oops = 0
 EOF
 chmod 644 /etc/sysctl.d/panic.conf
 
@@ -2512,14 +2565,12 @@ chmod 644 /etc/sysctl.d/panic.conf
 # Note: systemd sets clock to UTC by default
 #echo 'UTC' >> /etc/adjtime
 
-# Configure NTP time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
+# Configure NTPd/NTPdate time synchronization (immediate hardware sync, add initial time adjusting from given servers, use given servers as time references)
 sed -i -e 's/^SYNC_HWCLOCK=.*$/SYNC_HWCLOCK="yes"/' /etc/sysconfig/ntpdate
 cat /dev/null > /etc/ntp/step-tickers
-for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
-		echo "${server}" >> /etc/ntp/step-tickers
-done
 sed -i -e '/^server/s/^/#/' /etc/chrony.conf
 for server in $(echo "${my_ntpservers}" | sed -e 's/,/ /g'); do
+		echo "${server}" >> /etc/ntp/step-tickers
 		echo "server ${server} iburst" >> /etc/chrony.conf
 done
 
@@ -2862,6 +2913,7 @@ chmod 644 /etc/systemd/system/glusterd.service.d/custom-slice.conf
 sed -i -e '/^\s*recovery\s*lock\s*/s>=.*$>= /gluster/lock/lockfile>' /etc/ctdb/ctdb.conf
 sed -i -e 's/^\(\s*\)#*\s*location\s*.*$/\1location = syslog/' /etc/ctdb/ctdb.conf
 cat << EOF >> /etc/sysconfig/ctdb
+CTDB_MANAGES_WINBIND=yes
 #CTDB_SET_DeterministicIPs=1
 CTDB_SET_RecoveryBanPeriod=120
 CTDB_SET_TraverseTimeout=60
@@ -2872,6 +2924,9 @@ CTDB_SOCKET=/run/ctdb/ctdbd.socket
 EOF
 
 # Note: hosts and addresses configuration files created in pre section above and copied in third post section below
+
+# Allow snapshot scheduler usage of cron through SELinux
+setsebool -P cron_system_cronjob_use_shares on
 
 # Add monitoring script for GlusterFS-based NFS
 # Note: taken from https://xrsa.net/2015/04/25/ctdb-glusterfs-nfs-event-monitor-script/
@@ -3007,6 +3062,11 @@ mkdir -p /gluster/lock
 
 # Note: systemd unit to wait for CTDB lock volume availability created in pre section above and copied in third post section below
 
+# Note: mount systemd unit for shared storage area created in pre section above and copied in third post section below
+mkdir -p /var/run/gluster/shared_storage
+
+# Note: systemd unit to wait for shared storage volume availability created in pre section above and copied in third post section below
+
 cat << EOF > /usr/local/sbin/gluster-volume-wait
 #!/bin/bash
 result="255"
@@ -3020,14 +3080,14 @@ exit \${result}
 EOF
 chmod 755 /usr/local/sbin/gluster-volume-wait
 
-# Modify CTDB service to force dependency on shared locking area
+# Modify CTDB service to force dependency on shared locking and storage areas
 # TODO: verify restart-mode reconfiguration
 mkdir -p /etc/systemd/system/ctdb.service.d
 cat << EOF > /etc/systemd/system/ctdb.service.d/custom-dependencies.conf
 
 [Unit]
-After=gluster-lock.mount cgroup-rt-bandwidth.service
-Requires=gluster-lock.mount cgroup-rt-bandwidth.service
+After=gluster-lock.mount var-run-gluster-shared_storage.mount cgroup-rt-bandwidth.service
+Requires=gluster-lock.mount var-run-gluster-shared_storage.mount cgroup-rt-bandwidth.service
 
 [Service]
 Restart=on-failure
@@ -3139,10 +3199,65 @@ semodule_package -o myglustersmb.pp -m myglustersmb.mod
 semodule -i myglustersmb.pp
 popd
 
+# Add SELinux support for Winbind access to FUSE-mounted GlusterFS-based shared lock area and netlink monitoring
+# TODO: remove when included upstream
+mkdir -p /etc/selinux/local
+cat << EOF > /etc/selinux/local/myglusterwinbind.te
+
+module myglusterwinbind 10.0;
+
+require {
+	type unconfined_service_t;
+	type ifconfig_t;
+	type kernel_t;
+	type ctdbd_t;
+	type winbind_t;
+	type glusterd_t;
+	type fusefs_t;
+	class process { noatsecure rlimitinh siginh signal };
+	class unix_stream_socket { read write };
+	class sock_file { create unlink write };
+	class file { getattr read write };
+	class dir { add_name create getattr remove_name search write };
+	class system module_request;
+	class netlink_tcpdiag_socket nlmsg_read;
+}
+
+#============= ctdbd_t ==============
+allow ctdbd_t ifconfig_t:process { noatsecure rlimitinh siginh };
+allow ctdbd_t kernel_t:system module_request;
+allow ctdbd_t self:netlink_tcpdiag_socket nlmsg_read;
+
+#============= glusterd_t ==============
+allow glusterd_t unconfined_service_t:process signal;
+
+#============= ifconfig_t ==============
+allow ifconfig_t ctdbd_t:unix_stream_socket { read write };
+
+#============= winbind_t ==============
+allow winbind_t fusefs_t:dir { add_name create getattr remove_name search write };
+allow winbind_t fusefs_t:file { getattr read write };
+allow winbind_t fusefs_t:sock_file { create unlink write };
+EOF
+chmod 644 /etc/selinux/local/myglusterwinbind.te
+
+pushd /etc/selinux/local
+checkmodule -M -m -o myglusterwinbind.mod myglusterwinbind.te
+semodule_package -o myglusterwinbind.pp -m myglusterwinbind.mod
+semodule -i myglusterwinbind.pp
+popd
+
+# Configure Winbind NSS resolution
+sed -i -r -e '/^(passwd|group)/s/sss/winbind/g' /etc/nsswitch.conf
+
 # Disable Samba services (will be managed by CTDB anyway)
 for service in smb nmb winbind; do
 	systemctl disable ${service}
 done
+
+# Enable CTDB managing of Samba services
+ctdb event script enable legacy 50.samba
+ctdb event script enable legacy 49.winbind
 
 # Allow network traffic related to Samba
 firewall-offline-cmd --add-service=samba
@@ -3400,6 +3515,7 @@ pushd /etc/selinux/local
 checkmodule -M -m -o myks1stboot.mod myks1stboot.te
 semodule_package -o myks1stboot.pp -m myks1stboot.mod
 semodule -i myks1stboot.pp
+popd
 
 # Set up "first-boot" configuration script (steps that require a fully up system)
 cat << EOF > /etc/rc.d/rc.ks1stboot
@@ -3439,12 +3555,28 @@ elif dmidecode -s system-manufacturer | grep -q 'Xen' ; then
 elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	# Note: VMware basic support uses distro-provided packages installed during post phase
 	# Note: adding nofail to avoid making it fail the remote-fs.target if unavailable
-	# TODO: adding _netdev to break possible systemd ordering cycle - investigate further and remove it
-	mkdir -p /mnt/hgfs
-	cat <<- EOM >> /etc/fstab
-	.host:/	/mnt/hgfs	fuse.vmhgfs-fuse	allow_other,auto_unmount,_netdev,nofail,x-systemd.requires=vmtoolsd.service,defaults	0 0
+	# TODO: adding network dependency to break possible systemd ordering cycle - investigate further and remove it
+	cat <<- EOM > /etc/systemd/system/mnt-hgfs.mount
+	[Unit]
+	Description=VMware shared folders
+	After=network.target network-online.target vmtoolsd.service
+	Requires=network.target network-online.target vmtoolsd.service
+	Before=multi-user.target
+	Conflicts=umount.target
+	
+	[Mount]
+	What=.host:/
+	Where=/mnt/hgfs
+	Type=fuse.vmhgfs-fuse
+	Options=allow_other,auto_unmount,nofail
+	TimeoutSec=50s
+	
+	[Install]
+	WantedBy=multi-user.target
 	EOM
-	mount /mnt/hgfs
+	chmod 644 /etc/systemd/system/mnt-hgfs.mount
+	systemctl daemon-reload
+	systemctl start mnt-hgfs.mount
 	need_reboot="no"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
 	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
@@ -3535,6 +3667,16 @@ if [ -s /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ]; then
 	cp /tmp/hvp-ctdb-files/gluster-ctdb-wait-online.service ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
 	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
 	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-ctdb-wait-online.service
+fi
+if [ -s /tmp/hvp-ctdb-files/var-run-gluster-shared_storage.mount ]; then
+	cp /tmp/hvp-ctdb-files/var-run-gluster-shared_storage.mount ${ANA_INSTALL_PATH}/etc/systemd/system/var-run-gluster-shared_storage.mount
+	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/var-run-gluster-shared_storage.mount
+	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/var-run-gluster-shared_storage.mount
+fi
+if [ -s /tmp/hvp-ctdb-files/gluster-shared-storage-wait-online.service ]; then
+	cp /tmp/hvp-ctdb-files/gluster-shared-storage-wait-online.service ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-shared-storage-wait-online.service
+	chmod 644 ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-shared-storage-wait-online.service
+	chown root:root ${ANA_INSTALL_PATH}/etc/systemd/system/gluster-shared-storage-wait-online.service
 fi
 
 # Copy Samba configuration (generated in pre section above) into installed system
