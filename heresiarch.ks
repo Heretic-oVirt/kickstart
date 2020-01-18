@@ -77,6 +77,7 @@
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
+# Note: to force custom AD main admin password add hvp_winrootpwd=mywinsecret where mywinsecret is the main AD admin user password
 # Note: to force custom AD further admin username add hvp_winadminname=mywinadmin where mywinadmin is the further AD admin username
 # Note: to force custom AD further admin password add hvp_winadminpwd=mywinothersecret where mywinothersecret is the further AD admin user password
 # Note: to force custom AD LDAP bind username add hvp_adbindname=mybinduser where mybinduser is the AD LDAP bind username
@@ -167,6 +168,7 @@
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
+# Note: the default AD main admin user password is HVP_dem0
 # Note: the default AD further admin username is the same as the admin username with the string "ad" prefixed
 # Note: the default AD further admin user password is HVP_dem0
 # Note: the default AD LDAP bind username is binduser
@@ -466,6 +468,7 @@ unset my_gateway
 unset root_password
 unset admin_username
 unset admin_password
+unset winroot_password
 unset winadmin_username
 unset winadmin_password
 unset adbind_username
@@ -690,6 +693,7 @@ my_name="twilight"
 root_password="HVP_dem0"
 admin_username="hvpadmin"
 admin_password="hvpdemo"
+winroot_password="HVP_dem0"
 winadmin_password="HVP_dem0"
 adbind_username="binduser"
 adbind_password="BindPassw0rd"
@@ -992,6 +996,12 @@ fi
 given_admin_password=$(sed -n -e "s/^.*hvp_adminpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
 if [ -n "${given_admin_password}" ]; then
 	admin_password="${given_admin_password}"
+fi
+
+# Determine AD main admin password
+given_winroot_password=$(sed -n -e "s/^.*hvp_winrootpwd=\\(\\S*\\).*\$/\\1/p" /proc/cmdline)
+if [ -n "${given_winroot_password}" ]; then
+	winroot_password="${given_winroot_password}"
 fi
 
 # Determine AD further admin username
@@ -2284,7 +2294,7 @@ LABEL rootmenu
 LABEL installdc
         MENU LABEL Install Active Directory Domain Controller Server
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_adbindname=${adbind_username} hvp_adbindpwd=${adbind_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winrootpwd=${winroot_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_adbindname=${adbind_username} hvp_adbindpwd=${adbind_password} hvp_kblayout=${keyboard_layout} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_sysvolpassword=${sysvolrepl_password} hvp_joindomain=false hvp_myname=${ad_dc_name} hvp_${ad_zone}_my_ip=${ad_dc_ip} hvp_nodecount=${node_count} hvp_storagename=${storage_name} hvp_unixshare_volumename=${gluster_vol_name['unixshare']} hvp_nameserver=${my_ip[${mgmt_zone}]} hvp_forwarders=${my_forwarders} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} hvp_storage_offset=${storage_ip_offset} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-dc-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP DB server installation
@@ -2516,6 +2526,8 @@ my_ip_offset="${ad_dc_ip_offset}"
 my_name="${ad_dc_name}"
 
 my_forwarders="$(append="false"; for ((i=0;i<${node_count};i=i+1)); do if [ "${append}" = "true" ]; then echo -n ","; else append="true"; fi; echo -n "$(ipmat $(ipmat ${network[${ad_zone}]} ${node_ip_offset} +) ${i} +)"; done)"
+
+winroot_password='${winroot_password}'
 
 # Note: when installing further AD DCs you must change the following option to true or set the proper commandline option
 domain_join="false"
@@ -3696,7 +3708,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020011802"
+script_version="2020011803"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
