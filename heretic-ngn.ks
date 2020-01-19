@@ -1349,11 +1349,13 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 	my_role="master"
 	my_options="// allow-update { key ddns_key; };"
 	file_location="dynamic"
+	my_comment="dynamically updateable"
 else
 	my_role="slave"
 	master_ip=$(ipmat $(ipmat ${my_ip['mgmt']} ${my_index} -) ${master_index} +)
 	my_options="masters { ${master_ip}; };"
 	file_location="slaves"
+	my_comment="transferred-from-master"
 fi
 
 # Define AD subdomain name
@@ -1368,7 +1370,7 @@ mkdir -p /tmp/hvp-bind-zones
 pushd /tmp/hvp-bind-zones
 cat << EOF > named.conf
 //
-// Sample named.conf BIND DNS server 'named' configuration file
+// Modified from Sample named.conf BIND DNS server 'named' configuration file
 // for the Red Hat BIND distribution.
 //
 // See the BIND Administrator's Reference Manual (ARM) for details, in:
@@ -1470,8 +1472,7 @@ include "/etc/rndc.key";
 // your configuration files in the future.
 //
 
-view "localhost_resolver"
-{
+view localhost_resolver {
 /* This view sets up named to be a localhost resolver ( caching only nameserver ).
  * If all you want is a caching-only nameserver, then you need only define this view:
  */
@@ -1516,8 +1517,8 @@ for zone in "${!network[@]}" ; do
 		        zone "${reverse_domain_name[${zone}]}" { 
 		                type ${my_role};
 		                ${my_options}
-		                // put dynamically updateable zones in the dynamic/ directory so named can update them
-		                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+		                // put ${my_comment} zones in the ${file_location}/ directory so named can update them
+		                file "${file_location}/$(if [ "${my_role}" = "slave" ]; then echo "localhost-" ; fi)${reverse_domain_name[${zone}]}.db";
 		        };
 		EOF
 		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
@@ -1528,8 +1529,8 @@ for zone in "${!network[@]}" ; do
 		        zone "${domain_name[${zone}]}" { 
 		                type ${my_role};
 		                ${my_options}
-		                // put dynamically updateable zones in the dynamic/ directory so named can update them
-		                file "${file_location}/${domain_name[${zone}]}.db";
+		                // put ${my_comment} zones in the ${file_location}/ directory so named can update them
+		                file "${file_location}/$(if [ "${my_role}" = "slave" ]; then echo "localhost-" ; fi)${domain_name[${zone}]}.db";
 		        };
 		
 		EOF
@@ -1539,8 +1540,7 @@ done
 cat << EOF >> named.conf
 };
 
-view "internal"
-{
+view internal {
 /* This view will contain zones you want to serve only to "internal" clients
    that connect via your directly attached LAN interfaces - "localnets" .
  */
@@ -1578,8 +1578,8 @@ for zone in "${!network[@]}" ; do
 		        zone "${reverse_domain_name[${zone}]}" { 
 		                type ${my_role};
 		                ${my_options}
-		                // put dynamically updateable zones in the dynamic/ directory so named can update them
-		                file "${file_location}/${reverse_domain_name[${zone}]}.db";
+		                // put ${my_comment} zones in the ${file_location}/ directory so named can update them
+		                file "${file_location}/$(if [ "${my_role}" = "slave" ]; then echo "internal-" ; fi)${reverse_domain_name[${zone}]}.db";
 		        };
 		EOF
 		added_zones="${added_zones} ${reverse_domain_name[${zone}]}"
@@ -1590,8 +1590,8 @@ for zone in "${!network[@]}" ; do
 		        zone "${domain_name[${zone}]}" { 
 		                type ${my_role};
 		                ${my_options}
-		                // put dynamically updateable zones in the dynamic/ directory so named can update them
-		                file "${file_location}/${domain_name[${zone}]}.db";
+		                // put ${my_comment} zones in the ${file_location}/ directory so named can update them
+		                file "${file_location}/$(if [ "${my_role}" = "slave" ]; then echo "internal-" ; fi)${domain_name[${zone}]}.db";
 		        };
 		
 		EOF
@@ -1601,8 +1601,7 @@ done
 cat << EOF >> named.conf
 };
 
-view "external"
-{
+view external {
 /* This view will contain zones you want to serve only to "external" clients
  * that have addresses that are not on your directly attached LAN interface subnets:
  */
@@ -1943,7 +1942,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020010602"
+script_version="2020011901"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
