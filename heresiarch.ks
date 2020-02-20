@@ -1457,11 +1457,13 @@ for zone in "${!network[@]}" ; do
 	if [ -n "${given_ovn_networks}" ]; then
 		unset ovn_network
 		if [ "${given_ovn_networks}" = '""' -o "${given_ovn_networks}" = "''" ]; then
-			declare -A ovn_network
+			declare -a ovn_network
 		else
+			declare -a ovn_network
 			i=0
 			for ovn_net in $(echo "${given_ovn_networks}" | sed -e 's/,/ /g'); do
 				ovn_network[${i}]="${ovn_net}"
+				i=$((i+1))
 			done
 		fi
 	fi
@@ -3706,7 +3708,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020011901"
+script_version="2020022001"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
