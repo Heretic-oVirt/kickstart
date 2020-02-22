@@ -43,7 +43,7 @@
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
 # Note: to force custom metrics server IP add hvp_metrics=n.n.n.n where n.n.n.n is the metrics server IP on the mgmt network
-# Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan/internal networks
+# Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan networks
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
@@ -89,7 +89,7 @@
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
 # Note: the default metrics server IP on the mgmt network is assumed to be the mgmt network address plus 6
-# Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
+# Note: the default storage IPs base offset on mgmt/lan networks is assumed to be the network address plus 30
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
@@ -1474,7 +1474,7 @@ if [ "${my_index}" -eq "${master_index}" ]; then
 		# Add round-robin-resolved name for CTDB-controlled NFS/CIFS services on lan/mgmt zones (depending on actual network availability)
 		# Note: no name decoration used on LAN zone
 		# Note: registered with a TTL of 1 to enhance round-robin load balancing
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
+		if [ "${zone}" = "lan" -o "${zone}" = "mgmt" ]; then
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
 				cat <<- EOF >> ${domain_name[${zone}]}.db
 				${storage_name}$(if [ "${use_hostname_decoration}" = "true" -a "${zone}" != "${lan_zone}" ]; then echo "-${zone}" ; fi)	1 IN	A	$(ipmat $(ipmat $(ipmat $(ipmat ${my_ip[${zone}]} ${my_index} -) ${node_ip_offset} -) ${storage_ip_offset} +) ${i} +)
@@ -1810,7 +1810,7 @@ for zone in "${!network[@]}" ; do
 	# Only active storage nodes can receive shared storage IPs
 	if [ "${my_index}" -le $((${active_storage_node_count}-1)) ]; then
 		# Add round-robin-resolved IPs for CTDB-controlled NFS/CIFS services on lan/internal/mgmt zones (depending on actual network availability)
-		if [ "${zone}" = "lan" -o "${zone}" = "internal" -o "${zone}" = "mgmt" ]; then
+		if [ "${zone}" = "lan" -o "${zone}" = "mgmt" ]; then
 			unset PREFIX
 			eval $(ipcalc -s -p "${network[${zone}]}" "${netmask[${zone}]}")
 			for ((i=0;i<${active_storage_node_count};i=i+1)); do
@@ -2079,7 +2079,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020011901"
+script_version="2020022101"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
