@@ -142,6 +142,10 @@ vd_ip_offset="240"
 
 vd_name="grannysmith"
 
+fw_ip_offset="254"
+
+fw_name="featherweight"
+
 tmpl_ip_offset="180"
 
 tmpl_name="featherweight"
