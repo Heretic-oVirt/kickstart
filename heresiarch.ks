@@ -44,6 +44,8 @@
 # Note: to force custom print server naming add hvp_prname=myprname where myprname is the unqualified (ie without domain name part) hostname of the print server
 # Note: to force custom remote desktop server IP add hvp_vd=e.e.e.e where e.e.e.e is the remote desktop server IP on the vm main network
 # Note: to force custom remote desktop server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the remote desktop server
+# Note: to force custom firewall/proxy server IP add hvp_fw=v.v.v.v where v.v.v.v is the firewall/proxy server IP on the vm main/internal network
+# Note: to force custom firewall/proxy server naming add hvp_fwname=myfwname where myfwname is the unqualified (ie without domain name part) hostname of the firewall/proxy server
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom NTP server names/IPs add hvp_ntpservers=ntp0,ntp1,ntp2,ntp3 where ntpN are the NTP servers fully qualified domain names or IPs
@@ -73,7 +75,7 @@
 # Note: to force custom node IP offsets add hvp_nodes_offset=L where L is the offset
 # Note: to force custom engine IP add hvp_engine=m.m.m.m where m.m.m.m is the engine IP on the mgmt network
 # Note: to force custom metrics server IP add hvp_metrics=n.n.n.n where n.n.n.n is the metrics server IP on the mgmt network
-# Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan/internal networks
+# Note: to force custom storage IPs add hvp_storage_offset=o where o is the storage IPs base offset on mgmt/lan networks
 # Note: to force custom root password add hvp_rootpwd=mysecret where mysecret is the root user password
 # Note: to force custom admin username add hvp_adminname=myadmin where myadmin is the admin username
 # Note: to force custom admin password add hvp_adminpwd=myothersecret where myothersecret is the admin user password
@@ -135,6 +137,8 @@
 # Note: the default print server naming uses the "My Little Pony" character name rainbowdash for the print server
 # Note: the default remote desktop server IP on the vm main network is assumed to be the vm main network address plus 240
 # Note: the default remote desktop server naming uses the "My Little Pony" character name grannysmith for the remote desktop server
+# Note: the default firewall/proxy server IP on the vm main network is assumed to be the vm main/internal network address plus 254
+# Note: the default firewall/proxy server naming uses the "My Little Pony" character name featherweight for the firewall/proxy server
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default NTP server names are assumed to be 0.centos.pool.ntp.org 1.centos.pool.ntp.org 2.centos.pool.ntp.org 3.centos.pool.ntp.org
@@ -164,7 +168,7 @@
 # Note: the default nodes IP offset is 10
 # Note: the default engine IP on the mgmt network is assumed to be the mgmt network address plus 5
 # Note: the default metrics server IP on the mgmt network is assumed to be the mgmt network address plus 6
-# Note: the default storage IPs base offset on mgmt/lan/internal networks is assumed to be the network address plus 30
+# Note: the default storage IPs base offset on mgmt/lan networks is assumed to be the network address plus 30
 # Note: the default root user password is HVP_dem0
 # Note: the default admin username is hvpadmin
 # Note: the default admin user password is hvpdemo
@@ -428,6 +432,9 @@ unset pr_name
 unset vd_ip
 unset vd_ip_offset
 unset vd_name
+unset fw_ip
+unset fw_ip_offset
+unset fw_name
 unset reverse_domain_name
 unset bridge_name
 unset ovn_network
@@ -673,6 +680,10 @@ pr_name="rainbowdash"
 vd_ip_offset="240"
 
 vd_name="grannysmith"
+
+fw_ip_offset="254"
+
+fw_name="featherweight"
 
 my_nameserver="dhcp"
 
@@ -1277,6 +1288,12 @@ if echo "${given_tmplname}" | grep -q '^[[:alnum:]]\+$' ; then
 	tmpl_name="${given_tmplname}"
 fi
 
+# Determine firewall/proxy server name
+given_fwname=$(sed -n -e 's/^.*hvp_fwname=\(\S*\).*$/\1/p' /proc/cmdline)
+if echo "${given_fwname}" | grep -q '^[[:alnum:]]\+$' ; then
+	fw_name="${given_fwname}"
+fi
+
 # Determine database type
 given_dbtype=$(sed -n -e 's/^.*hvp_dbtype=\(\S*\).*$/\1/p' /proc/cmdline)
 case "${given_dbtype}" in
@@ -1785,6 +1802,15 @@ if [ -n "${given_vd}" ]; then
 fi
 if [ -z "${vd_ip}" ]; then
 	vd_ip=$(ipmat $(ipmat ${my_ip[${ad_zone}]} ${my_ip_offset} -) ${vd_ip_offset} +)
+fi
+
+# Determine firewall/proxy server IP
+given_fw=$(sed -n -e 's/^.*hvp_fw=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_fw}" ]; then
+	fw_ip="${given_fw}"
+fi
+if [ -z "${fw_ip}" ]; then
+	fw_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${fw_ip_offset} +)
 fi
 
 # Define default NetBIOS domain name if not specified
@@ -2334,6 +2360,13 @@ LABEL installtmpl
         # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-tmpl-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_joindomain=true hvp_myname=${tmpl_name} hvp_${ad_zone}_my_ip=${tmpl_ip} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-tmpl-c7.ks ${essential_network_params}
 
+# Start kickstart-based HVP firewall/proxy server installation
+LABEL installfw
+        MENU LABEL Install Firewall/Proxy Server
+        kernel linux/centos/vmlinuz
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-fw-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${fw_name} hvp_${ad_zone}_my_ip=${fw_ip} hvp_storagename=${storage_name} hvp_storage_offset=${storage_ip_offset} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-fw-c7.ks ${essential_network_params}
+
 EOF
 # Create common configuration parameters fragment
 cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters.sh
@@ -2670,6 +2703,26 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_tmpl.sh
 my_ip_offset="${tmpl_ip_offset}"
 
 my_name="${tmpl_name}"
+
+domain_join="true"
+# Determine domain action from commandline
+given_joindomain=\$(sed -n -e 's/^.*hvp_joindomain=\\(\\S*\\).*\$/\\1/p' /proc/cmdline)
+if echo "\${given_joindomain}" | egrep -q '^(true|false)\$' ; then
+	domain_join="\${given_joindomain}"
+fi
+
+if [ "\${domain_join}" = "true" ]; then
+	my_nameserver="${ad_dc_ip}"
+fi
+
+EOF
+
+cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_fw.sh
+# Custom defaults for firewall/proxy server installation
+
+my_ip_offset="${fw_ip_offset}"
+
+my_name="${fw_name}"
 
 domain_join="true"
 # Determine domain action from commandline
@@ -3262,7 +3315,7 @@ subnet ${network[${mgmt_zone}]} netmask ${netmask[${mgmt_zone}]} {
 }
 
 EOF
-for further_zone in lan internal; do
+for further_zone in lan ; do
 	eval got_further_zone='${'${further_zone}_network'}'
 	if [ "${got_further_zone}" = "true" ]; then
 		cat <<- EOF >> dhcpd.conf
@@ -3641,6 +3694,7 @@ vms_network_domainname: "{{ hvp_lan_domainname }}"
 vms_network: "{{ got_lan_network | ternary(lan_network, mgmt_network) }}"
 # TODO: dynamically extract the following from mirrored kickstart files
 # Note: always skip template server since it must be installed on its own (must be stopped and sealed afterwards)
+# Note: always skip firewall/proxy server since it must be installed on its own (needs multiple nics and offers DHCP)
 guest_vms:
   - { vm_kickstart_file: 'hvp-dc-c7.ks', vm_name: 'DomainController', vm_comment: 'Active Directory Domain Controller', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 2GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 80GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('220') | ipaddr('address') }}", vm_service_port: 53 }
   - { vm_kickstart_file: 'hvp-db-c7.ks', vm_name: 'DatabaseServer', vm_comment: 'Database Server', vm_delete_protected: yes, vm_high_availability: false, vm_memory: 4GiB, vm_cpu_cores: 1, vm_cpu_sockets: 1, vm_cpu_shares: 1024, vm_type: 'server', vm_operating_system: 'rhel_7x64', vm_disk_size: 120GiB, vm_network_name: "{{ vms_network_name }}", vm_service_ip: "{{ vms_network | ipaddr('230') | ipaddr('address') }}", vm_service_port: ${dbport} }
@@ -3708,7 +3762,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020022001"
+script_version="2020022201"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4053,6 +4107,8 @@ if [ "${orthodox_mode}" = "false" ]; then
 	yum-config-manager --enable hvp-ansible-rebuild > /dev/null
 	yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
 fi
+# Note: using HVP Fedora-rebuild repo to get a newer (6.x) Syslinux
+yum-config-manager --enable hvp-fedora-rebuild > /dev/null
 # Comment out mirrorlist directives and uncomment the baseurl ones when using custom URLs for repos
 if [ "${custom_yum_conf}" = "true" ]; then
 	for repofile in /etc/yum.repos.d/*.repo; do
@@ -4296,7 +4352,7 @@ yum -y install logcheck
 
 # Install DHCPd, TFTPd, Syslinux and Bind to support PXE
 # Note: using HVP Fedora-rebuild repo to get a newer (6.x) Syslinux
-yum -y --enablerepo hvp-fedora-rebuild install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux syslinux-perl bind
+yum -y install dhcp tftp tftp-server syslinux syslinux-efi64 syslinux-tftpboot syslinux-extlinux syslinux-perl bind
 
 # Install Ansible and gDeploy
 yum -y install ansible gdeploy ovirt-engine-sdk-python python2-jmespath python-netaddr python-dns python-psycopg2 libselinux-python libsemanage-python rhel-system-roles ovirt-ansible-roles gluster-ansible-roles ovirt-ansible-hosted-engine-setup ovirt-ansible-repositories ovirt-ansible-engine-setup NetworkManager-glib python-passlib ansible-lint
@@ -4411,6 +4467,7 @@ if [ "${custom_yum_conf}" = "true" ]; then
 		yum-config-manager --enable hvp-ansible-rebuild > /dev/null
 		yum-config-manager --save --setopt='hvp-ansible-rebuild.priority=50' > /dev/null
 	fi
+	yum-config-manager --enable hvp-fedora-rebuild > /dev/null
 	# Allow specifying custom base URLs for repositories and GPG keys
 	# Note: done here to cater for those repos already installed by default
 	for repo_name in $(yum-config-manager --enablerepo '*' | grep '\[.*\]' | tr -d '[]' | grep -v -w 'main'); do
@@ -5167,9 +5224,7 @@ EOF
 chmod 644 /etc/dhcp/dhcpd-static-leases.conf
 
 # Enable DHCPd
-# TODO: check actual need (and configuration) for proxy service
 firewall-offline-cmd --add-service=dhcp --zone=internal
-firewall-offline-cmd --add-service=proxy-dhcp --zone=internal
 systemctl enable dhcpd
 
 # Add PXE menu/setup configuration
