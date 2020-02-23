@@ -686,7 +686,7 @@ vd_name="grannysmith"
 
 fw_ip_offset="254"
 
-fw_name="featherweight"
+fw_name="shiningarmor"
 
 fw_gateway_ip_offset="1"
 
@@ -3781,7 +3781,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020022301"
+script_version="2020022302"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
