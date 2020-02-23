@@ -139,7 +139,7 @@
 # Note: the default remote desktop server IP on the vm main network is assumed to be the vm main network address plus 240
 # Note: the default remote desktop server naming uses the "My Little Pony" character name grannysmith for the remote desktop server
 # Note: the default firewall/proxy server IP on the vm main network is assumed to be the vm main/internal network address plus 254
-# Note: the default firewall/proxy server naming uses the "My Little Pony" character name featherweight for the firewall/proxy server
+# Note: the default firewall/proxy server naming uses the "My Little Pony" character name shiningarmor for the firewall/proxy server
 # Note: the default firewall/proxy server gateway IP on the vm internal network is assumed to be the vm internal network address plus 1
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
@@ -3781,7 +3781,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020022302"
+script_version="2020022303"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
