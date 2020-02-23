@@ -144,7 +144,9 @@ vd_name="grannysmith"
 
 fw_ip_offset="254"
 
-fw_name="featherweight"
+fw_name="shiningarmor"
+
+fw_gateway="172.20.13.1"
 
 tmpl_ip_offset="180"
 
