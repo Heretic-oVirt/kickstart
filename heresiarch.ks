@@ -46,6 +46,7 @@
 # Note: to force custom remote desktop server naming add hvp_vdname=myvdname where myvdname is the unqualified (ie without domain name part) hostname of the remote desktop server
 # Note: to force custom firewall/proxy server IP add hvp_fw=v.v.v.v where v.v.v.v is the firewall/proxy server IP on the vm main/internal network
 # Note: to force custom firewall/proxy server naming add hvp_fwname=myfwname where myfwname is the unqualified (ie without domain name part) hostname of the firewall/proxy server
+# Note: to force custom firewall/proxy server gateway add hvp_fwgateway=y.y.y.y where y.y.y.y is the firewall/proxy server gateway IP on the vm internal network
 # Note: to force custom nameserver IP add hvp_nameserver=w.w.w.w where w.w.w.w is the nameserver IP
 # Note: to force custom forwarders IPs add hvp_forwarders=forw0,forw1,forw2 where forwN are the forwarders IPs
 # Note: to force custom NTP server names/IPs add hvp_ntpservers=ntp0,ntp1,ntp2,ntp3 where ntpN are the NTP servers fully qualified domain names or IPs
@@ -139,6 +140,7 @@
 # Note: the default remote desktop server naming uses the "My Little Pony" character name grannysmith for the remote desktop server
 # Note: the default firewall/proxy server IP on the vm main network is assumed to be the vm main/internal network address plus 254
 # Note: the default firewall/proxy server naming uses the "My Little Pony" character name featherweight for the firewall/proxy server
+# Note: the default firewall/proxy server gateway IP on the vm internal network is assumed to be the vm internal network address plus 1
 # Note: the default nameserver is assumed to be the DHCP-provided nameserver IP address on the external network
 # Note: the default forwarder IP is assumed to be 8.8.8.8
 # Note: the default NTP server names are assumed to be 0.centos.pool.ntp.org 1.centos.pool.ntp.org 2.centos.pool.ntp.org 3.centos.pool.ntp.org
@@ -435,6 +437,7 @@ unset vd_name
 unset fw_ip
 unset fw_ip_offset
 unset fw_name
+unset fw_gateway
 unset reverse_domain_name
 unset bridge_name
 unset ovn_network
@@ -684,6 +687,8 @@ vd_name="grannysmith"
 fw_ip_offset="254"
 
 fw_name="featherweight"
+
+fw_gateway_ip_offset="1"
 
 my_nameserver="dhcp"
 
@@ -1813,6 +1818,15 @@ if [ -z "${fw_ip}" ]; then
 	fw_ip=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${fw_ip_offset} +)
 fi
 
+# Determine firewall/proxy server gateway IP
+given_fw_gateway=$(sed -n -e 's/^.*hvp_fwgateway=\(\S*\).*$/\1/p' /proc/cmdline)
+if [ -n "${given_fwgateway}" ]; then
+	fw_gateway="${given_fwgateway}"
+fi
+if [ -z "${fw_gateway}" ]; then
+	fw_gateway=$(ipmat $(ipmat ${my_ip[${mgmt_zone}]} ${my_ip_offset} -) ${fw_gateway_ip_offset} +)
+fi
+
 # Define default NetBIOS domain name if not specified
 if [ -z "${netbios_domain_name}" ]; then
 	netbios_domain_name=$(echo ${ad_subdomain_prefix}.${domain_name[${ad_zone}]} | awk -F. '{print toupper($1)}')
@@ -2361,10 +2375,11 @@ LABEL installtmpl
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-tmpl-c7.ks ${essential_network_params}
 
 # Start kickstart-based HVP firewall/proxy server installation
+# Note: since on the internal network there will probably be a DHCP service too, an ip=nicname:dhcp option must be manually added
 LABEL installfw
-        MENU LABEL Install Firewall/Proxy Server
+        MENU LABEL Install Firewall/Proxy Server (add ip=nicname:dhcp with ${lan_zone) nic name)
         kernel linux/centos/vmlinuz
-        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-fw-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${fw_name} hvp_${ad_zone}_my_ip=${fw_ip} hvp_storagename=${storage_name} hvp_storage_offset=${storage_ip_offset} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${my_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${dhcp_gateway} ${vm_network_params}
+        # append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-fw-c7.ks hvp_rootpwd=${root_password} hvp_adminname=${admin_username} hvp_adminpwd=${admin_password} hvp_winadminname=${winadmin_username} hvp_winadminpwd=${winadmin_password} hvp_kblayout=${keyboard_layout} hvp_language=${system_language} hvp_timezone=${local_timezone} hvp_ad_subdomainname=${ad_subdomain_prefix} hvp_netbiosdomain=${netbios_domain_name} hvp_joindomain=true hvp_dcname=${ad_dc_name} hvp_myname=${fw_name} hvp_${ad_zone}_my_ip=${fw_ip} hvp_storagename=${storage_name} hvp_storage_offset=${storage_ip_offset} hvp_nameserver=${ad_dc_ip} hvp_ntpservers=${external_ntpservers} hvp_smtpserver=${my_smtpserver} $(if [ "${use_smtps}" = "true" ]; then echo "hvp_smtps" ; fi) hvp_gateway=${fw_gateway} ${vm_network_params}
         append initrd=linux/centos/initrd.img inst.stage2=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/centos quiet nomodeset elevator=deadline inst.ks=http://${my_name}$(if [ "${use_hostname_decoration}" = "true" ]; then echo "-${lan_zone}" ; fi).${domain_name[${lan_zone}]}/hvp-repos/el7/ks/hvp-fw-c7.ks ${essential_network_params}
 
 EOF
@@ -2723,6 +2738,10 @@ cat << EOF > /tmp/hvp-syslinux-conf/hvp_parameters_fw.sh
 my_ip_offset="${fw_ip_offset}"
 
 my_name="${fw_name}"
+
+my_gateway="${fw_gateway}"
+
+my_ntpservers="${external_ntpservers}"
 
 domain_join="true"
 # Determine domain action from commandline
@@ -3762,7 +3781,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020022201"
+script_version="2020022301"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -5176,8 +5195,8 @@ OPTIONS="-4"
 EOF
 
 # Enable Bind
-systemctl enable named
 firewall-offline-cmd --add-service=dns --zone=internal
+systemctl enable named
 
 # Customize TFTPd
 # Note: blocksize set to (MTU - 32) conservatively assuming MTU 1500
