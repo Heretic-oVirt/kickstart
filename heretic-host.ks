@@ -2079,7 +2079,7 @@ done
 %post --log /dev/console
 ( # Run the entire post section as a subshell for logging purposes.
 
-script_version="2020022101"
+script_version="2020022501"
 
 # Report kickstart version for reference purposes
 logger -s -p "local7.info" -t "kickstart-post" "Kickstarting for $(cat /etc/system-release) - version ${script_version}"
@@ -4075,7 +4075,7 @@ elif dmidecode -s system-manufacturer | grep -q "VMware" ; then
 	EOM
 	chmod 644 /etc/systemd/system/mnt-hgfs.mount
 	systemctl daemon-reload
-	systemctl start mnt-hgfs.mount
+	systemctl --now enable mnt-hgfs.mount
 	need_reboot="no"
 elif dmidecode -s system-manufacturer | grep -q "innotek" ; then
 	wget https://dangerous.ovirt.life/support/VirtualBox/VBoxLinuxAdditions.run
